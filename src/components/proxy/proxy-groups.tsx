@@ -57,7 +57,7 @@ export const ProxyGroups = (props: Props) => {
   const { current, patchCurrent } = useProfiles();
   const rawTimeout = Number(verge?.default_latency_timeout);
   const timeout =
-    Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
+    Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 3000;
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 

@@ -27,7 +27,7 @@ export const ProxyItemMini = (props: Props) => {
   const { verge } = useVerge();
   const rawTimeout = Number(verge?.default_latency_timeout);
   const timeout =
-    Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
+    Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 3000;
 
   useEffect(() => {
     delayManager.setListener(proxy.name, groupName, setDelay);

@@ -262,22 +262,23 @@ class DelayManager {
     return this.isCurrentGroupCheck(group, task);
   }
 
-  formatDelay(delay: number, timeout = 5000) {
-    if (delay === DELAY_NOT_APPLICABLE) return "N/A";
-    if (delay === DELAY_UNREACHABLE) return "Blocked";
+  formatDelay(delay: number, timeout = 3000) {
+    if (delay === DELAY_NOT_APPLICABLE) return "SKIP";
+    if (delay === DELAY_UNREACHABLE) return "BLOCK";
     if (delay < 0) return ""; // 未测或测速中，不显示
-    if (delay > 1e5 || delay >= timeout) return "Failed";
+    if (delay > 1e5 || delay >= timeout) return "FAIL";
     return `${delay} ms`;
   }
 
-  formatDelayColor(delay: number, timeout = 5000) {
-    if (delay === DELAY_NOT_APPLICABLE || delay === DELAY_UNREACHABLE) {
-      return "text.primary";
-    }
+  // 颜色只表达“能不能用”：绿、橙、深橙表示可用且由快到慢；
+  // 红表示不可用（失败、超时、被阻断），灰表示没有可比较的结果。
+  formatDelayColor(delay: number, timeout = 3000) {
+    if (delay === DELAY_NOT_APPLICABLE) return "text.secondary";
+    if (delay === DELAY_UNREACHABLE) return "error.main";
     if (delay < 0) return "text.secondary";
     if (delay > 1e5 || delay >= timeout) return "error.main";
-    if (delay > 500) return "error.main";
-    if (delay > 200) return "warning.main";
+    if (delay > 200) return "warning.dark";
+    if (delay >= 100) return "warning.main";
     return "success.main";
   }
 }
