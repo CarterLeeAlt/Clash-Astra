@@ -6,6 +6,17 @@ const hashKey = (name: string, group: string) => `${group ?? ""}::${name}`;
 // 只有同一地址下测出的延迟才可比较
 const DEFAULT_LATENCY_TEST_URL = "http://www.google.com/generate_204";
 
+// 延迟结果的哨兵值：负数不是毫秒数
+export const DELAY_UNKNOWN = -1;
+export const DELAY_PENDING = -2;
+export const DELAY_NOT_APPLICABLE = -3; // REJECT 没有网络路径，不测
+export const DELAY_UNREACHABLE = -4; // DIRECT 直连不到目标，属预期结果
+const DELAY_FAILED = 1e6;
+
+/** 是否已有可用于显示的测速结果（未测和测速中不算） */
+export const hasDelayResult = (delay: number) =>
+  delay !== DELAY_UNKNOWN && delay !== DELAY_PENDING;
+
 type DelayTaskState = {
   id: number;
   aborted: boolean;
@@ -146,16 +157,21 @@ class DelayManager {
 
   /// 暂时修复provider的节点延迟排序的问题
   getDelayFix(proxy: IProxyItem, group: string) {
+    if (proxy.name === "REJECT") return DELAY_NOT_APPLICABLE;
+
     const cachedDelay = this.getDelay(proxy.name, group);
-    if (cachedDelay === -2 || (!proxy.provider && cachedDelay >= 0)) {
+    if (cachedDelay === DELAY_PENDING) return cachedDelay;
+    if (!proxy.provider && cachedDelay !== DELAY_UNKNOWN) {
       return cachedDelay;
     }
 
     if (proxy.history.length > 0) {
-      // 0ms以error显示
-      return proxy.history[proxy.history.length - 1].delay || 1e6;
+      // 内核历史里 0ms 表示失败；DIRECT 失败按预期不可达处理
+      const delay = proxy.history[proxy.history.length - 1].delay;
+      if (delay) return delay;
+      return proxy.name === "DIRECT" ? DELAY_UNREACHABLE : DELAY_FAILED;
     }
-    return -1;
+    return DELAY_UNKNOWN;
   }
 
   private isAbortError(_err: any, signal?: AbortSignal) {
@@ -181,7 +197,10 @@ class DelayManager {
     timeout: number,
     signal?: AbortSignal
   ) {
-    let delay = -1;
+    // REJECT 不是网络路径，任何地址都只会换来一次注定失败的请求
+    if (name === "REJECT") return DELAY_NOT_APPLICABLE;
+
+    let delay = DELAY_FAILED;
 
     try {
       if (signal?.aborted) return null;
@@ -191,7 +210,8 @@ class DelayManager {
       delay = result.delay;
     } catch (err) {
       if (this.isAbortError(err, signal)) return null;
-      delay = 1e6; // error
+      // DIRECT 失败说明目标对直连不可达，不是节点故障
+      delay = name === "DIRECT" ? DELAY_UNREACHABLE : DELAY_FAILED;
     }
 
     return delay;
@@ -243,16 +263,19 @@ class DelayManager {
   }
 
   formatDelay(delay: number, timeout = 10000) {
-    if (delay <= 0) return "Error";
-    if (delay > 1e5) return "Error";
-    if (delay >= timeout) return "Timeout"; // 10s
+    if (delay === DELAY_NOT_APPLICABLE) return "N/A";
+    if (delay === DELAY_UNREACHABLE) return "Block";
+    if (delay < 0) return ""; // 未测或测速中，不显示
+    if (delay > 1e5 || delay >= timeout) return "Fail";
     return `${delay} ms`;
   }
 
   formatDelayColor(delay: number, timeout = 10000) {
-    if (delay >= timeout) return "error.main";
-    if (delay <= 0) return "error.main";
-    if (delay > 500) return "warning.main";
+    if (delay === DELAY_NOT_APPLICABLE) return "text.disabled";
+    if (delay === DELAY_UNREACHABLE || delay < 0) return "text.secondary";
+    if (delay > 1e5 || delay >= timeout) return "error.main";
+    if (delay > 500) return "error.main";
+    if (delay > 200) return "warning.main";
     return "success.main";
   }
 }

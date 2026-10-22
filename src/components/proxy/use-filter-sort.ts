@@ -80,8 +80,12 @@ function sortProxies(
       const ad = delayManager.getDelayFix(a, groupName);
       const bd = delayManager.getDelayFix(b, groupName);
 
-      if (ad === -1 || ad === -2) return 1;
-      if (bd === -1 || bd === -2) return -1;
+      // 未测、测速中以及非延迟状态一律排在后面
+      const aMissing = ad < 0;
+      const bMissing = bd < 0;
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
 
       return ad - bd;
     });

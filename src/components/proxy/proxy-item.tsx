@@ -14,7 +14,11 @@ import {
   Typography,
 } from "@mui/material";
 import { BaseLoading } from "@/components/base";
-import delayManager from "@/services/delay";
+import delayManager, {
+  DELAY_PENDING,
+  DELAY_UNKNOWN,
+  hasDelayResult,
+} from "@/services/delay";
 import { useVerge } from "@/hooks/use-verge";
 
 interface Props {
@@ -47,9 +51,8 @@ const TypeBox = styled(Box)(({ theme }) => ({
 export const ProxyItem = (props: Props) => {
   const { groupName, proxy, selected, showType = true, sx, onClick } = props;
 
-  // -1/<=0 为 不显示
-  // -2 为 loading
-  const [delay, setDelay] = useState(-1);
+  // 负数哨兵见 delay.ts：-1 未测、-2 测速中、-3 不适用、-4 预期不可达
+  const [delay, setDelay] = useState(DELAY_UNKNOWN);
   const { verge } = useVerge();
   const rawTimeout = Number(verge?.default_latency_timeout);
   const timeout =
@@ -84,7 +87,7 @@ export const ProxyItem = (props: Props) => {
           ({ palette: { mode, primary } }) => {
             const bgcolor = mode === "light" ? "#ffffff" : "#24252f";
             const selectColor = mode === "light" ? primary.main : primary.light;
-            const showDelay = delay > 0;
+            const showDelay = hasDelayResult(delay);
 
             return {
               "&:hover .the-check": { display: !showDelay ? "block" : "none" },
@@ -135,13 +138,13 @@ export const ProxyItem = (props: Props) => {
         <ListItemIcon
           sx={{ justifyContent: "flex-end", color: "primary.main" }}
         >
-          {delay === -2 && (
+          {delay === DELAY_PENDING && (
             <Widget>
               <BaseLoading />
             </Widget>
           )}
 
-          {!proxy.provider && delay !== -2 && (
+          {!proxy.provider && delay !== DELAY_PENDING && (
             <Widget
               className="the-check"
               onClick={(e) => {
@@ -158,7 +161,7 @@ export const ProxyItem = (props: Props) => {
             </Widget>
           )}
 
-          {delay > 0 && (
+          {hasDelayResult(delay) && (
             <Widget
               className="the-delay"
               onClick={(e) => {
@@ -178,7 +181,7 @@ export const ProxyItem = (props: Props) => {
             </Widget>
           )}
 
-          {delay !== -2 && delay <= 0 && selected && (
+          {delay === DELAY_UNKNOWN && selected && (
             <CheckCircleOutlineRounded
               className="the-icon"
               sx={{ fontSize: 16 }}
