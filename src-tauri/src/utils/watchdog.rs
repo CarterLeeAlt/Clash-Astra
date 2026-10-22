@@ -30,6 +30,13 @@ pub fn is_supervised() -> bool {
 }
 
 pub fn launch_supervisor() -> io::Result<bool> {
+    // 开发模式下不启用监督进程：tauri dev 会在被监管的 GUI 退出后结束会话并停掉
+    // Vite，而 watchdog 拉起的第二个实例的 webview 仍指向已关闭的 dev 服务器，
+    // 结果是白屏窗口与脱离 tauri dev 的残留进程。
+    if cfg!(debug_assertions) {
+        return Ok(false);
+    }
+
     if is_supervised() {
         return Ok(false);
     }
