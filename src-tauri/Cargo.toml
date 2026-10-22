@@ -14,12 +14,9 @@ tauri-build = { version = "1", features = [] }
 
 [dependencies]
 warp = "0.3"
-which = "6.0.0"
 anyhow = "1.0"
-dirs = "5.0"
 open = "5.0"
 log = "0.4"
-ctrlc = "3.4"
 dunce = "1.0"
 log4rs = "1"
 nanoid = "0.4"

@@ -1,40 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
 import delayManager from "@/services/delay";
 
 // default | delay | alphabet
 export type ProxySortType = 0 | 1 | 2;
-
-export default function useFilterSort(
-  proxies: IProxyItem[],
-  groupName: string,
-  filterText: string,
-  sortType: ProxySortType
-) {
-  const [refresh, setRefresh] = useState({});
-
-  useEffect(() => {
-    let last = 0;
-
-    delayManager.setGroupListener(groupName, () => {
-      // 简单节流
-      const now = Date.now();
-      if (now - last > 666) {
-        last = now;
-        setRefresh({});
-      }
-    });
-
-    return () => {
-      delayManager.removeGroupListener(groupName);
-    };
-  }, [groupName]);
-
-  return useMemo(() => {
-    const fp = filterProxies(proxies, groupName, filterText);
-    const sp = sortProxies(fp, groupName, sortType);
-    return sp;
-  }, [proxies, groupName, filterText, sortType, refresh]);
-}
 
 export function filterSort(
   proxies: IProxyItem[],
