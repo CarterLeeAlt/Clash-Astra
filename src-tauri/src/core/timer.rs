@@ -100,13 +100,16 @@ impl Timer {
 
         if let Some(items) = Config::profiles().latest().get_items() {
             for item in items.iter() {
-                if item.option.is_some() {
-                    let option = item.option.as_ref().unwrap();
-                    let interval = option.update_interval.unwrap_or(0);
+                let Some(option) = item.option.as_ref() else {
+                    continue;
+                };
+                let interval = option.update_interval.unwrap_or(0);
+                let Some(uid) = item.uid.clone() else {
+                    continue;
+                };
 
-                    if interval > 0 {
-                        new_map.insert(item.uid.clone().unwrap(), interval);
-                    }
+                if interval > 0 {
+                    new_map.insert(uid, interval);
                 }
             }
         }

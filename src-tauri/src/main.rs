@@ -18,6 +18,23 @@ use tauri::{Manager, SystemTray};
 #[path = "watchdog_protocol.rs"]
 mod watchdog_protocol;
 
+/// 在 logger 初始化之前记录启动期错误，避免 release 构建下静默失败。
+fn write_startup_error(message: &str) {
+    let Ok(dir) = utils::dirs::app_logs_dir() else {
+        return;
+    };
+    let path = dir.join("startup-error.log");
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "[{timestamp}] {message}");
+    }
+}
+
 fn main() -> std::io::Result<()> {
     // 单例检测
     if server::check_singleton().is_err() {
@@ -25,9 +42,18 @@ fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    // 监督进程缺失或启动失败时不能直接退出：release 构建没有控制台，
+    // 用户只会看到双击后毫无反应。降级为无监督运行并记录原因。
+    // 此时 logger 尚未初始化（init_config 在后面），因此直接落盘。
     #[cfg(target_os = "windows")]
-    if utils::watchdog::launch_supervisor()? {
-        return Ok(());
+    match utils::watchdog::launch_supervisor() {
+        Ok(true) => return Ok(()),
+        Ok(false) => {}
+        Err(err) => {
+            write_startup_error(&format!(
+                "failed to launch supervisor, running without it: {err}"
+            ));
+        }
     }
 
     init::init_config().map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
