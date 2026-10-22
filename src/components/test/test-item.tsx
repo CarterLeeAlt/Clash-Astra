@@ -19,6 +19,7 @@ import { formatNoticeMessage, Notice } from "@/components/base";
 import { TestBox } from "./test-box";
 import delayManager from "@/services/delay";
 import { cmdTestDelay } from "@/services/cmds";
+import { utf8ToBase64 } from "@/utils/base64";
 import { listen } from "@tauri-apps/api/event";
 
 interface Props {
@@ -172,7 +173,7 @@ export const TestItem = (props: Props) => {
               <img
                 src={
                   icon.trim().startsWith("<svg")
-                    ? `data:image/svg+xml;base64,${btoa(icon)}`
+                    ? `data:image/svg+xml;base64,${utf8ToBase64(icon)}`
                     : icon
                 }
                 alt={`${name} icon`}

@@ -19,6 +19,7 @@ import type { IRenderItem } from "./use-render-list";
 import { useVerge } from "@/hooks/use-verge";
 import { useRecoilState } from "recoil";
 import { atomThemeMode } from "@/services/states";
+import { utf8ToBase64 } from "@/utils/base64";
 
 interface RenderProps {
   item: IRenderItem;
@@ -73,7 +74,7 @@ export const ProxyRender = (props: RenderProps) => {
             group.icon &&
             group.icon.trim().startsWith("<svg") && (
               <img
-                src={`data:image/svg+xml;base64,${btoa(group.icon)}`}
+                src={`data:image/svg+xml;base64,${utf8ToBase64(group.icon)}`}
                 height="32px"
               />
             )}

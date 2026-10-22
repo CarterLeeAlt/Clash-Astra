@@ -144,9 +144,14 @@ export const useWebsocket = (onMessage: WsMsgFn, options?: WsOptions) => {
     closeWs();
   }, [clearTimer, closeWs]);
 
-  useEffect(() => () => {
-    unmountedRef.current = true;
-    disconnect();
+  useEffect(() => {
+    // StrictMode 的开发模式会 mount -> unmount -> mount，
+    // 必须在挂载时复位，否则第二次挂载后 connect() 会一直被拒绝
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      disconnect();
+    };
   }, [disconnect]);
 
   // 消息活性看门狗：服务端有固定推送周期的连接（如 /connections 每秒快照）

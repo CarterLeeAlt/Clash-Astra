@@ -46,12 +46,13 @@ export const useLogSetup = () => {
   const pendingRef = useRef<ILogItem[]>([]);
   const unmountedRef = useRef(false);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // StrictMode 的开发模式会 mount -> unmount -> mount，挂载时需复位
+    unmountedRef.current = false;
+    return () => {
       unmountedRef.current = true;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const wsUrl = useMemo(
     () => buildControllerWsUrl(clashInfo?.server || "", "/logs", clashInfo?.secret || ""),

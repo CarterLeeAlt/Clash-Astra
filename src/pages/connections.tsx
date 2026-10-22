@@ -137,12 +137,13 @@ const ConnectionsPage = () => {
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // StrictMode 的开发模式会 mount -> unmount -> mount，挂载时需复位
+    unmountedRef.current = false;
+    return () => {
       unmountedRef.current = true;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const clearFallbackTimer = useCallback(() => {
     if (!fallbackTimerRef.current) return;

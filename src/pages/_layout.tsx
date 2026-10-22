@@ -147,14 +147,17 @@ const Layout = () => {
   }, []);
 
   useEffect(() => {
-    if (language) {
-      dayjs.locale(language === "zh" ? "zh-cn" : language);
-      i18next.changeLanguage(language);
-    }
+    if (!language) return;
+    dayjs.locale(language === "zh" ? "zh-cn" : language);
+    i18next.changeLanguage(language);
+  }, [language]);
+
+  // 只在 start_page 变化时跳转；与语言拆开，避免切换语言时被踢回起始页
+  useEffect(() => {
     if (start_page) {
       navigate(start_page);
     }
-  }, [language, start_page]);
+  }, [start_page, navigate]);
 
   return (
     <SWRConfig value={{ errorRetryCount: 3 }}>
