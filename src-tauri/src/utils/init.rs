@@ -265,17 +265,17 @@ pub fn init_config() -> Result<()> {
 
     let path = dirs::clash_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IClashTemp::template().0, Some("# Clash-Verge-Buty"))?;
+        help::save_yaml(&path, &IClashTemp::template().0, Some("# Clash Verge Buty"))?;
     }
 
     let path = dirs::verge_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IVerge::template(), Some("# Clash-Verge-Buty"))?;
+        help::save_yaml(&path, &IVerge::template(), Some("# Clash Verge Buty"))?;
     }
 
     let path = dirs::profiles_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IProfiles::template(), Some("# Clash-Verge-Buty"))?;
+        help::save_yaml(&path, &IProfiles::template(), Some("# Clash Verge Buty"))?;
     }
 
     Ok(())
@@ -335,64 +335,6 @@ pub fn init_resources() -> Result<()> {
                 handle_copy();
             }
         };
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn legacy_scheme_command_targets_app(command: &str, app_exe: &std::path::Path) -> bool {
-    let command = command.trim();
-    let executable = if let Some(quoted) = command.strip_prefix('"') {
-        quoted.split_once('"').map(|(path, _)| path)
-    } else {
-        command.split_whitespace().next()
-    };
-    executable
-        .zip(app_exe.to_str())
-        .map(|(registered, current)| registered.eq_ignore_ascii_case(current))
-        .unwrap_or(false)
-}
-
-/// Remove clash:// registrations left by versions that supported URL-scheme imports.
-/// Never remove a registration unless it can be attributed to this application.
-#[cfg(target_os = "windows")]
-pub fn cleanup_legacy_scheme_registration() -> Result<()> {
-    use std::io::ErrorKind;
-    use tauri::utils::platform::current_exe;
-    use winreg::enums::*;
-    use winreg::RegKey;
-
-    let app_exe = dunce::canonicalize(current_exe()?)?;
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let root_key = "Software\\Classes\\Clash";
-    let command_key = "Software\\Classes\\Clash\\Shell\\Open\\Command";
-    let registration_name = match hkcu.open_subkey_with_flags(root_key, KEY_READ) {
-        Ok(clash) => clash.get_value::<String, _>("").ok(),
-        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
-        Err(err) => return Err(err.into()),
-    };
-    let registered_command = hkcu
-        .open_subkey_with_flags(command_key, KEY_READ)
-        .ok()
-        .and_then(|command| command.get_value::<String, _>("").ok());
-    let registration_owned = registration_name.as_deref() == Some("Clash-Verge-Buty")
-        || registered_command
-            .as_deref()
-            .is_some_and(|command| legacy_scheme_command_targets_app(command, &app_exe));
-
-    if !registration_owned {
-        log::debug!(target: "app", "skip removing clash:// URL protocol because another application owns it");
-        return Ok(());
-    }
-
-    match hkcu.delete_subkey_all(root_key) {
-        Ok(()) => log::info!(
-            target: "app",
-            "removed legacy Clash-Verge-Buty clash:// URL protocol registration"
-        ),
-        Err(err) if err.kind() == ErrorKind::NotFound => {}
-        Err(err) => return Err(err.into()),
     }
 
     Ok(())

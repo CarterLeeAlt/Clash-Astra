@@ -7,29 +7,31 @@ import { getOctokit, context } from "@actions/github";
 const target = process.argv.slice(2)[0];
 const alpha = process.argv.slice(2)[1];
 
+const MACHINE_NAME = "clash-verge-buty";
+
 const ARCH_MAP = {
   "x86_64-pc-windows-msvc": "x64",
   "aarch64-pc-windows-msvc": "arm64",
 };
 
-async function getTauriPackageInfo() {
+async function getPackageInfo() {
+  const packageJsonPath = path.resolve("./package.json");
   const tauriConfigPath = path.resolve("./src-tauri/tauri.conf.json");
+  const packageJson = await fs.readJson(packageJsonPath);
   const tauriConfig = await fs.readJson(tauriConfigPath);
 
-  const productName = tauriConfig?.package?.productName;
-  const version = tauriConfig?.package?.version;
-
-  if (!productName) {
+  if (packageJson.name !== MACHINE_NAME) {
     throw new Error(
-      "package.productName not found in src-tauri/tauri.conf.json"
+      `package.name must be ${MACHINE_NAME}, got ${packageJson.name}`
     );
   }
 
+  const version = tauriConfig?.package?.version;
   if (!version) {
     throw new Error("package.version not found in src-tauri/tauri.conf.json");
   }
 
-  return { productName, version };
+  return { version };
 }
 
 /// Script for ci
@@ -37,15 +39,23 @@ async function getTauriPackageInfo() {
 async function resolvePortable() {
   if (process.platform !== "win32") return;
 
-  const { productName, version } = await getTauriPackageInfo();
-  const productFileName = productName.replace(/ /g, ".");
+  if (!target || !ARCH_MAP[target]) {
+    throw new Error(`Unsupported or missing target: ${target}`);
+  }
 
-  const releaseDir = target
-    ? `./src-tauri/target/${target}/release`
-    : `./src-tauri/target/release`;
+  const { version } = await getPackageInfo();
 
+  const targetReleaseDir = `./src-tauri/target/${target}/release`;
+  const releaseDir = (await fs.pathExists(targetReleaseDir))
+    ? targetReleaseDir
+    : "./src-tauri/target/release";
   if (!(await fs.pathExists(releaseDir))) {
-    throw new Error("could not found the release dir");
+    throw new Error(`could not found the release dir: ${targetReleaseDir}`);
+  }
+  if (releaseDir !== targetReleaseDir) {
+    console.warn(
+      `[WARN]: target-specific release dir not found, fallback to ${releaseDir}`
+    );
   }
 
   const releaseExeFiles = (await fs.readdir(releaseDir))
@@ -54,13 +64,15 @@ async function resolvePortable() {
 
   console.log("[INFO]: target/release exe files:", releaseExeFiles);
 
-  const preferredNames = [
-    "Clash_Verge_Buty.exe",
-    `${productName}.exe`,
-    `${productName.replace(/-/g, "_")}.exe`,
-    `${productName.toLowerCase()}.exe`,
-    `${productName.toLowerCase().replace(/-/g, "_")}.exe`,
-  ];
+  const portableExeName = "clash-verge-buty.exe";
+  const mainExeSource = releaseExeFiles.find(
+    (name) => name.toLowerCase() === portableExeName
+  );
+  if (!mainExeSource) {
+    throw new Error(
+      `Portable main exe not found under ${releaseDir}; run scripts/normalize-main-exe.mjs first`
+    );
+  }
 
   const watchdogExeName = "clash-verge-buty-watchdog.exe";
   const watchdogPath = path.join(releaseDir, watchdogExeName);
@@ -72,28 +84,11 @@ async function resolvePortable() {
   }
 
   const deniedKeyword = /(setup|setup_unsigned|installer)/i;
-  const isMainExeCandidate = (name) =>
-    !deniedKeyword.test(name) &&
-    !/watchdog/i.test(name) &&
-    !/mihomo(-alpha)?\.exe$/i.test(name);
-  const mainExeSource =
-    preferredNames.find(
-      (name) => releaseExeFiles.includes(name) && isMainExeCandidate(name)
-    ) || releaseExeFiles.find(isMainExeCandidate);
-
-  if (!mainExeSource) {
-    throw new Error(`Portable main exe not found under ${releaseDir}`);
-  }
   if (deniedKeyword.test(mainExeSource)) {
-    throw new Error(
-      `Portable main exe resolved to installer-like file: ${mainExeSource}`
-    );
+    throw new Error(`Portable main exe is installer-like: ${mainExeSource}`);
   }
-  // The shipped file name must stay all lowercase regardless of how the
-  // build pipeline names the binary (tauri CLI uses the mixed-case product
-  // name, plain cargo build uses the lowercase package name).
+
   const exePath = path.join(releaseDir, mainExeSource);
-  const portableExeName = "clash-verge-buty.exe";
 
   const mihomoPath = path.join(releaseDir, "mihomo.exe");
   if (!(await fs.pathExists(mihomoPath))) {
@@ -110,6 +105,20 @@ async function resolvePortable() {
     throw new Error(`Folder not found: ${resourcesPath}`);
   }
 
+  const obsoleteResourceNames = [
+    "clash-verge-service.exe",
+    "install-service.exe",
+    "uninstall-service.exe",
+    "firewall-helper.exe",
+  ];
+  for (const name of obsoleteResourceNames) {
+    if (await fs.pathExists(path.join(resourcesPath, name))) {
+      throw new Error(
+        `Obsolete resource must be removed before packaging: ${name}`
+      );
+    }
+  }
+
   const zip = new AdmZip();
 
   zip.addFile(portableExeName, await fs.readFile(exePath));
@@ -119,7 +128,7 @@ async function resolvePortable() {
   zip.addLocalFolder(resourcesPath, "resources");
 
   const unsignedSuffix = process.env.UNSIGNED_BUILD === "1" ? "_unsigned" : "";
-  const zipFile = `${productFileName}_${version}_${ARCH_MAP[target]}_portable${unsignedSuffix}.zip`;
+  const zipFile = `${MACHINE_NAME}_${version}_${ARCH_MAP[target]}_portable${unsignedSuffix}.zip`;
   zip.writeZip(zipFile);
 
   const zipCheck = new AdmZip(zipFile)
@@ -140,7 +149,9 @@ async function resolvePortable() {
     throw new Error(`portable.zip missing main exe: ${portableExeName}`);
   }
   if (!zipCheck.includes(watchdogExeName)) {
-    throw new Error(`portable.zip missing watchdog exe at root: ${watchdogExeName}`);
+    throw new Error(
+      `portable.zip missing watchdog exe at root: ${watchdogExeName}`
+    );
   }
   if (
     !zipExeEntries.some(
@@ -151,8 +162,7 @@ async function resolvePortable() {
   }
   if (
     !zipExeEntries.some(
-      (name) =>
-        path.basename(name).toLowerCase() === "mihomo-alpha.exe"
+      (name) => path.basename(name).toLowerCase() === "mihomo-alpha.exe"
     )
   ) {
     throw new Error("portable.zip missing mihomo-alpha.exe");

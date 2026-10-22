@@ -640,12 +640,12 @@ mod tests {
     #[test]
     fn detects_quoted_and_unquoted_owned_commands() {
         assert!(command_targets_app(
-            r#""D:\Portable Apps\Clash_Verge_Buty.exe""#,
-            "Clash_Verge_Buty"
+            r#""D:\Portable Apps\clash-verge-buty.exe""#,
+            "clash-verge-buty"
         ));
         assert!(command_targets_app(
-            r#"D:\Clash\Clash_Verge_Buty.exe --silent"#,
-            "Clash_Verge_Buty"
+            r#"D:\Clash\clash-verge-buty.exe --silent"#,
+            "clash-verge-buty"
         ));
     }
 
@@ -653,15 +653,15 @@ mod tests {
     fn rejects_another_app_command() {
         assert!(!command_targets_app(
             r#""D:\Other\other.exe""#,
-            "Clash_Verge_Buty"
+            "clash-verge-buty"
         ));
     }
 
     #[test]
     fn builds_stable_task_name() {
         assert_eq!(
-            task_name("Clash-Verge-Buty"),
-            "Clash-Verge-Buty Auto Launch"
+            task_name("clash-verge-buty"),
+            "clash-verge-buty Auto Launch"
         );
     }
 
@@ -702,8 +702,8 @@ mod tests {
 
     #[test]
     fn builds_and_recognizes_elevated_interactive_task() {
-        let app_name = "Clash-Verge-Buty";
-        let app_path = r#"C:\Portable & Tools\Clash-Verge-Buty.exe"#;
+        let app_name = "clash-verge-buty";
+        let app_path = r#"C:\Portable & Tools\clash-verge-buty.exe"#;
         let args = vec!["--silent".to_string()];
         let sid = "S-1-5-21-1001";
         let xml = task_xml(app_name, app_path, &args, sid);
@@ -738,7 +738,7 @@ mod tests {
         assert!(!task_matches(
             &xml,
             app_name,
-            r#"D:\Moved\Clash-Verge-Buty.exe"#,
+            r#"D:\Moved\clash-verge-buty.exe"#,
             &args,
             sid
         ));

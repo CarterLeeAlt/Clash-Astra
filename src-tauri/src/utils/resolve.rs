@@ -457,8 +457,6 @@ pub fn resolve_setup(app: &mut App) {
     log_err!(sysopt::Sysopt::global().recover_pending_sysproxy());
     log_err!(init::init_resources());
     #[cfg(target_os = "windows")]
-    log_err!(init::cleanup_legacy_scheme_registration());
-    #[cfg(target_os = "windows")]
     log_err!(crate::core::win_firewall::reconcile_lan_firewall_on_startup());
     log_err!(init::startup_script());
     // 处理随机端口
@@ -1221,7 +1219,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
             "main".to_string(),
             tauri::WindowUrl::App("index.html".into()),
         )
-        .title("Clash-Verge-Buty")
+        .title("Clash Verge Buty")
         .data_directory(webview_data_dir.clone())
         .visible(false)
         .fullscreen(false)

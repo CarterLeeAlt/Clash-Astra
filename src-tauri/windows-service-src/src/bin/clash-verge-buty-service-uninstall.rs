@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clash_verge_windows_service_src::{
+use clash_verge_buty_service_src::{
     api_token_path, remove_token_file_and_empty_parent, SERVICE_NAME,
 };
 use windows_service::service::{ServiceAccess, ServiceState};

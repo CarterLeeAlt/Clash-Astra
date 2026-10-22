@@ -202,8 +202,8 @@ export async function checkService() {
       api_ready: false,
       core_managed: false,
       core_pid: null,
-      service_name: "clash-verge-service",
-      message: "clash-verge-service is not installed.",
+      service_name: "clash-verge-buty-service",
+      message: "Clash Verge Buty Service is not installed.",
       state: "service_not_installed",
     };
   }

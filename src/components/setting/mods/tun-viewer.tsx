@@ -11,7 +11,13 @@ import {
   TextField,
 } from "@mui/material";
 import { useClash } from "@/hooks/use-clash";
-import { BaseDialog, DialogRef, formatNoticeMessage, Notice, Switch } from "@/components/base";
+import {
+  BaseDialog,
+  DialogRef,
+  formatNoticeMessage,
+  Notice,
+  Switch,
+} from "@/components/base";
 import { StackModeSwitch } from "./stack-mode-switch";
 
 export const TunViewer = forwardRef<DialogRef>((props, ref) => {
@@ -22,7 +28,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState({
     stack: "gvisor",
-    device: "Clash-Verge-Buty",
+    device: "clash-verge-buty",
     autoRoute: true,
     autoDetectInterface: true,
     dnsHijack: ["any:53"],
@@ -35,7 +41,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
       setOpen(true);
       setValues({
         stack: clash?.tun.stack ?? "gvisor",
-        device: clash?.tun.device ?? "Clash-Verge-Buty",
+        device: clash?.tun.device ?? "clash-verge-buty",
         autoRoute: clash?.tun["auto-route"] ?? true,
         autoDetectInterface: clash?.tun["auto-detect-interface"] ?? true,
         dnsHijack: clash?.tun["dns-hijack"] ?? ["any:53"],
@@ -53,7 +59,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
         .filter(Boolean);
       let tun = {
         stack: values.stack.toLowerCase(),
-        device: values.device.trim() || "Clash-Verge-Buty",
+        device: values.device.trim() || "clash-verge-buty",
         "auto-route": values.autoRoute,
         "auto-detect-interface": values.autoDetectInterface,
         "dns-hijack": dnsHijack.length ? dnsHijack : ["any:53"],
@@ -86,7 +92,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
             onClick={async () => {
               let tun = {
                 stack: "gvisor",
-                device: "Clash-Verge-Buty",
+                device: "clash-verge-buty",
                 "auto-route": true,
                 "auto-detect-interface": true,
                 "dns-hijack": ["any:53"],
@@ -95,7 +101,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
               };
               setValues({
                 stack: "gvisor",
-                device: "Clash-Verge-Buty",
+                device: "clash-verge-buty",
                 autoRoute: true,
                 autoDetectInterface: true,
                 dnsHijack: ["any:53"],
@@ -147,7 +153,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
             spellCheck="false"
             sx={{ width: 250 }}
             value={values.device}
-            placeholder="Clash-Verge-Buty"
+            placeholder="clash-verge-buty"
             onChange={(e) =>
               setValues((v) => ({ ...v, device: e.target.value }))
             }

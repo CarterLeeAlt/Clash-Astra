@@ -12,8 +12,8 @@ use windows::Win32::System::Com::{
     COINIT_APARTMENTTHREADED,
 };
 
-const RULE_PREFIX: &str = "Clash-Verge-Buty LAN";
-const RULE_GROUP: &str = "Clash-Verge-Buty";
+const RULE_PREFIX: &str = "Clash Verge Buty LAN";
+const RULE_GROUP: &str = "Clash Verge Buty";
 const CORE_BINARIES: [&str; 2] = ["mihomo.exe", "mihomo-alpha.exe"];
 
 struct ComGuard;
@@ -37,15 +37,18 @@ impl Drop for ComGuard {
 }
 
 fn install_dir() -> Result<PathBuf> {
-    let helper = std::env::current_exe().context("failed to resolve firewall-helper.exe path")?;
+    let helper = std::env::current_exe()
+        .context("failed to resolve clash-verge-buty-firewall-helper.exe path")?;
     let resources = helper
         .parent()
-        .context("firewall-helper.exe has no parent directory")?;
+        .context("clash-verge-buty-firewall-helper.exe has no parent directory")?;
     if !resources
         .file_name()
         .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("resources"))
     {
-        bail!("firewall-helper.exe must run from the application resources directory");
+        bail!(
+            "clash-verge-buty-firewall-helper.exe must run from the application resources directory"
+        );
     }
     resources
         .parent()
@@ -188,11 +191,11 @@ mod tests {
     fn uses_stable_distinct_rule_names() {
         assert_eq!(
             rule_name(CORE_BINARIES[0]),
-            "Clash-Verge-Buty LAN - mihomo.exe"
+            "Clash Verge Buty LAN - mihomo.exe"
         );
         assert_eq!(
             rule_name(CORE_BINARIES[1]),
-            "Clash-Verge-Buty LAN - mihomo-alpha.exe"
+            "Clash Verge Buty LAN - mihomo-alpha.exe"
         );
     }
 }

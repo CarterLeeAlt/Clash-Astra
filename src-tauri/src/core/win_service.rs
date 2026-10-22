@@ -16,10 +16,10 @@ use tokio::time::sleep;
 
 const SERVICE_URL: &str = "http://127.0.0.1:33211";
 const SERVICE_STOP_URL: &str = "http://127.0.0.1:33211/stop_service";
-const SERVICE_NAME: &str = "clash-verge-service";
-const SERVICE_BINARY: &str = "clash-verge-service.exe";
-const INSTALL_HELPER: &str = "install-service.exe";
-const UNINSTALL_HELPER: &str = "uninstall-service.exe";
+const SERVICE_NAME: &str = "clash-verge-buty-service";
+const SERVICE_BINARY: &str = "clash-verge-buty-service.exe";
+const INSTALL_HELPER: &str = "clash-verge-buty-service-install.exe";
+const UNINSTALL_HELPER: &str = "clash-verge-buty-service-uninstall.exe";
 
 pub fn is_current_process_elevated() -> Result<bool> {
     let token = Token::with_current_process()?;
@@ -253,7 +253,7 @@ async fn get_service_health() -> Result<HealthResponse> {
         .await?
         .json::<HealthResponse>()
         .await
-        .context("failed to parse the clash-verge-service health response")
+        .context("failed to parse the clash-verge-buty-service health response")
 }
 
 async fn get_service_clash_state() -> Result<JsonResponse> {
@@ -268,7 +268,7 @@ async fn get_service_clash_state() -> Result<JsonResponse> {
         .await?
         .json::<JsonResponse>()
         .await
-        .context("failed to parse the clash-verge-service response")
+        .context("failed to parse the clash-verge-buty-service response")
 }
 
 pub async fn is_service_core_running() -> bool {
@@ -474,7 +474,7 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
         .await?
         .json::<JsonResponse>()
         .await
-        .context("failed to connect to the clash-verge-service")?;
+        .context("failed to connect to the clash-verge-buty-service")?;
     log::info!(target: "app", "start_clash response: code={}, msg={}", res.code, res.msg);
     if res.code != 0 {
         bail!(res.msg);
@@ -517,7 +517,7 @@ pub async fn stop_core_by_service() -> Result<()> {
         .await?
         .json::<JsonResponse>()
         .await
-        .context("failed to connect to the clash-verge-service")?;
+        .context("failed to connect to the clash-verge-buty-service")?;
     if res.code != 0 {
         bail!(res.msg);
     }
@@ -531,7 +531,7 @@ pub async fn stop_service_if_idle() -> Result<()> {
         return Ok(());
     }
     if is_service_core_running().await {
-        bail!("refuse to stop clash-verge-service while it is managing Mihomo");
+        bail!("refuse to stop clash-verge-buty-service while it is managing Mihomo");
     }
 
     let token = service_api_token()?;
@@ -545,7 +545,7 @@ pub async fn stop_service_if_idle() -> Result<()> {
         .await?
         .json::<JsonResponse>()
         .await
-        .context("failed to request idle clash-verge-service shutdown")?;
+        .context("failed to request idle clash-verge-buty-service shutdown")?;
     if res.code != 0 {
         bail!(res.msg);
     }
@@ -556,5 +556,5 @@ pub async fn stop_service_if_idle() -> Result<()> {
         }
         sleep(Duration::from_millis(150)).await;
     }
-    bail!("clash-verge-service did not stop after idle shutdown request")
+    bail!("clash-verge-buty-service did not stop after idle shutdown request")
 }

@@ -80,13 +80,17 @@ runs:
       shell: pwsh
       run: pnpm install --frozen-lockfile
 
+    - name: Check naming
+      shell: pwsh
+      run: pnpm check:naming
+
     - name: Build Windows service binaries from source
       shell: pwsh
       run: |
         cargo build --manifest-path src-tauri/windows-service-src/Cargo.toml --release --target ${{ inputs.target }}
         New-Item -ItemType Directory -Force -Path src-tauri/local-binaries/windows-service-bin | Out-Null
         $svcOut = "src-tauri/windows-service-src/target/${{ inputs.target }}/release"
-        $need = @("clash-verge-service.exe", "install-service.exe", "uninstall-service.exe", "firewall-helper.exe")
+        $need = @("clash-verge-buty-service.exe", "clash-verge-buty-service-install.exe", "clash-verge-buty-service-uninstall.exe", "clash-verge-buty-firewall-helper.exe")
         foreach ($n in $need) {
           $src = Join-Path $svcOut $n
           if (-not (Test-Path $src)) { throw "missing service binary: $src" }
@@ -111,6 +115,10 @@ runs:
         if (-not (Test-Path -LiteralPath $watchdogSource -PathType Leaf)) { throw "missing watchdog binary: $watchdogSource" }
         New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
         Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "clash-verge-buty-watchdog.exe") -Force
+
+    - name: Normalize main executable name
+      shell: pwsh
+      run: node scripts/normalize-main-exe.mjs --target ${{ inputs.target }}
 
     - name: Detect signing availability
       id: sign_mode
@@ -161,18 +169,18 @@ runs:
         if (-not $signtool) { throw "signtool.exe not found" }
 
         $files = @(
-          "src-tauri/target/${{ inputs.target }}/release/Clash_Verge_Buty.exe",
+          "src-tauri/target/${{ inputs.target }}/release/clash-verge-buty.exe",
           "src-tauri/target/${{ inputs.target }}/release/clash-verge-buty-watchdog.exe",
           "src-tauri/target/${{ inputs.target }}/release/mihomo.exe",
           "src-tauri/target/${{ inputs.target }}/release/mihomo-alpha.exe"
         )
-        $watchdogPath = "src-tauri/target/${{ inputs.target }}/release/clash-verge-buty-watchdog.exe"
-        if (-not (Test-Path -LiteralPath $watchdogPath -PathType Leaf)) { throw "missing watchdog binary: $watchdogPath" }
-        $files = $files | Where-Object { Test-Path $_ } | Select-Object -Unique
+        foreach ($f in $files) {
+          if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing artifact: $f" }
+        }
 
         foreach ($f in $files) {
           & $signtool sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f "windows-signing.pfx" /p "${{ inputs.windows-certificate-password }}" "$f"
-          if ($f.EndsWith("/clash-verge-buty-watchdog.exe") -and $LASTEXITCODE -ne 0) { throw "watchdog signing failed: $f" }
+          if ($LASTEXITCODE -ne 0) { throw "signing failed: $f" }
         }
 
     - name: Sign Windows artifacts (SignPath)
@@ -184,7 +192,7 @@ runs:
         project-slug: ${{ inputs.signpath-project-slug }}
         signing-policy-slug: ${{ inputs.signpath-signing-policy-slug }}
         artifact-configuration-slug: ${{ inputs.signpath-artifact-configuration-slug }}
-        input-artifact-path: src-tauri/target/${{ inputs.target }}/release/Clash_Verge_Buty.exe
+        input-artifact-path: src-tauri/target/${{ inputs.target }}/release/clash-verge-buty.exe
         output-artifact-directory: src-tauri/target/${{ inputs.target }}/release
 
     - name: Sign Windows watchdog (SignPath)
@@ -212,18 +220,18 @@ runs:
         $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
 
         $files = @(
-          "src-tauri/target/${{ inputs.target }}/release/Clash_Verge_Buty.exe",
+          "src-tauri/target/${{ inputs.target }}/release/clash-verge-buty.exe",
           "src-tauri/target/${{ inputs.target }}/release/clash-verge-buty-watchdog.exe",
           "src-tauri/target/${{ inputs.target }}/release/mihomo.exe",
           "src-tauri/target/${{ inputs.target }}/release/mihomo-alpha.exe"
         )
-        $watchdogPath = "src-tauri/target/${{ inputs.target }}/release/clash-verge-buty-watchdog.exe"
-        if (-not (Test-Path -LiteralPath $watchdogPath -PathType Leaf)) { throw "missing watchdog binary: $watchdogPath" }
-        $files = $files | Where-Object { Test-Path $_ } | Select-Object -Unique
+        foreach ($f in $files) {
+          if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing artifact: $f" }
+        }
 
         foreach ($f in $files) {
           & $signtool verify /pa /v "$f"
-          if ($f.EndsWith("/clash-verge-buty-watchdog.exe") -and $LASTEXITCODE -ne 0) { throw "watchdog signature verification failed: $f" }
+          if ($LASTEXITCODE -ne 0) { throw "signature verification failed: $f" }
           Get-AuthenticodeSignature "$f" | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
         }
 
@@ -241,7 +249,7 @@ runs:
         if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
         New-Item -ItemType Directory -Path $stage | Out-Null
 
-        $portableZip = Get-ChildItem . -File | Where-Object { $_.Name -match "^Clash-Verge-Buty([_-].*)?[-_]portable.*\.zip$" -or $_.Name -match "^Clash[-_.]Verge[-_.]Buty_.*_x64_portable.*\.zip$" } | Select-Object -First 1
+        $portableZip = Get-ChildItem . -File | Where-Object { $_.Name -match "^clash-verge-buty_.*_portable.*\.zip$" } | Select-Object -First 1
         if (-not $portableZip) {
           throw "portable artifact zip not found in workspace root"
         }
@@ -284,7 +292,7 @@ runs:
     - name: Upload Windows alpha portable artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Clash-Verge-Buty-windows-alpha-portable
+        name: clash-verge-buty-windows-alpha-portable
         if-no-files-found: error
         include-hidden-files: true
         path: dist/windows-alpha-portable/

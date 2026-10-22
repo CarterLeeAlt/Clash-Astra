@@ -99,7 +99,9 @@ async function fetchWithRetry(url, options = {}, context = {}) {
     } catch (err) {
       lastError = err;
       console.warn(
-        `[WARN]: fetch failed attempt ${attempt}/${retries} url="${url}" target="${SIDECAR_HOST}"${targetPathLog}${nameLog} error="${err?.message || err}"`
+        `[WARN]: fetch failed attempt ${attempt}/${retries} url="${url}" target="${SIDECAR_HOST}"${targetPathLog}${nameLog} error="${
+          err?.message || err
+        }"`
       );
 
       if (attempt >= retries) break;
@@ -195,15 +197,11 @@ async function getLatestReleaseVersion() {
  * check available
  */
 if (!META_MAP[`${platform}-${arch}`]) {
-  throw new Error(
-    `mihomo unsupported platform "${platform}-${arch}"`
-  );
+  throw new Error(`mihomo unsupported platform "${platform}-${arch}"`);
 }
 
 if (!META_ALPHA_MAP[`${platform}-${arch}`]) {
-  throw new Error(
-    `mihomo alpha unsupported platform "${platform}-${arch}"`
-  );
+  throw new Error(`mihomo alpha unsupported platform "${platform}-${arch}"`);
 }
 
 /**
@@ -357,7 +355,12 @@ async function resolveResource(binInfo) {
  * copy local windows service binaries to resources dir
  */
 const WINDOWS_SERVICE_BINARY_FILES = [
-  // Windows service binary keeps historical filename for CI/local-binaries compatibility.
+  "clash-verge-buty-service.exe",
+  "clash-verge-buty-service-install.exe",
+  "clash-verge-buty-service-uninstall.exe",
+  "clash-verge-buty-firewall-helper.exe",
+];
+const OBSOLETE_WINDOWS_SERVICE_BINARY_FILES = [
   "clash-verge-service.exe",
   "install-service.exe",
   "uninstall-service.exe",
@@ -478,6 +481,11 @@ async function copyLocalWindowsServiceBinaries() {
     await removeIfExists(dst);
     await fs.copyFile(src, dst);
     console.log(`[INFO]: ${file} copied from local repository`);
+  }
+
+  for (const file of OBSOLETE_WINDOWS_SERVICE_BINARY_FILES) {
+    await removeIfExists(path.join(targetDir, file));
+    await removeIfExists(path.join(sourceDir, file));
   }
 
   console.log(

@@ -18,10 +18,10 @@ pub use windows::core::Error as Win32Error;
 const SUB_KEY: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
 const CONNECTIONS_SUB_KEY: &str =
     "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Connections";
-const RECOVERY_PARENT_KEY: &str = "SOFTWARE\\Clash-Verge-Buty";
-const RECOVERY_KEY: &str = "SOFTWARE\\Clash-Verge-Buty\\ProxyRecovery";
-const RECOVERY_ORIGINAL_KEY: &str = "SOFTWARE\\Clash-Verge-Buty\\ProxyRecovery\\Original";
-const RECOVERY_OWNED_KEY: &str = "SOFTWARE\\Clash-Verge-Buty\\ProxyRecovery\\Owned";
+const RECOVERY_PARENT_KEY: &str = "SOFTWARE\\clash-verge-buty";
+const RECOVERY_KEY: &str = "SOFTWARE\\clash-verge-buty\\ProxyRecovery";
+const RECOVERY_ORIGINAL_KEY: &str = "SOFTWARE\\clash-verge-buty\\ProxyRecovery\\Original";
+const RECOVERY_OWNED_KEY: &str = "SOFTWARE\\clash-verge-buty\\ProxyRecovery\\Owned";
 const RECOVERY_PHASE_PREPARED: u32 = 1;
 const RECOVERY_PHASE_OWNED: u32 = 2;
 const RECOVERY_JOURNAL_VERSION: u32 = 1;

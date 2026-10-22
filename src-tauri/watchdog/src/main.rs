@@ -118,7 +118,7 @@ impl Logger {
     fn new(exe_dir: &Path) -> io::Result<Self> {
         let path: PathBuf = exe_dir
             .join(".config")
-            .join("io.github.clash-verge-buty.data")
+            .join("io.github.clash-verge-buty")
             .join("logs")
             .join("watchdog");
         fs::create_dir_all(&path)?;

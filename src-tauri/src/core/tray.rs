@@ -193,7 +193,7 @@ impl Tray {
         };
 
         let _ = tray.set_tooltip(&format!(
-            "Clash-Verge-Buty {version}\n{}: {}\n{}: {}",
+            "Clash Verge Buty {version}\n{}: {}\n{}: {}",
             t!("System Proxy", "系统代理"),
             switch_map[system_proxy],
             t!("TUN Mode", "网卡模式"),

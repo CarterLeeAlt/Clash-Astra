@@ -1,24 +1,24 @@
 [package]
-name = "clash-verge-windows-service-src"
+name = "clash-verge-buty-service-src"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
 [[bin]]
-name = "clash-verge-service"
-path = "src/bin/clash-verge-service.rs"
+name = "clash-verge-buty-service"
+path = "src/bin/clash-verge-buty-service.rs"
 
 [[bin]]
-name = "install-service"
-path = "src/bin/install-service.rs"
+name = "clash-verge-buty-service-install"
+path = "src/bin/clash-verge-buty-service-install.rs"
 
 [[bin]]
-name = "uninstall-service"
-path = "src/bin/uninstall-service.rs"
+name = "clash-verge-buty-service-uninstall"
+path = "src/bin/clash-verge-buty-service-uninstall.rs"
 
 [[bin]]
-name = "firewall-helper"
-path = "src/bin/firewall-helper.rs"
+name = "clash-verge-buty-firewall-helper"
+path = "src/bin/clash-verge-buty-firewall-helper.rs"
 
 [dependencies]
 anyhow = "1"

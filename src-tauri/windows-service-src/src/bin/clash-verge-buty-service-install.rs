@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
-use clash_verge_windows_service_src::{api_token_path, SERVICE_DISPLAY_NAME, SERVICE_NAME};
+use clash_verge_buty_service_src::{
+    api_token_path, SERVICE_BINARY, SERVICE_DISPLAY_NAME, SERVICE_NAME,
+};
 use rand::{rngs::OsRng, RngCore};
 use std::ffi::OsString;
 use std::fs;
@@ -141,8 +143,8 @@ fn main() -> Result<()> {
     .context("failed to connect ServiceManager")?;
 
     let exe = std::env::current_exe()
-        .context("failed to resolve install-service.exe path")?
-        .with_file_name("clash-verge-service.exe");
+        .context("failed to resolve service install helper path")?
+        .with_file_name(SERVICE_BINARY);
     let info = ServiceInfo {
         name: OsString::from(SERVICE_NAME),
         display_name: OsString::from(SERVICE_DISPLAY_NAME),

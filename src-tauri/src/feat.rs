@@ -334,14 +334,14 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
         if let Some(true) = service_mode {
             let status = super::core::win_service::check_service().await?;
             if !status.installed {
-                bail!("Service Mode requires clash-verge-service to be installed. Please install service first.");
+                bail!("Service Mode requires clash-verge-buty-service to be installed. Please install service first.");
             }
         }
 
         if let Some(true) = tun_mode {
             let status = super::core::win_service::check_service().await?;
             if !status.installed {
-                bail!("Tun mode on Windows requires clash-verge-service to be installed. Please install and enable Service Mode first.");
+                bail!("Tun mode on Windows requires clash-verge-buty-service to be installed. Please install and enable Service Mode first.");
             }
             let service_enabled = service_mode.unwrap_or(current_service_enabled);
             if !service_enabled && service_mode != Some(true) {
@@ -350,7 +350,7 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
 
             super::core::win_service::ensure_service_ready()
                 .await
-                .map_err(|err| anyhow::anyhow!("Tun mode on Windows requires clash-verge-service. Please install and enable Service Mode first. {err}"))?;
+                .map_err(|err| anyhow::anyhow!("Tun mode on Windows requires clash-verge-buty-service. Please install and enable Service Mode first. {err}"))?;
         }
     }
 

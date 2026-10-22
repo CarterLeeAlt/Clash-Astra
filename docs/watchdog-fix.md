@@ -4,11 +4,11 @@
 
 ## 行为
 
-- `clash-verge-buty.exe` 仅承载 GUI，蓝色完整猫图标，任务管理器显示名 `Clash-Verge-Buty`。
-- `clash-verge-buty-watchdog.exe` 为独立监督程序，黄色完整猫图标，文件名全小写与 GUI 一致；任务管理器显示名 `Clash-Verge-Buty-Watchdog`。黄色取自仓库自带系统代理托盘图标 `tray-icon-sys.png` 的原始色板（主体 `#EE8A68`），仅换色不改变完整猫形。
+- `clash-verge-buty.exe` 仅承载 GUI，蓝色完整猫图标，任务管理器显示名 `Clash Verge Buty`。
+- `clash-verge-buty-watchdog.exe` 为独立监督程序，黄色完整猫图标，文件名全小写与 GUI 一致；任务管理器显示名 `Clash Verge Buty-Watchdog`。黄色取自仓库自带系统代理托盘图标 `tray-icon-sys.png` 的原始色板（主体 `#EE8A68`），仅换色不改变完整猫形。
 - 正常退出：GUI 清理系统代理与核心后退出 0，Watchdog 随之结束。
 - 托盘重启：GUI 清理后退出 42，现有 Watchdog 立即重新启动 GUI，不产生第二个监督程序。
-- 异常退出：最多重试三次，每次等待十秒；日志位于 `.config/io.github.clash-verge-buty.data/logs/watchdog/`。
+- 异常退出：最多重试三次，每次等待十秒；日志位于 `.config/io.github.clash-verge-buty/logs/watchdog/`。
 - “系统代理守卫”继续在 GUI 中运行，职责与 Watchdog 无关。
 - 启动时依据前次核心 PID、可执行文件路径和 `-d` 配置目录核验并清理残留 Mihomo。
 - 仓库自带的 `tray-icon-sys.png` 保持原样，未被本修复改动。
@@ -26,7 +26,7 @@ pnpm build:watchdog --target x86_64-pc-windows-msvc
 
 图标由 `scripts/generate-watchdog-icon.ps1` 生成：以完整蓝猫资源为形状，按仓库自带 `tray-icon-sys.png` 的主体色做逐通道线性映射，提供 16、32、48、64、128、256 像素 ICO 与 PNG。
 
-GUI 的任务管理器显示名来自 `Cargo.toml` 的 `description`（与 `package.json.description`、`tauri.conf.json` 的 short/longDescription 同步为 `Clash-Verge-Buty`）；Watchdog 的显示名在其 `build.rs` 中固定为 `Clash-Verge-Buty-Watchdog`。
+GUI 的任务管理器显示名来自 `Cargo.toml` 的 `description`（与 `package.json.description`、`tauri.conf.json` 的 short/longDescription 同步为 `Clash Verge Buty`）；Watchdog 的显示名在其 `build.rs` 中固定为 `Clash Verge Buty-Watchdog`。
 
 本地宿主：Windows 10 x64、Visual Studio 2022 Community 17.14.18、Rust 1.85.1、Node 20.20.0、pnpm 8.15.9。Rust/Node/包管理器与缓存均放在工作区内，未更改全局 PATH。
 
@@ -38,7 +38,7 @@ GUI 的任务管理器显示名来自 `Cargo.toml` 的 `description`（与 `pack
 - 实际 GUI 使用工作区隔离配置测试，关闭系统代理、自启、TUN，使用 43331/17897/19097 端口。启动与重复启动后恰好一个 GUI 和一个 Watchdog。
 - 强制结束实际测试 GUI 后，监督程序自动恢复 GUI，旧核心退出、新核心重新监听 17897，验证通过。
 - 便携包五种场景通过：完整、缺 helper、helper 为目录、只有 helper 没有 GUI、非标准 GUI 名称 fallback。
-- 内嵌大/小图标提取成功，实际资源为完整黄色猫（原版珊瑚橙色板）；文件描述分别为 `Clash-Verge-Buty` 与 `Clash-Verge-Buty-Watchdog`。
+- 内嵌大/小图标提取成功，实际资源为完整黄色猫（原版珊瑚橙色板）；文件描述分别为 `Clash Verge Buty` 与 `Clash Verge Buty-Watchdog`。
 
 使用项目本地 Rust 环境执行 `pwsh -File scripts/test-watchdog.ps1` 可复跑六项行为回归。测试产物位于工作区 `.tmp` 的独立目录。
 

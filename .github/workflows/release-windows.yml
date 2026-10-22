@@ -147,7 +147,7 @@ jobs:
           cargo build --manifest-path src-tauri/windows-service-src/Cargo.toml --release --target ${{ matrix.target }}
           New-Item -ItemType Directory -Force -Path src-tauri/local-binaries/windows-service-bin | Out-Null
           $svcOut = "src-tauri/windows-service-src/target/${{ matrix.target }}/release"
-          $need = @("clash-verge-service.exe", "install-service.exe", "uninstall-service.exe")
+          $need = @("clash-verge-buty-service.exe", "clash-verge-buty-service-install.exe", "clash-verge-buty-service-uninstall.exe", "clash-verge-buty-firewall-helper.exe")
           foreach ($n in $need) {
             $src = Join-Path $svcOut $n
             if (-not (Test-Path $src)) { throw "missing service binary: $src" }
@@ -164,6 +164,7 @@ jobs:
           $pkg | ConvertTo-Json -Depth 100 | Set-Content package.json -Encoding UTF8
 
           pnpm sync-metadata
+          pnpm check:naming
           pnpm check ${{ matrix.target }}
 
       - name: Detect signing availability
@@ -211,6 +212,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
           Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "clash-verge-buty-watchdog.exe") -Force
 
+      - name: Normalize main executable name
+        shell: pwsh
+        run: node scripts/normalize-main-exe.mjs --target ${{ matrix.target }}
+
       - name: Restore certificate
         if: steps.sign_mode.outputs.mode == 'pfx' && steps.sign_mode.outputs.can_sign == 'true'
         shell: pwsh
@@ -224,14 +229,14 @@ jobs:
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           if (-not $signtool) { throw "signtool.exe not found" }
           $files = @(
-            "src-tauri/target/${{ matrix.target }}/release/Clash_Verge_Buty.exe",
+            "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty.exe",
             "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
-          $watchdogPath = "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe"
-          if (-not (Test-Path -LiteralPath $watchdogPath -PathType Leaf)) { throw "missing watchdog binary: $watchdogPath" }
-          $files = $files | Where-Object { Test-Path $_ } | Select-Object -Unique
+          foreach ($f in $files) {
+            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing artifact: $f" }
+          }
           foreach ($f in $files) {
             & $signtool sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f "windows-signing.pfx" /p "${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}" "$f"
             if ($LASTEXITCODE -ne 0) { throw "signing failed: $f" }
@@ -246,7 +251,7 @@ jobs:
           project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/Clash_Verge_Buty.exe
+          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-verge-buty.exe
           output-artifact-directory: src-tauri/target/${{ matrix.target }}/release
 
       - name: Sign Windows watchdog (SignPath)
@@ -273,14 +278,14 @@ jobs:
         run: |
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           $files = @(
-            "src-tauri/target/${{ matrix.target }}/release/Clash_Verge_Buty.exe",
+            "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty.exe",
             "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
-          $watchdogPath = "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe"
-          if (-not (Test-Path -LiteralPath $watchdogPath -PathType Leaf)) { throw "missing watchdog binary: $watchdogPath" }
-          $files = $files | Where-Object { Test-Path $_ } | Select-Object -Unique
+          foreach ($f in $files) {
+            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing artifact: $f" }
+          }
           foreach ($f in $files) {
             & $signtool verify /pa /v "$f"
             if ($LASTEXITCODE -ne 0) { throw "signature verification failed: $f" }
@@ -306,8 +311,8 @@ jobs:
           # portable.mjs 在可签名构建（UNSIGNED_BUILD=0）时不加 _unsigned 后缀，
           # 因此这里必须按签名状态推导期望名，否则启用签名后必定找不到产物
           $unsignedSuffix = if ("${{ steps.sign_mode.outputs.can_sign }}" -eq "true") { "" } else { "_unsigned" }
-          $expectedPortable = "Clash-Verge-Buty_${env:VERSION}_x64_portable${unsignedSuffix}.zip"
-          $expectedSource = "Clash_Verge_Buty-v${env:VERSION}-full-source.zip"
+          $expectedPortable = "clash-verge-buty_${env:VERSION}_x64_portable${unsignedSuffix}.zip"
+          $expectedSource = "clash-verge-buty_${env:VERSION}_source.zip"
 
           $portableCandidates = Get-ChildItem . -Recurse -File -Filter "*.zip" | Where-Object { $_.Name -eq $expectedPortable }
           if ($portableCandidates.Count -ne 1) {
@@ -344,11 +349,9 @@ jobs:
         run: |
           # 同时覆盖签名与未签名两种命名，切换签名状态后也能清掉上一版残留
           $assetsToDelete = @(
-            "Clash-Verge-Buty_${env:VERSION}_x64_portable.zip",
-            "Clash-Verge-Buty_${env:VERSION}_x64_portable_unsigned.zip",
-            "Clash_Verge_Buty-v${env:VERSION}-full-source.zip",
-            "Clash-Verge-Buty_${env:VERSION}_x64-setup.exe",
-            "Clash-Verge-Buty_${env:VERSION}_x64-setup_unsigned.exe"
+            "clash-verge-buty_${env:VERSION}_x64_portable.zip",
+            "clash-verge-buty_${env:VERSION}_x64_portable_unsigned.zip",
+            "clash-verge-buty_${env:VERSION}_source.zip"
           )
           gh release view "${env:TAG_NAME}" --json id *> $null
           if ($LASTEXITCODE -ne 0) {
@@ -375,8 +378,8 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           # 用通配符覆盖签名与未签名两种便携包命名
           files: |
-            dist/windows-release-staging/Clash-Verge-Buty_${{ env.VERSION }}_x64_portable*.zip
-            dist/windows-release-staging/Clash_Verge_Buty-v${{ env.VERSION }}-full-source.zip
+            dist/windows-release-staging/clash-verge-buty_${{ env.VERSION }}_x64_portable*.zip
+            dist/windows-release-staging/clash-verge-buty_${{ env.VERSION }}_source.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

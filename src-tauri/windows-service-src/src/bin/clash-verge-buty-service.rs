@@ -19,7 +19,7 @@ use windows_service::service::{
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::{define_windows_service, service_dispatcher};
 
-use clash_verge_windows_service_src::{
+use clash_verge_buty_service_src::{
     api_token_path, API_ADDR, API_GET_CLASH, API_HEALTH, API_START_CLASH, API_STOP_CLASH,
     API_STOP_SERVICE, SERVICE_NAME,
 };
@@ -383,8 +383,8 @@ fn validate_start_request(payload: StartClashRequest) -> Result<ValidatedStartCl
         .context("portable .config directory not found beside the installed executable")?;
     let approved_config_name = config_dir.file_name().is_some_and(|name| {
         let name = name.to_string_lossy();
-        name.eq_ignore_ascii_case("io.github.clash-verge-buty.data")
-            || name.eq_ignore_ascii_case("io.github.clash-verge-buty.data.dev")
+        name.eq_ignore_ascii_case("io.github.clash-verge-buty")
+            || name.eq_ignore_ascii_case("io.github.clash-verge-buty.dev")
     });
     if !config_dir.is_dir()
         || !approved_config_name

@@ -1,6 +1,6 @@
 {
   "package": {
-    "productName": "Clash-Verge-Buty",
+    "productName": "Clash Verge Buty",
     "version": "1.6.9"
   },
   "build": {
@@ -12,7 +12,7 @@
   "tauri": {
     "bundle": {
       "active": false,
-      "identifier": "io.github.clash-verge-buty.data",
+      "identifier": "io.github.clash-verge-buty",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -21,10 +21,10 @@
       ],
       "resources": ["resources"],
       "externalBin": ["sidecar/mihomo", "sidecar/mihomo-alpha"],
-      "copyright": "© 2026 Clash-Verge-Buty",
+      "copyright": "© 2026 Clash Verge Buty",
       "category": "DeveloperTool",
-      "shortDescription": "Clash-Verge-Buty",
-      "longDescription": "Clash-Verge-Buty"
+      "shortDescription": "Clash Verge Buty",
+      "longDescription": "Clash Verge Buty"
     },
 
     "updater": {
