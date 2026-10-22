@@ -1,11 +1,5 @@
 use crate::config::IVerge;
-use crate::{
-    config::Config,
-    core::*,
-    utils::dirs,
-    utils::init,
-    utils::server,
-};
+use crate::{config::Config, core::*, utils::dirs, utils::init, utils::server};
 use crate::{log_err, trace_err};
 use anyhow::Result;
 use once_cell::sync::OnceCell;
