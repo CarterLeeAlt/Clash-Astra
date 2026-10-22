@@ -278,7 +278,7 @@ class DelayManager {
     if (delay < 0) return "text.secondary";
     if (delay > 1e5 || delay >= timeout) return "error.main";
     if (delay > 200) return "warning.dark";
-    if (delay >= 100) return "warning.main";
+    if (delay >= 150) return "warning.main";
     return "success.main";
   }
 }
