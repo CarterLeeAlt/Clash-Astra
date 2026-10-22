@@ -4,8 +4,8 @@ use windows::core::BSTR;
 use windows::Win32::Foundation::VARIANT_BOOL;
 use windows::Win32::NetworkManagement::WindowsFirewall::{
     INetFwPolicy2, INetFwRule, INetFwRules, NetFwPolicy2, NetFwRule, NET_FW_ACTION_ALLOW,
-    NET_FW_IP_PROTOCOL_ANY, NET_FW_PROFILE2_ALL, NET_FW_PROFILE2_DOMAIN,
-    NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC, NET_FW_RULE_DIR_IN,
+    NET_FW_IP_PROTOCOL_ANY, NET_FW_PROFILE2_ALL, NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE,
+    NET_FW_PROFILE2_PUBLIC, NET_FW_RULE_DIR_IN,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
@@ -62,9 +62,8 @@ fn rule_name(core: &str) -> String {
 
 fn firewall_rules() -> Result<INetFwRules> {
     unsafe {
-        let policy: INetFwPolicy2 =
-            CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
-                .context("failed to open Windows Firewall policy")?;
+        let policy: INetFwPolicy2 = CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
+            .context("failed to open Windows Firewall policy")?;
         policy
             .Rules()
             .context("failed to access Windows Firewall rules")
@@ -108,9 +107,9 @@ fn add_rule(rules: &INetFwRules, name: &str, program: &Path) -> Result<()> {
             .Add(&rule)
             .with_context(|| format!("failed to add Windows Firewall rule '{name}'"))?;
 
-        let stored = rules
-            .Item(&expected_name)
-            .with_context(|| format!("Windows Firewall rule '{name}' was not found after creation"))?;
+        let stored = rules.Item(&expected_name).with_context(|| {
+            format!("Windows Firewall rule '{name}' was not found after creation")
+        })?;
         let stored_program = stored.ApplicationName()?.to_string();
         let required_profiles =
             NET_FW_PROFILE2_DOMAIN.0 | NET_FW_PROFILE2_PRIVATE.0 | NET_FW_PROFILE2_PUBLIC.0;

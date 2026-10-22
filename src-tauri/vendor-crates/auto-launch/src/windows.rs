@@ -70,9 +70,7 @@ fn remove_owned_registration(
     if let Some(run) = run.as_ref() {
         delete_value_if_present(run, app_name)?;
     }
-    if let Ok(startup_approved) =
-        root.open_subkey_with_flags(startup_approved_key, KEY_SET_VALUE)
-    {
+    if let Ok(startup_approved) = root.open_subkey_with_flags(startup_approved_key, KEY_SET_VALUE) {
         delete_value_if_present(&startup_approved, app_name)?;
     }
     Ok(())
@@ -80,12 +78,7 @@ fn remove_owned_registration(
 
 fn remove_legacy_registrations(app_name: &str) -> std::io::Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    remove_owned_registration(
-        &hkcu,
-        AL_REGKEY,
-        TASK_MANAGER_OVERRIDE_REGKEY,
-        app_name,
-    )?;
+    remove_owned_registration(&hkcu, AL_REGKEY, TASK_MANAGER_OVERRIDE_REGKEY, app_name)?;
 
     // Older versions could register an elevated Run32 entry. Remove only an
     // entry that still belongs to this executable name and only when the
@@ -197,15 +190,9 @@ fn schtasks_error(operation: &str, output: &Output) -> std::io::Error {
     )
 }
 
-fn schtasks_mutation(
-    operation: &str,
-    args: &[&str],
-    allow_not_found: bool,
-) -> std::io::Result<()> {
+fn schtasks_mutation(operation: &str, args: &[&str], allow_not_found: bool) -> std::io::Result<()> {
     let output = schtasks(args)?;
-    if output.status.success()
-        || (allow_not_found && task_not_found(output.status.code()))
-    {
+    if output.status.success() || (allow_not_found && task_not_found(output.status.code())) {
         return Ok(());
     }
     if output.status.code() != Some(HRESULT_ACCESS_DENIED) {
@@ -213,9 +200,7 @@ fn schtasks_mutation(
     }
 
     let elevated = elevated_schtasks(args)?;
-    if elevated.status.success()
-        || (allow_not_found && task_not_found(elevated.status.code()))
-    {
+    if elevated.status.success() || (allow_not_found && task_not_found(elevated.status.code())) {
         return Ok(());
     }
     Err(std::io::Error::new(
@@ -234,21 +219,12 @@ fn task_name(app_name: &str) -> String {
 fn task_not_found(exit_code: Option<i32>) -> bool {
     matches!(
         exit_code,
-        Some(HRESULT_FILE_NOT_FOUND)
-            | Some(HRESULT_PATH_NOT_FOUND)
-            | Some(SCHED_E_TASK_NOT_FOUND)
+        Some(HRESULT_FILE_NOT_FOUND) | Some(HRESULT_PATH_NOT_FOUND) | Some(SCHED_E_TASK_NOT_FOUND)
     )
 }
 
 fn query_task_xml(task_name: &str) -> std::io::Result<Option<String>> {
-    let output = schtasks(&[
-        "/Query",
-        "/TN",
-        task_name,
-        "/XML",
-        "ONE",
-        "/HRESULT",
-    ])?;
+    let output = schtasks(&["/Query", "/TN", task_name, "/XML", "ONE", "/HRESULT"])?;
     if output.status.success() {
         return Ok(Some(decode_command_output(&output.stdout)));
     }
@@ -360,7 +336,11 @@ fn build_arguments(args: &[String]) -> String {
 fn task_is_owned(xml: &str, app_name: &str) -> bool {
     xml_element(xml, "Command")
         .map(xml_unescape)
-        .and_then(|command| PathBuf::from(command).file_stem().map(|stem| stem.to_owned()))
+        .and_then(|command| {
+            PathBuf::from(command)
+                .file_stem()
+                .map(|stem| stem.to_owned())
+        })
         .and_then(|stem| stem.to_str().map(str::to_string))
         .map(|stem| stem.eq_ignore_ascii_case(app_name))
         .unwrap_or(false)
@@ -543,15 +523,10 @@ impl AutoLaunch {
         }
 
         let sid = current_user_sid()?;
-        if existing.as_deref().is_some_and(|xml| {
-            task_matches(
-                xml,
-                &self.app_name,
-                executable_path,
-                &self.args,
-                &sid,
-            )
-        }) {
+        if existing
+            .as_deref()
+            .is_some_and(|xml| task_matches(xml, &self.app_name, executable_path, &self.args, &sid))
+        {
             remove_legacy_registrations(&self.app_name)?;
             return Ok(());
         }
@@ -724,17 +699,8 @@ mod tests {
             &args,
             sid
         ));
-        let disabled_xml = xml.replace(
-            "<Enabled>true</Enabled>",
-            "<Enabled>false</Enabled>",
-        );
-        assert!(!task_matches(
-            &disabled_xml,
-            app_name,
-            app_path,
-            &args,
-            sid
-        ));
+        let disabled_xml = xml.replace("<Enabled>true</Enabled>", "<Enabled>false</Enabled>");
+        assert!(!task_matches(&disabled_xml, app_name, app_path, &args, sid));
         assert!(!task_matches(
             &xml,
             app_name,

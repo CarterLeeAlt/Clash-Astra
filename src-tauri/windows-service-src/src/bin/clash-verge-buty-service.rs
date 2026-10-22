@@ -318,8 +318,7 @@ fn paths_equal(left: &Path, right: &Path) -> bool {
 /// `\\?\C:\data/file`. Keep canonical paths for validation, but pass their
 /// equivalent ordinary Win32 form to the child process.
 fn win32_compatible_path(path: &Path) -> PathBuf {
-    const VERBATIM_PREFIX: [u16; 4] =
-        [b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+    const VERBATIM_PREFIX: [u16; 4] = [b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
     const VERBATIM_UNC_PREFIX: [u16; 8] = [
         b'\\' as u16,
         b'\\' as u16,
@@ -336,9 +335,7 @@ fn win32_compatible_path(path: &Path) -> PathBuf {
         let mut result = vec![b'\\' as u16, b'\\' as u16];
         result.extend_from_slice(&wide[VERBATIM_UNC_PREFIX.len()..]);
         result
-    } else if wide.starts_with(&VERBATIM_PREFIX)
-        && wide.get(5).copied() == Some(b':' as u16)
-    {
+    } else if wide.starts_with(&VERBATIM_PREFIX) && wide.get(5).copied() == Some(b':' as u16) {
         wide[VERBATIM_PREFIX.len()..].to_vec()
     } else {
         return path.to_path_buf();

@@ -293,18 +293,8 @@ fn read_snapshot(key: &RegKey) -> Result<WindowsProxySnapshot> {
     let present_mask = key.get_value::<u32, _>("PresentMask")?;
     Ok(WindowsProxySnapshot {
         connections_existed: key.get_value::<u32, _>("ConnectionsExisted")? == 1,
-        proxy_enable: read_snapshot_value(
-            key,
-            "ProxyEnable",
-            SNAPSHOT_PROXY_ENABLE,
-            present_mask,
-        )?,
-        proxy_server: read_snapshot_value(
-            key,
-            "ProxyServer",
-            SNAPSHOT_PROXY_SERVER,
-            present_mask,
-        )?,
+        proxy_enable: read_snapshot_value(key, "ProxyEnable", SNAPSHOT_PROXY_ENABLE, present_mask)?,
+        proxy_server: read_snapshot_value(key, "ProxyServer", SNAPSHOT_PROXY_SERVER, present_mask)?,
         proxy_override: read_snapshot_value(
             key,
             "ProxyOverride",
@@ -317,12 +307,7 @@ fn read_snapshot(key: &RegKey) -> Result<WindowsProxySnapshot> {
             SNAPSHOT_AUTO_CONFIG_URL,
             present_mask,
         )?,
-        auto_detect: read_snapshot_value(
-            key,
-            "AutoDetect",
-            SNAPSHOT_AUTO_DETECT,
-            present_mask,
-        )?,
+        auto_detect: read_snapshot_value(key, "AutoDetect", SNAPSHOT_AUTO_DETECT, present_mask)?,
         default_connection_settings: read_snapshot_value(
             key,
             "DefaultConnectionSettings",
@@ -365,8 +350,7 @@ fn load_recovery() -> Result<Option<WindowsProxyRecovery>> {
     let owned = match phase {
         RECOVERY_PHASE_PREPARED => None,
         RECOVERY_PHASE_OWNED => {
-            let owned_key =
-                hkcu.open_subkey_with_flags(RECOVERY_OWNED_KEY, enums::KEY_READ)?;
+            let owned_key = hkcu.open_subkey_with_flags(RECOVERY_OWNED_KEY, enums::KEY_READ)?;
             Some(read_snapshot(&owned_key)?)
         }
         value => {
@@ -430,10 +414,7 @@ impl WindowsProxySnapshot {
                 connections.as_ref(),
                 "DefaultConnectionSettings",
             )?,
-            saved_legacy_settings: read_raw_value(
-                connections.as_ref(),
-                "SavedLegacySettings",
-            )?,
+            saved_legacy_settings: read_raw_value(connections.as_ref(), "SavedLegacySettings")?,
         })
     }
 
@@ -443,8 +424,7 @@ impl WindowsProxySnapshot {
         let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
         let transaction = Transaction::new()?;
         let (recovery, _) = hkcu.create_subkey_transacted(RECOVERY_KEY, &transaction)?;
-        let (original, _) =
-            hkcu.create_subkey_transacted(RECOVERY_ORIGINAL_KEY, &transaction)?;
+        let (original, _) = hkcu.create_subkey_transacted(RECOVERY_ORIGINAL_KEY, &transaction)?;
         write_snapshot(&original, self)?;
         write_recovery_metadata(&recovery);
         recovery.set_value("Phase", &RECOVERY_PHASE_PREPARED)?;
@@ -525,8 +505,7 @@ impl WindowsProxySnapshot {
         let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
         let transaction = Transaction::new()?;
         let (settings, _) = hkcu.create_subkey_transacted(SUB_KEY, &transaction)?;
-        let (connections, _) =
-            hkcu.create_subkey_transacted(CONNECTIONS_SUB_KEY, &transaction)?;
+        let (connections, _) = hkcu.create_subkey_transacted(CONNECTIONS_SUB_KEY, &transaction)?;
 
         restore_raw_value(&settings, "ProxyEnable", &self.proxy_enable)?;
         restore_raw_value(&settings, "ProxyServer", &self.proxy_server)?;
@@ -570,8 +549,7 @@ impl WindowsProxySnapshot {
         let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
         let transaction = Transaction::new()?;
         let (settings, _) = hkcu.create_subkey_transacted(SUB_KEY, &transaction)?;
-        let (connections, _) =
-            hkcu.create_subkey_transacted(CONNECTIONS_SUB_KEY, &transaction)?;
+        let (connections, _) = hkcu.create_subkey_transacted(CONNECTIONS_SUB_KEY, &transaction)?;
 
         restore_raw_value_if_unchanged(
             &settings,
@@ -715,9 +693,7 @@ fn set_global_proxy(server: &str, bypass: &str) -> Result<()> {
         },
     });
 
-    let mut b = ManuallyDrop::new(
-        bypass.encode_utf16().chain([0u16]).collect::<Vec<u16>>(),
-    );
+    let mut b = ManuallyDrop::new(bypass.encode_utf16().chain([0u16]).collect::<Vec<u16>>());
     p_opts.push(INTERNET_PER_CONN_OPTIONW {
         dwOption: INTERNET_PER_CONN_PROXY_BYPASS,
         Value: INTERNET_PER_CONN_OPTIONW_0 {
