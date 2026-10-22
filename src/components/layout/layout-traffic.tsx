@@ -7,7 +7,7 @@ import {
 } from "@mui/icons-material";
 import { useClashInfo } from "@/hooks/use-clash";
 import { useVerge } from "@/hooks/use-verge";
-import { TrafficGraph, type TrafficRef } from "./traffic-graph";
+import { TrafficGraph, type TrafficRef, trafficUpColor } from "./traffic-graph";
 import { useVisibility } from "@/hooks/use-visibility";
 import { useWebsocket } from "@/hooks/use-websocket";
 import parseTraffic from "@/utils/parse-traffic";
@@ -84,6 +84,10 @@ export const LayoutTraffic = () => {
     textAlign: "center",
     sx: { flex: "1 1 56px", userSelect: "none" },
   };
+  const upValStyle: any = {
+    ...valStyle,
+    sx: { ...valStyle.sx, color: trafficUpColor },
+  };
   const unitStyle: any = {
     component: "span",
     color: "grey.500",
@@ -104,11 +108,13 @@ export const LayoutTraffic = () => {
         <Box display="flex" alignItems="center" whiteSpace="nowrap">
           <ArrowUpward
             {...iconStyle}
-            color={+up > 0 ? "secondary" : "disabled"}
+            color={+up > 0 ? undefined : "disabled"}
+            sx={{
+              ...iconStyle.sx,
+              color: +up > 0 ? trafficUpColor : undefined,
+            }}
           />
-          <Typography {...valStyle} color="secondary">
-            {up}
-          </Typography>
+          <Typography {...upValStyle}>{up}</Typography>
           <Typography {...unitStyle}>{upUnit}/s</Typography>
         </Box>
 

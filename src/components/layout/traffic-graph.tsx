@@ -6,7 +6,10 @@ const maxPoint = 30;
 const refLineAlpha = 1;
 const refLineWidth = 2;
 
-const upLineAlpha = 0.6;
+// 与「测试」图标主体一致的黄色，供上行数值与曲线共用
+export const trafficUpColor = "#FFA800";
+
+const upLineAlpha = 1;
 const upLineWidth = 4;
 
 const downLineAlpha = 1;
@@ -76,9 +79,9 @@ export const TrafficGraph = forwardRef<TrafficRef>((props, ref) => {
 
     if (!context) return;
 
-    const { primary, secondary, divider } = palette;
+    const { primary, divider } = palette;
     const refLineColor = divider || "rgba(0, 0, 0, 0.12)";
-    const upLineColor = secondary.main || "#ffac47";
+    const upLineColor = trafficUpColor;
     const downLineColor = primary.main || "#5b5c9d";
 
     const width = canvas.width;
