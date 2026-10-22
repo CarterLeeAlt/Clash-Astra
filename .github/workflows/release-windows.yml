@@ -226,15 +226,15 @@ jobs:
           $files = @(
             "src-tauri/target/${{ matrix.target }}/release/Clash_Verge_Buty.exe",
             "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-meta.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-meta-alpha.exe"
+            "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
+            "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
           $watchdogPath = "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe"
           if (-not (Test-Path -LiteralPath $watchdogPath -PathType Leaf)) { throw "missing watchdog binary: $watchdogPath" }
           $files = $files | Where-Object { Test-Path $_ } | Select-Object -Unique
           foreach ($f in $files) {
             & $signtool sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f "windows-signing.pfx" /p "${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}" "$f"
-            if ($f.EndsWith("/clash-verge-buty-watchdog.exe") -and $LASTEXITCODE -ne 0) { throw "watchdog signing failed: $f" }
+            if ($LASTEXITCODE -ne 0) { throw "signing failed: $f" }
           }
 
       - name: Sign final release artifacts (SignPath)
@@ -275,15 +275,15 @@ jobs:
           $files = @(
             "src-tauri/target/${{ matrix.target }}/release/Clash_Verge_Buty.exe",
             "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-meta.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-meta-alpha.exe"
+            "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
+            "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
           $watchdogPath = "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe"
           if (-not (Test-Path -LiteralPath $watchdogPath -PathType Leaf)) { throw "missing watchdog binary: $watchdogPath" }
           $files = $files | Where-Object { Test-Path $_ } | Select-Object -Unique
           foreach ($f in $files) {
             & $signtool verify /pa /v "$f"
-            if ($f.EndsWith("/clash-verge-buty-watchdog.exe") -and $LASTEXITCODE -ne 0) { throw "watchdog signature verification failed: $f" }
+            if ($LASTEXITCODE -ne 0) { throw "signature verification failed: $f" }
             Get-AuthenticodeSignature "$f" | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
           }
 
@@ -303,7 +303,10 @@ jobs:
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Path $stage | Out-Null
 
-          $expectedPortable = "Clash-Verge-Buty_${env:VERSION}_x64_portable_unsigned.zip"
+          # portable.mjs 在可签名构建（UNSIGNED_BUILD=0）时不加 _unsigned 后缀，
+          # 因此这里必须按签名状态推导期望名，否则启用签名后必定找不到产物
+          $unsignedSuffix = if ("${{ steps.sign_mode.outputs.can_sign }}" -eq "true") { "" } else { "_unsigned" }
+          $expectedPortable = "Clash-Verge-Buty_${env:VERSION}_x64_portable${unsignedSuffix}.zip"
           $expectedSource = "Clash_Verge_Buty-v${env:VERSION}-full-source.zip"
 
           $portableCandidates = Get-ChildItem . -Recurse -File -Filter "*.zip" | Where-Object { $_.Name -eq $expectedPortable }
@@ -339,7 +342,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 同时覆盖签名与未签名两种命名，切换签名状态后也能清掉上一版残留
           $assetsToDelete = @(
+            "Clash-Verge-Buty_${env:VERSION}_x64_portable.zip",
             "Clash-Verge-Buty_${env:VERSION}_x64_portable_unsigned.zip",
             "Clash_Verge_Buty-v${env:VERSION}-full-source.zip",
             "Clash-Verge-Buty_${env:VERSION}_x64-setup.exe",
@@ -368,8 +373,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
+          # 用通配符覆盖签名与未签名两种便携包命名
           files: |
-            dist/windows-release-staging/Clash-Verge-Buty_${{ env.VERSION }}_x64_portable_unsigned.zip
+            dist/windows-release-staging/Clash-Verge-Buty_${{ env.VERSION }}_x64_portable*.zip
             dist/windows-release-staging/Clash_Verge_Buty-v${{ env.VERSION }}-full-source.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

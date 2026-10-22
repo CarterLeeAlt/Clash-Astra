@@ -15,6 +15,15 @@ use std::{
 
 const MAX_RETRIES: usize = 3;
 const RETRY_DELAY_SECS: u64 = 10;
+/// 应用请求重启后的等待时间，避免立即重新拉起造成紧密循环。
+const RESTART_DELAY_SECS: u64 = 2;
+/// 单位时间窗内允许的「应用请求重启」次数上限。
+///
+/// 退出码 42 表示应用主动请求重启，正常只来自托盘的「重启应用」。
+/// 若某条路径变成「启动即请求重启」，不做限频就会形成零延迟无限重启并
+/// 绕开 MAX_RETRIES；这里用滑动窗口把这种情况也纳入重试计数。
+const RESTART_WINDOW_SECS: u64 = 60;
+const RESTART_LIMIT_PER_WINDOW: usize = 5;
 
 fn main() {
     match run() {
@@ -49,6 +58,8 @@ fn run() -> io::Result<i32> {
     let mut logger = Logger::new(exe.parent().unwrap())?;
     logger.write(&format!("{WATCHDOG_EXE} supervisor started"));
     let mut retries = 0;
+    // 应用主动请求重启的时间戳，用于滑动窗口限频
+    let mut restart_times: Vec<std::time::Instant> = Vec::new();
     loop {
         let status = process::run_child(&exe, &gui_args);
         match status {
@@ -57,8 +68,27 @@ fn run() -> io::Result<i32> {
                 return Ok(0);
             }
             Ok(RESTART_EXIT_CODE) => {
-                logger.write("GUI requested restart");
+                let now = std::time::Instant::now();
+                restart_times
+                    .retain(|t| now.duration_since(*t).as_secs() < RESTART_WINDOW_SECS);
+
+                if restart_times.len() >= RESTART_LIMIT_PER_WINDOW {
+                    logger.write(&format!(
+                        "GUI requested restart {RESTART_LIMIT_PER_WINDOW} times within \
+                         {RESTART_WINDOW_SECS}s; restart loop detected, supervisor stopping"
+                    ));
+                    return Ok(RESTART_EXIT_CODE);
+                }
+
+                restart_times.push(now);
+                logger.write(&format!(
+                    "GUI requested restart ({}/{RESTART_LIMIT_PER_WINDOW} in {}s window)",
+                    restart_times.len(),
+                    RESTART_WINDOW_SECS
+                ));
                 retries = 0;
+                // 请求重启同样需要间隔，避免零延迟的紧密循环
+                std::thread::sleep(Duration::from_secs(RESTART_DELAY_SECS));
             }
             result => {
                 let code = match &result {
