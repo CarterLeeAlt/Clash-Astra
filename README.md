@@ -1,12 +1,12 @@
 <h1 align="center">
   <img src="./src/assets/image/logo.png" alt="Clash" width="128" />
   <br>
-  Clash-Verge-Buty</a>
+  Clash-Verge-Buty
   <br>
 </h1>
 
 <h3 align="center">
-A Mihomo GUI based on Tauri (Just a Modified Version)</a>.
+A Mihomo GUI based on Tauri (Just a Modified Version).
 </h3>
 
 

@@ -132,10 +132,7 @@ pub struct DelayRes {
     pub delay: u64,
 }
 
-/// Native TCP probe for the built-in DIRECT outbound.
-///
-/// This intentionally bypasses Clash's `/proxies/DIRECT/delay` path so the
-/// result reflects the host system's direct TCP connect latency to the test URL.
+/// 解析延迟测试 URL，为空时回落到默认地址。
 fn resolve_latency_test_url(test_url: Option<String>) -> String {
     test_url
         .and_then(|url| {
@@ -149,6 +146,10 @@ fn resolve_latency_test_url(test_url: Option<String>) -> String {
         .unwrap_or_else(|| DEFAULT_LATENCY_TEST_URL.to_string())
 }
 
+/// Native TCP probe for the built-in DIRECT outbound.
+///
+/// This intentionally bypasses Clash's `/proxies/DIRECT/delay` path so the
+/// result reflects the host system's direct TCP connect latency to the test URL.
 pub async fn get_direct_tcp_delay(test_url: Option<String>, timeout: i32) -> Result<DelayRes> {
     let test_url = resolve_latency_test_url(test_url);
 

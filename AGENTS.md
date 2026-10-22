@@ -41,6 +41,7 @@
 
 - 前端改动：`pnpm exec tsc --noEmit`
 - Rust 改动：`cargo fmt` 和 `cargo check`
-- 完整检查：`pnpm check`
+
+`pnpm check` 不是代码检查：它下载 mihomo、geo 数据等 sidecar 资源并构建 Windows service 二进制，前端类型检查与 Rust 编译检查都不包含在内。
 
 如果检查因环境限制失败，必须说明原因；不要把 `cargo fmt` 当成编译检查，也不要声称未通过的检查已通过。
