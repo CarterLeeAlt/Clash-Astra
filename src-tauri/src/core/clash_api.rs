@@ -404,8 +404,8 @@ mod tests {
     #[test]
     fn resolve_latency_test_url_trims_and_preserves_custom_url() {
         assert_eq!(
-            resolve_latency_test_url(Some("  https://example.com/generate_204  ".into())),
-            "https://example.com/generate_204"
+            resolve_latency_test_url(Some("  https://example.com/healthz  ".into())),
+            "https://example.com/healthz"
         );
     }
 }

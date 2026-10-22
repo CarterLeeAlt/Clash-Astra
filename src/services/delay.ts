@@ -2,6 +2,11 @@ import { cmdGetProxyDelay } from "./cmds";
 
 const hashKey = (name: string, group: string) => `${group ?? ""}::${name}`;
 
+// 普通节点默认使用 gstatic（组级 URL 可覆盖），DIRECT/REJECT 固定使用国内 204
+const PROXY_LATENCY_TEST_URL = "http://www.gstatic.com/generate_204";
+const BUILT_IN_LATENCY_TEST_URL =
+  "http://connectivitycheck.platform.hicloud.com/generate_204";
+
 type DelayTaskState = {
   id: number;
   aborted: boolean;
@@ -154,6 +159,14 @@ class DelayManager {
     return -1;
   }
 
+  private getTestUrl(name: string, group: string) {
+    if (name === "DIRECT" || name === "REJECT") {
+      return BUILT_IN_LATENCY_TEST_URL;
+    }
+
+    return this.getUrl(group)?.trim() || PROXY_LATENCY_TEST_URL;
+  }
+
   private isAbortError(_err: any, signal?: AbortSignal) {
     return signal?.aborted ?? false;
   }
@@ -181,7 +194,7 @@ class DelayManager {
 
     try {
       if (signal?.aborted) return null;
-      const url = this.getUrl(group);
+      const url = this.getTestUrl(name, group);
       const result = await cmdGetProxyDelay(name, timeout, url);
       if (signal?.aborted) return null;
       delay = result.delay;

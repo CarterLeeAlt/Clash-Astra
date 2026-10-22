@@ -1,4 +1,4 @@
-use crate::config::{DEFAULT_LATENCY_TEST_URL, LEGACY_DEFAULT_LATENCY_TEST_URLS};
+use crate::config::DEFAULT_LATENCY_TEST_URL;
 use crate::utils::{dirs, help};
 use anyhow::Result;
 use log::LevelFilter;
@@ -231,9 +231,6 @@ impl IVerge {
     pub fn normalize_default_latency_test(&mut self) -> bool {
         let normalized = match self.default_latency_test.as_deref() {
             Some(url) if url.trim().is_empty() => Some(DEFAULT_LATENCY_TEST_URL.to_string()),
-            Some(url) if LEGACY_DEFAULT_LATENCY_TEST_URLS.contains(&url) => {
-                Some(DEFAULT_LATENCY_TEST_URL.to_string())
-            }
             Some(_) => self.default_latency_test.clone(),
             None => Some(DEFAULT_LATENCY_TEST_URL.to_string()),
         };
@@ -360,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_default_latency_test_migrates_none() {
+    fn normalize_default_latency_test_fills_none() {
         let mut config = IVerge {
             default_latency_test: None,
             ..IVerge::default()
@@ -374,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_default_latency_test_migrates_empty_string() {
+    fn normalize_default_latency_test_fills_empty_string() {
         let mut config = IVerge {
             default_latency_test: Some("   ".into()),
             ..IVerge::default()
@@ -385,26 +382,6 @@ mod tests {
             config.default_latency_test.as_deref(),
             Some(DEFAULT_LATENCY_TEST_URL)
         );
-    }
-
-    #[test]
-    fn normalize_default_latency_test_migrates_all_legacy_defaults() {
-        for legacy_url in LEGACY_DEFAULT_LATENCY_TEST_URLS {
-            let mut config = IVerge {
-                default_latency_test: Some((*legacy_url).to_string()),
-                ..IVerge::default()
-            };
-
-            assert!(
-                config.normalize_default_latency_test(),
-                "legacy URL was not migrated: {legacy_url}"
-            );
-            assert_eq!(
-                config.default_latency_test.as_deref(),
-                Some(DEFAULT_LATENCY_TEST_URL),
-                "legacy URL did not migrate to the current default: {legacy_url}"
-            );
-        }
     }
 
     #[test]
