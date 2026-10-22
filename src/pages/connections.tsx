@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLockFn } from "ahooks";
 import {
+  Alert,
   Box,
   Button,
   IconButton,
@@ -39,6 +40,38 @@ const getStartTimestamp = (conn: IConnectionsItem) => {
   if (!conn.start) return 0;
   const ts = new Date(conn.start).getTime();
   return Number.isNaN(ts) ? 0 : ts;
+};
+
+// 用 Map 按 id 匹配新旧快照，保持旧条目原有位置以减少列表跳动（O(n)，替代逐条 findIndex 的 O(n²)）
+const mergeConnectionSnapshot = (
+  oldConn: IConnectionsItem[],
+  incoming: IConnectionsItem[],
+): IConnectionsItem[] => {
+  const maxLen = incoming.length;
+  const oldIndexMap = new Map(oldConn.map((conn, index) => [conn.id, index]));
+  const connections: IConnectionsItem[] = new Array(maxLen);
+  const rest: IConnectionsItem[] = [];
+
+  incoming.forEach((each) => {
+    const index = oldIndexMap.get(each.id);
+    if (index !== undefined && index < maxLen) {
+      const prev = oldConn[index];
+      each.curUpload = (each.upload ?? 0) - (prev.upload ?? 0);
+      each.curDownload = (each.download ?? 0) - (prev.download ?? 0);
+      connections[index] = each;
+    } else {
+      each.curUpload = 0;
+      each.curDownload = 0;
+      rest.push(each);
+    }
+  });
+
+  for (let i = 0; i < maxLen && rest.length > 0; ++i) {
+    if (!connections[i]) {
+      connections[i] = rest.shift()!;
+    }
+  }
+  return connections;
 };
 
 const sortByActiveSpeed = (list: IConnectionsItem[]) =>
@@ -92,69 +125,72 @@ const ConnectionsPage = () => {
   const syncConnections = useLockFn(async () => {
     const snapshot = await getConnections();
     const incoming = snapshot?.connections ?? [];
-    setConnData((old) => {
-      const oldConn = old.connections;
-      const connections: IConnectionsItem[] = [];
-      const rest = incoming.filter((each) => {
-        const index = oldConn.findIndex((o) => o.id === each.id);
-        if (index >= 0 && index < incoming.length) {
-          const prev = oldConn[index];
-          each.curUpload = (each.upload ?? 0) - (prev.upload ?? 0);
-          each.curDownload = (each.download ?? 0) - (prev.download ?? 0);
-          connections[index] = each;
-          return false;
-        }
-        return true;
-      });
-      for (let i = 0; i < incoming.length; ++i) {
-        if (!connections[i] && rest.length > 0) {
-          const item = rest.shift()!;
-          item.curUpload = item.curUpload ?? 0;
-          item.curDownload = item.curDownload ?? 0;
-          connections[i] = item;
-        }
-      }
-      return { ...snapshot, connections };
-    });
+    setConnData((old) => ({
+      ...snapshot,
+      connections: mergeConnectionSnapshot(old.connections, incoming),
+    }));
   });
+
+  const [wsState, setWsState] = useState<"connected" | "reconnecting">(
+    "reconnecting",
+  );
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmountedRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      unmountedRef.current = true;
+    },
+    [],
+  );
+
+  const clearFallbackTimer = useCallback(() => {
+    if (!fallbackTimerRef.current) return;
+    clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = null;
+  }, []);
+
+  // 断线期间用 HTTP 拉快照兜底，WS 恢复后停止
+  const scheduleFallbackPolling = useCallback(() => {
+    if (fallbackTimerRef.current) return;
+    fallbackTimerRef.current = setTimeout(async () => {
+      fallbackTimerRef.current = null;
+      await syncConnections().catch(() => undefined);
+      if (unmountedRef.current) return;
+      scheduleFallbackPolling();
+    }, 3000);
+  }, [syncConnections]);
 
   const { connect, disconnect } = useWebsocket(
     (event) => {
       // meta v1.15.0 出现data.connections为null的情况
       const data = JSON.parse(event.data) as IConnections;
       const incoming = data.connections ?? [];
-      setConnData((old) => {
-        const oldConn = old.connections;
-        const maxLen = incoming.length;
-
-        const connections: typeof oldConn = [];
-
-        const rest = incoming.filter((each) => {
-          const index = oldConn.findIndex((o) => o.id === each.id);
-
-          if (index >= 0 && index < maxLen) {
-            const old = oldConn[index];
-            each.curUpload = each.upload - old.upload;
-            each.curDownload = each.download - old.download;
-
-            connections[index] = each;
-            return false;
-          }
-          return true;
-        });
-
-        for (let i = 0; i < maxLen; ++i) {
-          if (!connections[i] && rest.length > 0) {
-            connections[i] = rest.shift()!;
-            connections[i].curUpload = 0;
-            connections[i].curDownload = 0;
-          }
-        }
-
-        return { ...data, connections };
-      });
+      setConnData((old) => ({
+        ...data,
+        connections: mergeConnectionSnapshot(old.connections, incoming),
+      }));
     },
-    { errorCount: 3, retryInterval: 1000, onOpen: () => { void syncConnections().catch(() => undefined); } }
+    {
+      maxRetries: "infinite",
+      retryInterval: 500,
+      maxRetryInterval: 10000,
+      backoff: true,
+      heartbeatTimeout: 5000,
+      onOpen: () => {
+        setWsState("connected");
+        clearFallbackTimer();
+        void syncConnections().catch(() => undefined);
+      },
+      onClose: () => {
+        setWsState("reconnecting");
+        scheduleFallbackPolling();
+      },
+      onError: () => {
+        setWsState("reconnecting");
+        scheduleFallbackPolling();
+      },
+    },
   );
 
   useEffect(() => {
@@ -164,9 +200,10 @@ const ConnectionsPage = () => {
     connect(`ws://${server}/connections?token=${encodeURIComponent(secret)}`);
 
     return () => {
+      clearFallbackTimer();
       disconnect();
     };
-  }, [clashInfo?.server, clashInfo?.secret]);
+  }, [clashInfo?.server, clashInfo?.secret, connect, disconnect, clearFallbackTimer]);
 
 
   useEffect(() => {
@@ -215,6 +252,14 @@ const ConnectionsPage = () => {
         </Box>
       }
     >
+      {wsState === "reconnecting" && (
+        <Box sx={{ px: "10px", pb: 0.5 }}>
+          <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
+            连接流短暂中断，正在自动重连…
+          </Alert>
+        </Box>
+      )}
+
       <Box
         sx={{
           pt: 1,

@@ -9,6 +9,8 @@ export interface WsOptions {
   maxRetries?: number | "infinite";
   reconnect?: boolean;
   backoff?: boolean;
+  // 超过该毫秒数未收到任何消息则强制断开并重连（仅适用于服务端有固定推送周期的连接，如 /connections 每秒快照）
+  heartbeatTimeout?: number;
   onError?: (event: Event) => void;
   onOpen?: (event: Event) => void;
   onClose?: (event: CloseEvent) => void;
@@ -25,6 +27,7 @@ export const useWebsocket = (onMessage: WsMsgFn, options?: WsOptions) => {
   const msgRef = useRef(onMessage);
   const optsRef = useRef(options);
   const connIdRef = useRef(0);
+  const lastMsgAtRef = useRef(0);
 
   msgRef.current = onMessage;
   optsRef.current = options;
@@ -69,6 +72,7 @@ export const useWebsocket = (onMessage: WsMsgFn, options?: WsOptions) => {
     wsRef.current = ws;
     const connId = connIdRef.current + 1;
     connIdRef.current = connId;
+    lastMsgAtRef.current = Date.now();
 
     const scheduleReconnect = () => {
       const opts = optsRef.current;
@@ -107,12 +111,14 @@ export const useWebsocket = (onMessage: WsMsgFn, options?: WsOptions) => {
     ws.onopen = (event) => {
       if (wsRef.current !== ws || connIdRef.current !== connId) return;
       retryCountRef.current = 0;
+      lastMsgAtRef.current = Date.now();
       clearTimer();
       optsRef.current?.onOpen?.(event);
     };
 
     ws.onmessage = (event) => {
       if (wsRef.current !== ws || connIdRef.current !== connId) return;
+      lastMsgAtRef.current = Date.now();
       msgRef.current(event);
     };
 
@@ -143,5 +149,22 @@ export const useWebsocket = (onMessage: WsMsgFn, options?: WsOptions) => {
     disconnect();
   }, [disconnect]);
 
-  return { connect, disconnect };
+  // 消息活性看门狗：服务端有固定推送周期的连接（如 /connections 每秒快照）
+  // 超时未收到消息时强制重建，处理 TCP 半开/对端卡死但不触发 onclose 的情况
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const timeout = optsRef.current?.heartbeatTimeout;
+      if (!timeout || !wsRef.current || unmountedRef.current) return;
+      if (Date.now() - lastMsgAtRef.current < timeout) return;
+      connect(urlRef.current, false);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [connect]);
+
+  const isOpen = useCallback(
+    () => wsRef.current?.readyState === WebSocket.OPEN,
+    [],
+  );
+
+  return { connect, disconnect, isOpen };
 };

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useRecoilValue, useSetRecoilState } from "recoil";
 import { getClashLogs } from "@/services/cmds";
+import { getVersion } from "@/services/api";
 import { useClashInfo } from "@/hooks/use-clash";
 import {
   atomEnableLog,
@@ -14,6 +15,7 @@ import { useWebsocket } from "@/hooks/use-websocket";
 import { buildControllerWsUrl } from "@/utils/controller";
 
 const MAX_LOG_NUM = 2000;
+const LOG_FLUSH_INTERVAL = 200;
 const FALLBACK_SYNC_INTERVAL = 4000;
 const RECONNECTING_HINT_DELAY = 8000;
 
@@ -37,7 +39,19 @@ export const useLogSetup = () => {
 
   const historyReqIdRef = useRef(0);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<ILogItem[]>([]);
+  const unmountedRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      unmountedRef.current = true;
+    },
+    [],
+  );
 
   const wsUrl = useMemo(
     () => buildControllerWsUrl(clashInfo?.server || "", "/logs", clashInfo?.secret || ""),
@@ -64,15 +78,37 @@ export const useLogSetup = () => {
     }, RECONNECTING_HINT_DELAY);
   }, [clearReconnectHintTimer, setLogConnState, setLogError]);
 
+  const clearFlushTimer = useCallback(() => {
+    if (!flushTimerRef.current) return;
+    clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = null;
+  }, []);
+
+  const flushLogs = useCallback(() => {
+    flushTimerRef.current = null;
+    const batch = pendingRef.current;
+    pendingRef.current = [];
+    if (batch.length === 0) return;
+    setLogData((old) => {
+      const map = new Map<string, ILogItem>();
+      // 最新日志排在最前，batch 反转后与旧数据拼接
+      [...batch.slice().reverse(), ...old].forEach((item) =>
+        map.set(getLogKey(item), item),
+      );
+      return Array.from(map.values()).slice(0, MAX_LOG_NUM);
+    });
+  }, [setLogData]);
+
+  // 高频日志先入缓冲，200ms 批量合并一次，避免逐条触发整表重渲
   const mergeLogs = useCallback(
     (incoming: ILogItem[]) => {
-      setLogData((old) => {
-        const map = new Map<string, ILogItem>();
-        [...incoming, ...old].forEach((item) => map.set(getLogKey(item), item));
-        return Array.from(map.values()).slice(0, MAX_LOG_NUM);
-      });
+      if (!incoming || incoming.length === 0) return;
+      pendingRef.current.push(...incoming);
+      if (!flushTimerRef.current) {
+        flushTimerRef.current = setTimeout(flushLogs, LOG_FLUSH_INTERVAL);
+      }
     },
-    [setLogData],
+    [flushLogs],
   );
 
   const pullHistory = useCallback(async (source: "ws-open" | "fallback" | "manual" = "manual") => {
@@ -80,11 +116,13 @@ export const useLogSetup = () => {
     try {
       const logs = await getClashLogs();
       if (reqId !== historyReqIdRef.current) return;
+      // 历史保持「旧 -> 新」入缓冲，由 flushLogs 统一反转一次前置；
+      // 若在此处再 reverse，会与 flushLogs 的反转相互抵消，导致历史段倒序
       mergeLogs(
         (logs || []).map((item) => ({
           ...item,
           time: normalizeLogTime(item.time),
-        })).reverse(),
+        })),
       );
 
       if (source === "ws-open") {
@@ -98,18 +136,7 @@ export const useLogSetup = () => {
     }
   }, [clearReconnectHintTimer, mergeLogs, setLogConnState, setLogError]);
 
-  const scheduleFallbackSync = useCallback(() => {
-    if (!enableLog) return;
-    if (fallbackTimerRef.current) return;
-
-    fallbackTimerRef.current = setTimeout(async () => {
-      fallbackTimerRef.current = null;
-      await pullHistory("fallback");
-      scheduleFallbackSync();
-    }, FALLBACK_SYNC_INTERVAL);
-  }, [enableLog, pullHistory]);
-
-  const { connect, disconnect } = useWebsocket(
+  const { connect, disconnect, isOpen } = useWebsocket(
     (event) => {
       try {
         const data = JSON.parse(event.data) as ILogItem;
@@ -143,6 +170,36 @@ export const useLogSetup = () => {
       },
     },
   );
+
+  const scheduleFallbackSync = useCallback(() => {
+    if (!enableLog) return;
+    if (fallbackTimerRef.current) return;
+
+    fallbackTimerRef.current = setTimeout(async () => {
+      fallbackTimerRef.current = null;
+      await pullHistory("fallback");
+      // 探活：controller 不可达而 WS 仍处于 OPEN，说明是半开死链（本地回环下内核卡死），强制重建
+      try {
+        await getVersion();
+      } catch {
+        if (wsUrl && isOpen()) {
+          enterReconnectingState();
+          disconnect();
+          connect(wsUrl);
+        }
+      }
+      if (unmountedRef.current) return;
+      scheduleFallbackSync();
+    }, FALLBACK_SYNC_INTERVAL);
+  }, [
+    connect,
+    disconnect,
+    enableLog,
+    enterReconnectingState,
+    isOpen,
+    pullHistory,
+    wsUrl,
+  ]);
 
   useEffect(() => {
     let unlisten: null | (() => void) = null;
@@ -209,7 +266,9 @@ export const useLogSetup = () => {
       historyReqIdRef.current += 1;
       clearFallbackTimer();
       clearReconnectHintTimer();
+      clearFlushTimer();
+      pendingRef.current = [];
       disconnect();
     };
-  }, [clearFallbackTimer, clearReconnectHintTimer, connect, disconnect, enableLog, enterReconnectingState, pullHistory, scheduleFallbackSync, setLogConnState, setLogError, wsUrl]);
+  }, [clearFallbackTimer, clearFlushTimer, clearReconnectHintTimer, connect, disconnect, enableLog, enterReconnectingState, pullHistory, scheduleFallbackSync, setLogConnState, setLogError, wsUrl]);
 };

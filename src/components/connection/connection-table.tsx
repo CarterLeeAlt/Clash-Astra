@@ -14,16 +14,43 @@ interface Props {
   onShowDetail: (data: IConnectionsItem) => void;
 }
 
+const COLUMN_VISIBLE_KEY = "connections-table-columns";
+
+const DEFAULT_COLUMN_VISIBLE: GridColumnVisibilityModel = {
+  activeSpeed: false,
+  process: true,
+};
+
+const loadColumnVisible = (): GridColumnVisibilityModel => {
+  try {
+    const saved = localStorage.getItem(COLUMN_VISIBLE_KEY);
+    if (!saved) return DEFAULT_COLUMN_VISIBLE;
+    const parsed = JSON.parse(saved) as GridColumnVisibilityModel;
+    // 校验值必须是布尔，防止脏数据进入 DataGrid
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, v]) => typeof v === "boolean"),
+    );
+  } catch {
+    return DEFAULT_COLUMN_VISIBLE;
+  }
+};
+
 export const ConnectionTable = (props: Props) => {
   const { connections, onShowDetail } = props;
 
-  const [columnVisible, setColumnVisible] = useState<GridColumnVisibilityModel>({
-    activeSpeed: false,
-    process: false,
-  });
+  const [columnVisible, setColumnVisible] =
+    useState<GridColumnVisibilityModel>(loadColumnVisible);
+
+  const onColumnVisibleChange = (model: GridColumnVisibilityModel) => {
+    setColumnVisible(model);
+    try {
+      localStorage.setItem(COLUMN_VISIBLE_KEY, JSON.stringify(model));
+    } catch {}
+  };
 
   const columns: GridColDef[] = [
-    { field: "host", headerName: "Host", flex: 1, minWidth: 200 },
+    { field: "host", headerName: "Host", width: 220, minWidth: 220 },
+    { field: "process", headerName: "Process", width: 126, minWidth: 84 },
     {
       field: "activeSpeed",
       headerName: "Active Speed",
@@ -37,8 +64,8 @@ export const ConnectionTable = (props: Props) => {
     {
       field: "dlSpeed",
       headerName: "DL Speed",
-      width: 110,
-      minWidth: 100,
+      width: 99,
+      minWidth: 90,
       align: "right",
       headerAlign: "right",
       valueFormatter: (params: GridValueFormatterParams<number>) =>
@@ -47,21 +74,20 @@ export const ConnectionTable = (props: Props) => {
     {
       field: "ulSpeed",
       headerName: "UL Speed",
-      width: 110,
-      minWidth: 100,
+      width: 99,
+      minWidth: 90,
       align: "right",
       headerAlign: "right",
       valueFormatter: (params: GridValueFormatterParams<number>) =>
         parseTraffic(params.value).join(" ") + "/s",
     },
 
-    { field: "chains", headerName: "Chains", flex: 1.7, minWidth: 320 },
-    { field: "rule", headerName: "Rule", flex: 300, minWidth: 250 },
-    { field: "process", headerName: "Process", flex: 240, minWidth: 120 },
+    { field: "chains", headerName: "Chains", width: 192, minWidth: 192 },
+    { field: "rule", headerName: "Rule", width: 210, minWidth: 210 },
     {
       field: "time",
       headerName: "Time",
-      flex: 120,
+      width: 100,
       minWidth: 100,
       align: "right",
       headerAlign: "right",
@@ -71,14 +97,14 @@ export const ConnectionTable = (props: Props) => {
       valueFormatter: (params: GridValueFormatterParams<string>) =>
         dayjs(params.value).fromNow(),
     },
-    { field: "source", headerName: "Source", flex: 200, minWidth: 130 },
+    { field: "source", headerName: "Source", width: 180, minWidth: 180 },
     {
       field: "destinationIP",
-      headerName: "Destination IP",
-      flex: 200,
-      minWidth: 130,
+      headerName: "Dst IP",
+      width: 120,
+      minWidth: 120,
     },
-    { field: "type", headerName: "Type", flex: 160, minWidth: 100 },
+    { field: "type", headerName: "Type", width: 160, minWidth: 160 },
   ];
 
   const connRows = useMemo(() => {
@@ -118,7 +144,7 @@ export const ConnectionTable = (props: Props) => {
       density="compact"
       sx={{ border: "none", "div:focus": { outline: "none !important" } }}
       columnVisibilityModel={columnVisible}
-      onColumnVisibilityModelChange={(e) => setColumnVisible(e)}
+      onColumnVisibilityModelChange={onColumnVisibleChange}
       initialState={{
         sorting: {
           sortModel: [{ field: "activeSpeed", sort: "desc" }],
