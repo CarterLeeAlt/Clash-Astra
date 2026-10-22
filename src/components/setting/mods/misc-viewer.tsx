@@ -10,7 +10,13 @@ import {
   TextField,
 } from "@mui/material";
 import { useVerge } from "@/hooks/use-verge";
-import { BaseDialog, DialogRef, formatNoticeMessage, Notice, Switch } from "@/components/base";
+import {
+  BaseDialog,
+  DialogRef,
+  formatNoticeMessage,
+  Notice,
+  Switch,
+} from "@/components/base";
 
 export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
   const { t } = useTranslation();
@@ -24,7 +30,7 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
     proxyLayoutColumn: 6,
     defaultLatencyTest: "",
     autoLogClean: 1,
-    defaultLatencyTimeout: "10000",
+    defaultLatencyTimeout: "5000",
   });
 
   useImperativeHandle(ref, () => ({
@@ -37,9 +43,7 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
         proxyLayoutColumn: verge?.proxy_layout_column ?? 6,
         defaultLatencyTest: verge?.default_latency_test ?? "",
         autoLogClean: verge?.auto_log_clean ?? 1,
-        defaultLatencyTimeout: String(
-          verge?.default_latency_timeout ?? 10000
-        ),
+        defaultLatencyTimeout: String(verge?.default_latency_timeout ?? 5000),
       });
     },
     close: () => setOpen(false),
@@ -202,7 +206,7 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
             spellCheck="false"
             sx={{ width: 250 }}
             value={values.defaultLatencyTimeout}
-            placeholder="10000"
+            placeholder="5000"
             onChange={(e) =>
               setValues((v) => ({
                 ...v,

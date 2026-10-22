@@ -159,7 +159,7 @@ pub async fn get_proxy_delay(
     let test_url = resolve_latency_test_url(test_url);
 
     let timeout = if timeout <= 0 {
-        10000
+        5000
     } else if timeout > 60000 {
         60000
     } else {

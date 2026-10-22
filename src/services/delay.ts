@@ -12,8 +12,6 @@ export const DELAY_PENDING = -2;
 export const DELAY_NOT_APPLICABLE = -3; // REJECT 没有网络路径，不测
 export const DELAY_UNREACHABLE = -4; // DIRECT 直连不到目标，属预期结果
 const DELAY_FAILED = 1e6;
-// DIRECT 在受限网络下会一直等到超时，单独给它一个更短的上限
-const DIRECT_LATENCY_TIMEOUT_MS = 3000;
 
 /** 是否已有可用于显示的测速结果（未测和测速中不算） */
 export const hasDelayResult = (delay: number) =>
@@ -207,11 +205,7 @@ class DelayManager {
     try {
       if (signal?.aborted) return null;
       const url = this.getUrl(group)?.trim() || DEFAULT_LATENCY_TEST_URL;
-      const effectiveTimeout =
-        name === "DIRECT"
-          ? Math.min(timeout, DIRECT_LATENCY_TIMEOUT_MS)
-          : timeout;
-      const result = await cmdGetProxyDelay(name, effectiveTimeout, url);
+      const result = await cmdGetProxyDelay(name, timeout, url);
       if (signal?.aborted) return null;
       delay = result.delay;
     } catch (err) {
@@ -268,7 +262,7 @@ class DelayManager {
     return this.isCurrentGroupCheck(group, task);
   }
 
-  formatDelay(delay: number, timeout = 10000) {
+  formatDelay(delay: number, timeout = 5000) {
     if (delay === DELAY_NOT_APPLICABLE) return "N/A";
     if (delay === DELAY_UNREACHABLE) return "Blocked";
     if (delay < 0) return ""; // 未测或测速中，不显示
@@ -276,7 +270,7 @@ class DelayManager {
     return `${delay} ms`;
   }
 
-  formatDelayColor(delay: number, timeout = 10000) {
+  formatDelayColor(delay: number, timeout = 5000) {
     if (delay === DELAY_NOT_APPLICABLE || delay === DELAY_UNREACHABLE) {
       return "text.primary";
     }
