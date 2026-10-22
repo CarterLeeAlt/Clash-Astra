@@ -64,9 +64,15 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult {
 
     match CoreManager::global().update_config().await {
         Ok(_) => {
+            // 先落盘再 apply：apply 之后再存盘失败会让内存与文件不一致，
+            // 前端收到错误却已经生效，重启后又回跳
+            if let Err(err) = Config::profiles().draft().save_file() {
+                Config::profiles().discard();
+                log::error!(target: "app", "{err}");
+                return Err(format!("{err}"));
+            }
             handle::Handle::refresh_clash();
             Config::profiles().apply();
-            wrap_err!(Config::profiles().data().save_file())?;
             Ok(())
         }
         Err(err) => {

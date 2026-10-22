@@ -72,7 +72,8 @@ pub fn change_clash_mode(mode: String) {
 
 // 切换系统代理
 pub fn toggle_system_proxy() {
-    let enable = Config::verge().draft().enable_system_proxy;
+    // 用 data() 读取：draft() 有副作用，会创建草稿并读到其他流程未提交的中间值
+    let enable = Config::verge().data().enable_system_proxy;
     let enable = enable.unwrap_or(false);
 
     tauri::async_runtime::spawn(async move {
@@ -158,12 +159,23 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
                     .latest()
                     .verge_mixed_port
                     .unwrap_or(Config::clash().data().get_mixed_port());
-            // 检查端口占用
+            // 检查端口占用。配置值可能是字符串（如 "7897"），也需要解析；
+            // 超出 u16 范围的值直接拒绝，避免截断成另一个端口去检查
             if changed {
-                if let Some(port) = mixed_port.unwrap().as_u64() {
-                    if !port_scanner::local_port_available(port as u16) {
+                let raw_port = mixed_port.unwrap();
+                let parsed_port = raw_port
+                    .as_u64()
+                    .or_else(|| raw_port.as_str().and_then(|s| s.trim().parse().ok()));
+                match parsed_port.and_then(|p| u16::try_from(p).ok()) {
+                    Some(port) => {
+                        if !port_scanner::local_port_available(port) {
+                            Config::clash().discard();
+                            bail!("port already in use");
+                        }
+                    }
+                    None => {
                         Config::clash().discard();
-                        bail!("port already in use");
+                        bail!("invalid mixed-port: {raw_port:?}");
                     }
                 }
             }

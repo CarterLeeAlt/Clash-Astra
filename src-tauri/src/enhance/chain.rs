@@ -1,7 +1,4 @@
-use crate::{
-    config::PrfItem,
-    utils::{dirs, help},
-};
+use crate::{config::PrfItem, utils::help};
 use serde_yaml::Mapping;
 use std::fs;
 
@@ -30,7 +27,8 @@ impl From<&PrfItem> for Option<ChainItem> {
         let itype = item.itype.as_ref()?.as_str();
         let file = item.file.clone()?;
         let uid = item.uid.clone().unwrap_or("".into());
-        let path = dirs::app_profiles_dir().ok()?.join(file);
+        // 与其他 profile 读写路径保持一致：拒绝绝对路径与含分隔符的文件名
+        let path = help::resolve_profile_path(&file).ok()?;
 
         if !path.exists() {
             return None;
