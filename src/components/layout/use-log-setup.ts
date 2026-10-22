@@ -190,7 +190,7 @@ export const useLogSetup = () => {
         }
       }
       if (unmountedRef.current) return;
-      scheduleFallbackSync();
+      scheduleFallbackSyncRef.current();
     }, FALLBACK_SYNC_INTERVAL);
   }, [
     connect,
@@ -201,6 +201,10 @@ export const useLogSetup = () => {
     pullHistory,
     wsUrl,
   ]);
+
+  // 递归调度需要引用自身，用 ref 避免自引用导致的闭包过期
+  const scheduleFallbackSyncRef = useRef(scheduleFallbackSync);
+  scheduleFallbackSyncRef.current = scheduleFallbackSync;
 
   useEffect(() => {
     let unlisten: null | (() => void) = null;

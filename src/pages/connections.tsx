@@ -131,6 +131,12 @@ const ConnectionsPage = () => {
     }));
   });
 
+  // useLockFn 内部只做了 useCallback(fn)，传入的箭头函数每次渲染都是新引用，
+  // 因此 syncConnections 的标识每次渲染都会变。用 ref 固定它，避免下游
+  // useCallback 级联失效、以及递归调度时捕获到过期闭包。
+  const syncConnectionsRef = useRef(syncConnections);
+  syncConnectionsRef.current = syncConnections;
+
   const [wsState, setWsState] = useState<"connected" | "reconnecting">(
     "reconnecting",
   );
@@ -156,11 +162,15 @@ const ConnectionsPage = () => {
     if (fallbackTimerRef.current) return;
     fallbackTimerRef.current = setTimeout(async () => {
       fallbackTimerRef.current = null;
-      await syncConnections().catch(() => undefined);
+      await syncConnectionsRef.current().catch(() => undefined);
       if (unmountedRef.current) return;
-      scheduleFallbackPolling();
+      scheduleFallbackPollingRef.current();
     }, 3000);
-  }, [syncConnections]);
+  }, []);
+
+  // scheduleFallbackPolling 需要递归调度自身，用 ref 打破自引用
+  const scheduleFallbackPollingRef = useRef(scheduleFallbackPolling);
+  scheduleFallbackPollingRef.current = scheduleFallbackPolling;
 
   const { connect, disconnect } = useWebsocket(
     (event) => {
@@ -209,11 +219,11 @@ const ConnectionsPage = () => {
 
   useEffect(() => {
     const onRefresh = () => {
-      void syncConnections().catch(() => undefined);
+      void syncConnectionsRef.current().catch(() => undefined);
     };
     window.addEventListener("verge://connections-refresh", onRefresh);
     return () => window.removeEventListener("verge://connections-refresh", onRefresh);
-  }, [syncConnections]);
+  }, []);
   const onCloseAll = useLockFn(async () => {
     await closeAllConnections();
     setConnData(initConn);

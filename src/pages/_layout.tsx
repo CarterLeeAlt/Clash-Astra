@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import i18next from "i18next";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SWRConfig, mutate } from "swr";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { CSSTransition, TransitionGroup } from "react-transition-group";
@@ -57,6 +57,12 @@ const Layout = () => {
   }));
   const nativeDecorations = windowStyle.nativeDecorations;
   const navigate = useNavigate();
+  // useNavigate 的返回函数在每次路由变化时都会换新引用（其内部 useCallback
+  // 依赖 locationPathname），所以不能直接放进 effect 依赖数组——否则每次点击
+  // 标签都会重新触发跳转，把用户弹回 start_page。这里用 ref 保存最新引用，
+  // 让 effect 只响应 start_page 的变化。
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const location = useLocation();
 
   useLogSetup();
@@ -155,9 +161,9 @@ const Layout = () => {
   // 只在 start_page 变化时跳转；与语言拆开，避免切换语言时被踢回起始页
   useEffect(() => {
     if (start_page) {
-      navigate(start_page);
+      navigateRef.current(start_page);
     }
-  }, [start_page, navigate]);
+  }, [start_page]);
 
   return (
     <SWRConfig value={{ errorRetryCount: 3 }}>
