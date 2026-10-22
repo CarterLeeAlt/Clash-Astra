@@ -63,6 +63,8 @@ impl IClashTemp {
         map.insert("mode".into(), "rule".into());
         map.insert("external-controller".into(), "127.0.0.1:9097".into());
         map.insert("secret".into(), "".into());
+        // 连接页需要展示发起连接的程序，strict 模式下普通连接不填 process
+        map.insert("find-process-mode".into(), "always".into());
         map.insert("tun".into(), tun.into());
 
         Self(map)
