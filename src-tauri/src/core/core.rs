@@ -1,4 +1,4 @@
-use super::scheduler::{JobFn, JobFuture, Schedule, Scheduler};
+use super::scheduler::{JobFn, JobFuture, OneShotScheduler};
 use super::{clash_api, logger::Logger};
 use crate::log_err;
 use crate::{config::*, utils::dirs};
@@ -534,13 +534,14 @@ impl CoreManager {
 
     #[cfg(target_os = "windows")]
     fn start_service_monitor(&'static self, generation: u64) {
-        let key = format!("service.monitor:{generation}");
-        let task_key = key.clone();
-        let failures = Arc::new(AtomicU8::new(0));
-        let task_failures = failures.clone();
+        self.schedule_service_monitor(generation, Arc::new(AtomicU8::new(0)));
+    }
 
+    #[cfg(target_os = "windows")]
+    fn schedule_service_monitor(&'static self, generation: u64, failures: Arc<AtomicU8>) {
+        let key = format!("service.monitor:{generation}");
+        let task_failures = failures.clone();
         let run: JobFn = Arc::new(move || {
-            let key = task_key.clone();
             let failures = task_failures.clone();
             let future: JobFuture = Box::pin(async move {
                 if !self.desired_running.load(Ordering::SeqCst)
@@ -551,7 +552,6 @@ impl CoreManager {
                         target: "app",
                         "service monitor stopped: generation={generation}"
                     );
-                    Scheduler::global().remove(&key)?;
                     return Ok(());
                 }
 
@@ -561,6 +561,7 @@ impl CoreManager {
                         target: "app",
                         "service monitor tick ok: generation={generation}"
                     );
+                    self.schedule_service_monitor(generation, failures);
                     return Ok(());
                 }
 
@@ -570,6 +571,7 @@ impl CoreManager {
                     "service monitor failure: generation={generation}, consecutive={failure_count}"
                 );
                 if failure_count < 3 {
+                    self.schedule_service_monitor(generation, failures);
                     return Ok(());
                 }
 
@@ -582,20 +584,19 @@ impl CoreManager {
                     self.core_ready.store(false, Ordering::SeqCst);
                     self.schedule_core_recovery();
                 }
-                Scheduler::global().remove(&key)?;
                 Ok(())
             });
             future
         });
 
-        match Scheduler::global().upsert(key, Schedule::Seconds(2), run) {
-            Ok(()) => log::debug!(
+        match OneShotScheduler::global().schedule_once(key, Duration::from_secs(2), run) {
+            Ok(()) => log::trace!(
                 target: "app",
-                "service monitor registered: generation={generation}, interval=2s"
+                "service monitor scheduled: generation={generation}, interval=2s"
             ),
             Err(err) => log::error!(
                 target: "app",
-                "failed to register service monitor: {err}"
+                "failed to schedule service monitor: {err}"
             ),
         }
     }

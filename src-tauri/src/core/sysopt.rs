@@ -1,4 +1,4 @@
-use crate::core::scheduler::{JobFn, JobFuture, Schedule, Scheduler};
+use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
 use crate::{config::Config, core::CoreManager, log_err};
 use anyhow::{anyhow, Context, Result};
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
@@ -690,17 +690,43 @@ impl Sysopt {
     /// 启动系统代理守护。
     ///
     /// 首次检查在 10 秒后；每次执行结束后按最新的 `proxy_guard_duration`
-    /// 重新安排下一次执行。任务已注册时不会重复启动。
+    /// 重新安排下一次执行。守护由一次性任务调度器驱动，任务执行期间不会
+    /// 删除自己的底层周期任务，因此不会触发 `delay_timer` 的 `finish_task`
+    /// 竞态错误。
     pub fn guard_proxy(&self) {
-        let scheduler = Scheduler::global();
-        if scheduler.is_registered(GUARD_TASK_KEY) {
-            log::trace!(target: "app", "system proxy guard task already registered");
+        let scheduler = OneShotScheduler::global();
+        let (enable, guard) = {
+            let verge = Config::verge();
+            let verge = verge.latest();
+            (
+                verge.enable_system_proxy.unwrap_or(false),
+                verge.enable_proxy_guard.unwrap_or(false),
+            )
+        };
+
+        if !system_proxy_guard_enabled(enable, guard) {
+            if scheduler.cancel(GUARD_TASK_KEY) {
+                log::debug!(
+                    target: "app",
+                    "system proxy guard task cancelled: enable_system_proxy={enable}, enable_proxy_guard={guard}"
+                );
+            } else {
+                log::trace!(
+                    target: "app",
+                    "system proxy guard task not needed: enable_system_proxy={enable}, enable_proxy_guard={guard}"
+                );
+            }
             return;
         }
 
-        match scheduler.upsert(
+        if scheduler.is_scheduled(GUARD_TASK_KEY) {
+            log::trace!(target: "app", "system proxy guard task already scheduled");
+            return;
+        }
+
+        match scheduler.schedule_once(
             GUARD_TASK_KEY,
-            Schedule::Seconds(GUARD_INITIAL_DELAY_SECS),
+            Duration::from_secs(GUARD_INITIAL_DELAY_SECS),
             guard_job(),
         ) {
             Ok(()) => log::debug!(
@@ -718,6 +744,10 @@ impl Sysopt {
 /// 系统代理守护任务。
 const GUARD_TASK_KEY: &str = "system_proxy.guard";
 const GUARD_INITIAL_DELAY_SECS: u64 = 10;
+
+fn system_proxy_guard_enabled(enable_system_proxy: bool, enable_proxy_guard: bool) -> bool {
+    enable_system_proxy && enable_proxy_guard
+}
 
 fn guard_job() -> JobFn {
     Arc::new(|| {
@@ -743,8 +773,7 @@ async fn run_guard_cycle() -> Result<()> {
         "system proxy guard tick: enable_system_proxy={enable}, enable_proxy_guard={guard}, duration={guard_duration}s"
     );
 
-    if !enable || !guard {
-        Scheduler::global().remove(GUARD_TASK_KEY)?;
+    if !system_proxy_guard_enabled(enable, guard) {
         log::debug!(
             target: "app",
             "system proxy guard task stopped: enable_system_proxy={enable}, enable_proxy_guard={guard}"
@@ -790,7 +819,7 @@ async fn run_guard_cycle() -> Result<()> {
         };
         if !still_enabled {
             log::debug!(target: "app", "system proxy guard skipped: disabled while waiting");
-            return reschedule_guard(interval_secs);
+            return Ok(());
         }
 
         let guard_result = sysproxy.set_system_proxy().context("guard system proxy");
@@ -813,21 +842,22 @@ async fn run_guard_cycle() -> Result<()> {
 }
 
 fn reschedule_guard(interval_secs: u64) -> Result<()> {
-    Scheduler::global().replace(
+    OneShotScheduler::global().schedule_once(
         GUARD_TASK_KEY,
-        Schedule::Seconds(interval_secs),
+        Duration::from_secs(interval_secs.max(1)),
         guard_job(),
     )?;
     log::debug!(
         target: "app",
-        "system proxy guard rescheduled in {interval_secs}s"
+        "system proxy guard rescheduled in {}s",
+        interval_secs.max(1)
     );
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::is_sysproxy_match;
+    use super::{is_sysproxy_match, system_proxy_guard_enabled};
     use sysproxy::Sysproxy;
 
     fn proxy(port: u16, bypass: &str) -> Sysproxy {
@@ -837,6 +867,14 @@ mod tests {
             port,
             bypass: bypass.into(),
         }
+    }
+
+    #[test]
+    fn proxy_guard_requires_both_switches() {
+        assert!(!system_proxy_guard_enabled(false, false));
+        assert!(!system_proxy_guard_enabled(false, true));
+        assert!(!system_proxy_guard_enabled(true, false));
+        assert!(system_proxy_guard_enabled(true, true));
     }
 
     #[test]

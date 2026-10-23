@@ -393,7 +393,7 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
             sysopt::Sysopt::global().guard_proxy();
         }
 
-        if let Some(true) = patch.enable_proxy_guard {
+        if patch.enable_proxy_guard.is_some() {
             sysopt::Sysopt::global().guard_proxy();
         }
 

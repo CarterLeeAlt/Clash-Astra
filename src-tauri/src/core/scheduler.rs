@@ -76,6 +76,7 @@ impl CancelToken {
 #[serde(rename_all = "camelCase")]
 pub enum Schedule {
     /// 按秒重复。
+    #[allow(dead_code)]
     Seconds(u64),
     /// 按分钟重复。
     Minutes(u64),
@@ -138,33 +139,18 @@ impl Scheduler {
     /// 同一个 key 的周期没有变化时保留原任务，不会重置计时；因此任务的运行
     /// 逻辑应从最新配置读取状态，不要依赖注册时捕获的可变快照。
     pub fn upsert(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
-        self.install(key, schedule, run, false)
+        self.install(key, schedule, run)
     }
 
-    /// 强制替换任务并重置计时，即使周期没有变化。
-    ///
-    /// 适合需要在每次执行结束后重新计算下一次触发时间的任务。
-    pub fn replace(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
-        self.install(key, schedule, run, true)
-    }
-
-    fn install(
-        &self,
-        key: impl Into<String>,
-        schedule: Schedule,
-        run: JobFn,
-        force: bool,
-    ) -> Result<()> {
+    fn install(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
         let key = key.into();
         let schedule = schedule.validate()?;
 
         let mut jobs = self.jobs.lock();
-        if !force {
-            if let Some(entry) = jobs.get(&key) {
-                if entry.schedule == schedule {
-                    log::trace!(target: "app", "scheduler task `{key}` unchanged");
-                    return Ok(());
-                }
+        if let Some(entry) = jobs.get(&key) {
+            if entry.schedule == schedule {
+                log::trace!(target: "app", "scheduler task `{key}` unchanged");
+                return Ok(());
             }
         }
 
@@ -185,6 +171,7 @@ impl Scheduler {
     }
 
     /// 任务是否已注册。
+    #[cfg(test)]
     pub fn is_registered(&self, key: &str) -> bool {
         self.jobs.lock().contains_key(key)
     }
@@ -234,6 +221,11 @@ impl Scheduler {
     }
 
     /// 移除任务；任务不存在时直接返回。
+    ///
+    /// 不要在周期任务的回调内部调用本方法：`delay_timer` 会先删除任务标记，
+    /// 回调结束时再执行 `finish_task`，从而打印“Without the task_mark_ref_mut”
+    /// 错误。需要自行停止的周期任务应改用一次性调度器并停止续约，或在任务
+    /// 外部调用本方法。
     pub fn remove(&self, key: &str) -> Result<()> {
         let mut jobs = self.jobs.lock();
         let Some(entry) = jobs.remove(key) else {
@@ -745,6 +737,23 @@ mod tests {
         })
     }
 
+    fn rescheduling_value_job(events: Values, key: &'static str, remaining: usize) -> JobFn {
+        Arc::new(move || {
+            let events = events.clone();
+            Box::pin(async move {
+                events.lock().unwrap().push(remaining);
+                if remaining > 1 {
+                    OneShotScheduler::global().schedule_once(
+                        key,
+                        Duration::from_millis(20),
+                        rescheduling_value_job(events, key, remaining - 1),
+                    )?;
+                }
+                Ok(())
+            })
+        })
+    }
+
     fn cancellable_wait_job(events: Events) -> CancellableJobFn {
         Arc::new(move |token| {
             let events = events.clone();
@@ -815,6 +824,28 @@ mod tests {
         }));
         assert_eq!(events.lock().unwrap().as_slice(), &["fired"]);
         assert!(!OneShotScheduler::global().is_scheduled(key));
+    }
+
+    #[test]
+    fn one_shot_can_reschedule_itself() {
+        let _guard = test_lock();
+        let events: Values = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.reschedule_self";
+        let scheduler = OneShotScheduler::global();
+
+        scheduler
+            .schedule_once(
+                key,
+                Duration::from_millis(20),
+                rescheduling_value_job(events.clone(), key, 3),
+            )
+            .unwrap();
+
+        assert!(wait_until(Duration::from_secs(2), || {
+            events.lock().unwrap().len() == 3
+        }));
+        assert_eq!(events.lock().unwrap().as_slice(), &[3, 2, 1]);
+        assert!(!scheduler.is_scheduled(key));
     }
 
     #[test]
