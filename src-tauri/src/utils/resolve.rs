@@ -1,4 +1,5 @@
 use crate::config::IVerge;
+use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
 use crate::{config::Config, core::*, utils::dirs, utils::init, utils::server};
 use crate::{log_err, trace_err};
 use anyhow::Result;
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Mapping;
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{App, AppHandle, Manager};
 use window_shadows::set_shadow;
@@ -31,6 +33,8 @@ const MAIN_WINDOW_RECREATE_BACKOFF_MS: u64 = 3_000;
 const MAIN_WINDOW_DESTROY_WINDOW_MS: u64 = 60_000;
 const MAIN_WINDOW_MAX_RECREATE_DESTROYS: u64 = 3;
 const WINDOW_SAVE_DEBOUNCE_MS: u64 = 600;
+const WINDOW_SIZE_POSITION_SAVE_TASK: &str = "window.size_position.save";
+const WINDOW_STATE_SAVE_TASK_PREFIX: &str = "window.state_save";
 const HEARTBEAT_WARN_AFTER_MS: u64 = 15_000;
 
 static MAIN_WINDOW_STATE: AtomicU64 = AtomicU64::new(MAIN_WINDOW_STATE_MISSING);
@@ -38,9 +42,6 @@ static MAIN_WINDOW_UNEXPECTED_DESTROY_COUNT: AtomicU64 = AtomicU64::new(0);
 static MAIN_WINDOW_UNEXPECTED_DESTROY_WINDOW_START_MS: AtomicU64 = AtomicU64::new(0);
 static MAIN_WINDOW_LAST_UNEXPECTED_DESTROY_MS: AtomicU64 = AtomicU64::new(0);
 static MAIN_WINDOW_LAST_CREATE_ATTEMPT_MS: AtomicU64 = AtomicU64::new(0);
-static WINDOW_SAVE_SCHEDULED: AtomicBool = AtomicBool::new(false);
-static LAST_WINDOW_MOVE_RESIZE_MS: AtomicU64 = AtomicU64::new(0);
-static WINDOW_SAVE_GENERATION: AtomicU64 = AtomicU64::new(0);
 static WINDOW_HIDE_IN_PROGRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
 static LAST_FRONTEND_HEARTBEAT_MS: AtomicU64 = AtomicU64::new(0);
 
@@ -276,48 +277,53 @@ pub fn is_window_hiding_in_progress() -> bool {
 }
 
 pub fn schedule_window_state_save(app_handle: AppHandle, delay: Duration) {
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(delay).await;
-        match save_window_size_position(&app_handle, true) {
-            Ok(_) => log::debug!(target: "app", "window state saved after delayed request"),
-            Err(err) => log::trace!(
-                target: "app",
-                "window state delayed save skipped: {err}"
-            ),
-        }
+    // 完整保存会读取当前窗口状态并落盘，取消尚未执行的拖动防抖保存。
+    OneShotScheduler::global().cancel(WINDOW_SIZE_POSITION_SAVE_TASK);
+
+    let key = format!("{WINDOW_STATE_SAVE_TASK_PREFIX}:{}ms", delay.as_millis());
+    let run: JobFn = Arc::new(move || {
+        let app_handle = app_handle.clone();
+        let future: JobFuture = Box::pin(async move {
+            match save_window_size_position(&app_handle, true) {
+                Ok(_) => log::debug!(target: "app", "window state saved after delayed request"),
+                Err(err) => log::trace!(
+                    target: "app",
+                    "window state delayed save skipped: {err}"
+                ),
+            }
+            Ok(())
+        });
+        future
     });
+
+    if let Err(err) = OneShotScheduler::global().schedule_once(key.clone(), delay, run) {
+        log::error!(
+            target: "app",
+            "failed to schedule window state save `{key}`: {err}"
+        );
+    } else {
+        log::debug!(
+            target: "app",
+            "window state save task scheduled, delay_ms={}, key={key}",
+            delay.as_millis()
+        );
+    }
 }
 
 pub fn schedule_save_window_size_position(app_handle: AppHandle) {
-    let now = current_time_millis();
-    LAST_WINDOW_MOVE_RESIZE_MS.store(now, Ordering::SeqCst);
-    WINDOW_SAVE_GENERATION.fetch_add(1, Ordering::SeqCst);
+    let scheduler = OneShotScheduler::global();
+    let was_pending = scheduler.is_scheduled(WINDOW_SIZE_POSITION_SAVE_TASK);
+    let moved_at = current_time_millis();
 
-    if WINDOW_SAVE_SCHEDULED
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        return;
-    }
-
-    log::debug!(target: "app", "window moved/resized debounce started");
-    tauri::async_runtime::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_millis(WINDOW_SAVE_DEBOUNCE_MS)).await;
-            let now = current_time_millis();
-            let last = LAST_WINDOW_MOVE_RESIZE_MS.load(Ordering::SeqCst);
-            let elapsed = now.saturating_sub(last);
-            if elapsed < WINDOW_SAVE_DEBOUNCE_MS {
-                continue;
-            }
-
+    let run: JobFn = Arc::new(move || {
+        let app_handle = app_handle.clone();
+        let future: JobFuture = Box::pin(async move {
             if is_window_hiding_in_progress() {
                 log::debug!(
                     target: "app",
                     "window moved/resized save skipped, reason=hiding_or_not_visible"
                 );
-                WINDOW_SAVE_SCHEDULED.store(false, Ordering::SeqCst);
-                return;
+                return Ok(());
             }
 
             let Some(window) = app_handle.get_window("main") else {
@@ -325,8 +331,7 @@ pub fn schedule_save_window_size_position(app_handle: AppHandle) {
                     target: "app",
                     "window moved/resized save skipped, reason=hiding_or_not_visible"
                 );
-                WINDOW_SAVE_SCHEDULED.store(false, Ordering::SeqCst);
-                return;
+                return Ok(());
             };
 
             if !window.is_visible().unwrap_or(false) {
@@ -334,33 +339,37 @@ pub fn schedule_save_window_size_position(app_handle: AppHandle) {
                     target: "app",
                     "window moved/resized save skipped, reason=hiding_or_not_visible"
                 );
-                WINDOW_SAVE_SCHEDULED.store(false, Ordering::SeqCst);
-                return;
+                return Ok(());
             }
 
+            let elapsed = current_time_millis().saturating_sub(moved_at);
             match save_window_size_position(&app_handle, false) {
                 Ok(_) => log::debug!(
                     target: "app",
-                    "window moved/resized saved after quiet, elapsed_ms={}",
-                    elapsed
+                    "window moved/resized saved after quiet, elapsed_ms={elapsed}"
                 ),
                 Err(err) => log::trace!(
                     target: "app",
                     "window moved/resized save after quiet skipped: {err}"
                 ),
             }
-            WINDOW_SAVE_SCHEDULED.store(false, Ordering::SeqCst);
-
-            if WINDOW_SAVE_GENERATION.load(Ordering::SeqCst) != 0
-                && current_time_millis()
-                    .saturating_sub(LAST_WINDOW_MOVE_RESIZE_MS.load(Ordering::SeqCst))
-                    < WINDOW_SAVE_DEBOUNCE_MS
-            {
-                schedule_save_window_size_position(app_handle.clone());
-            }
-            return;
-        }
+            Ok(())
+        });
+        future
     });
+
+    if let Err(err) = scheduler.debounce(
+        WINDOW_SIZE_POSITION_SAVE_TASK,
+        Duration::from_millis(WINDOW_SAVE_DEBOUNCE_MS),
+        run,
+    ) {
+        log::error!(
+            target: "app",
+            "failed to schedule window size/position save: {err}"
+        );
+    } else if !was_pending {
+        log::debug!(target: "app", "window moved/resized debounce started");
+    }
 }
 
 pub fn set_app_quitting(value: bool) {
@@ -521,6 +530,7 @@ pub fn resolve_setup(app: &mut App) {
 
 /// reset system proxy
 pub fn resolve_reset() {
+    OneShotScheduler::global().cancel_all();
     log_err!(sysopt::Sysopt::global().reset_sysproxy());
     log_err!(CoreManager::global().stop_core());
     #[cfg(target_os = "windows")]

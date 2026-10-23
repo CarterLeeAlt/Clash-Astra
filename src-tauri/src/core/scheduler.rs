@@ -1,10 +1,13 @@
 //! 后台定时任务调度器。
 //!
-//! 所有周期任务统一以稳定的 key 注册到 [`Scheduler`]，由调度器负责创建、
-//! 更新和移除底层的 `delay_timer` 任务。应用启动时调用 [`init`]，新增任务
-//! 时在 `init` 中追加对应模块的注册调用即可。
+//! [`Scheduler`] 管理固定周期的长期任务，所有周期任务以稳定的 key 注册到
+//! 调度器，由它负责创建、更新和移除底层的 `delay_timer` 任务。应用启动时
+//! 调用 [`init`]，新增周期任务时在 `init` 中追加对应模块的注册调用即可。
 //!
-//! 调度器只负责任务触发；任务返回的错误会被统一记录，不会影响其他任务。
+//! [`OneShotScheduler`] 管理一次性任务和防抖：同一个 key 再次调度会取消尚未
+//! 触发的旧任务并重新计时，任务执行前会自动从注册表移除。
+//!
+//! 两个调度器都只负责任务触发；任务返回的错误会被统一记录，不会影响其他任务。
 
 use anyhow::{bail, Context, Result};
 use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, Task, TaskBuilder};
@@ -15,6 +18,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
+use tauri::async_runtime::JoinHandle;
 
 use crate::core::timer;
 
@@ -184,6 +189,124 @@ impl Scheduler {
                 }
             })
             .context("failed to create scheduled task")
+    }
+}
+
+/// 一次性任务条目。
+struct OneShotEntry {
+    generation: u64,
+    handle: JoinHandle<()>,
+}
+
+/// 一次性/防抖任务调度器。
+///
+/// 任务只执行一次，执行前自动从注册表移除。同一个 key 再次调度会取消尚未
+/// 触发的旧任务并重新计时，因此同 key 的重复调用就是尾沿防抖，只保留最后
+/// 一次。已经在执行的任务不会被取消。
+pub struct OneShotScheduler {
+    jobs: Mutex<HashMap<String, OneShotEntry>>,
+    next_generation: AtomicU64,
+}
+
+impl OneShotScheduler {
+    pub fn global() -> &'static OneShotScheduler {
+        static ONE_SHOT: OnceCell<OneShotScheduler> = OnceCell::new();
+
+        ONE_SHOT.get_or_init(|| OneShotScheduler {
+            jobs: Mutex::new(HashMap::new()),
+            next_generation: AtomicU64::new(1),
+        })
+    }
+
+    /// 安排一次性任务；同 key 的旧任务会被取消并重新计时。
+    pub fn schedule_once(&self, key: impl Into<String>, delay: Duration, run: JobFn) -> Result<()> {
+        if delay.is_zero() {
+            bail!("one-shot task delay must be greater than zero");
+        }
+
+        let key = key.into();
+        let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
+        let task_key = key.clone();
+
+        // 先持锁再 spawn，确保任务醒来时一定能在注册表中看到本次条目。
+        let mut jobs = self.jobs.lock();
+        let handle = tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(delay).await;
+
+            let scheduler = OneShotScheduler::global();
+            let is_current = {
+                let mut jobs = scheduler.jobs.lock();
+                let is_current = jobs
+                    .get(&task_key)
+                    .map(|entry| entry.generation == generation)
+                    .unwrap_or(false);
+                if is_current {
+                    jobs.remove(&task_key);
+                }
+                is_current
+            };
+            if !is_current {
+                log::trace!(target: "app", "one-shot task `{task_key}` skipped: replaced");
+                return;
+            }
+
+            log::debug!(target: "app", "one-shot task `{task_key}` fired");
+            if let Err(err) = run().await {
+                log::error!(target: "app", "one-shot task `{task_key}` failed: {err:#}");
+            }
+        });
+
+        let replaced = jobs.insert(key.clone(), OneShotEntry { generation, handle });
+        drop(jobs);
+
+        if let Some(replaced) = replaced {
+            replaced.handle.abort();
+            log::trace!(target: "app", "one-shot task `{key}` rescheduled");
+        } else {
+            log::trace!(target: "app", "one-shot task `{key}` scheduled in {delay:?}");
+        }
+
+        Ok(())
+    }
+
+    /// 防抖：同 key 的重复调用只保留最后一次。
+    pub fn debounce(&self, key: impl Into<String>, delay: Duration, run: JobFn) -> Result<()> {
+        self.schedule_once(key, delay, run)
+    }
+
+    /// 取消尚未触发的一次性任务；返回是否确实取消了任务。
+    pub fn cancel(&self, key: &str) -> bool {
+        let mut jobs = self.jobs.lock();
+        let Some(entry) = jobs.remove(key) else {
+            return false;
+        };
+        drop(jobs);
+
+        entry.handle.abort();
+        log::debug!(target: "app", "one-shot task `{key}` cancelled");
+        true
+    }
+
+    /// 取消所有尚未触发的一次性任务。
+    pub fn cancel_all(&self) {
+        let entries: Vec<OneShotEntry> = self.jobs.lock().drain().map(|(_, entry)| entry).collect();
+        if entries.is_empty() {
+            return;
+        }
+
+        for entry in &entries {
+            entry.handle.abort();
+        }
+        log::debug!(
+            target: "app",
+            "one-shot tasks cancelled: {}",
+            entries.len()
+        );
+    }
+
+    /// 指定一次性任务是否仍在等待触发。
+    pub fn is_scheduled(&self, key: &str) -> bool {
+        self.jobs.lock().contains_key(key)
     }
 }
 
