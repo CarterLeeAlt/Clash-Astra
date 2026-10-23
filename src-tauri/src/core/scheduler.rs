@@ -360,7 +360,7 @@ struct RunningEntry {
 /// 一次。普通任务进入执行后不会被取消；可取消任务可以通过取消令牌协作退出。
 pub struct OneShotScheduler {
     jobs: Mutex<HashMap<String, OneShotEntry>>,
-    running: Mutex<HashMap<String, RunningEntry>>,
+    running: Mutex<HashMap<String, Vec<RunningEntry>>>,
     next_generation: AtomicU64,
 }
 
@@ -464,13 +464,21 @@ impl OneShotScheduler {
             cancelled = true;
         }
 
-        let token = self
+        let tokens: Vec<CancelToken> = self
             .running
             .lock()
             .get(key)
-            .and_then(|entry| entry.token.clone());
-        if let Some(token) = token {
-            token.cancel();
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| entry.token.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !tokens.is_empty() {
+            for token in &tokens {
+                token.cancel();
+            }
             cancelled = true;
         }
 
@@ -483,12 +491,18 @@ impl OneShotScheduler {
     /// 取消所有待触发任务，并向所有运行中的可取消任务发出取消信号。
     pub fn cancel_all(&self) {
         let entries: Vec<(String, OneShotEntry)> = self.jobs.lock().drain().collect();
-        let running: Vec<(String, CancelToken)> = self
-            .running
-            .lock()
-            .iter()
-            .filter_map(|(key, entry)| entry.token.clone().map(|token| (key.clone(), token)))
-            .collect();
+        let running: Vec<(String, CancelToken)> = {
+            let running = self.running.lock();
+            let mut tokens = Vec::new();
+            for (key, entries) in running.iter() {
+                for entry in entries {
+                    if let Some(token) = entry.token.clone() {
+                        tokens.push((key.clone(), token));
+                    }
+                }
+            }
+            tokens
+        };
 
         if entries.is_empty() && running.is_empty() {
             return;
@@ -545,15 +559,21 @@ impl OneShotScheduler {
     /// 返回所有正在执行的一次性任务快照，按 key 字典序排列。
     pub fn running_tasks(&self) -> Vec<RunningTaskInfo> {
         let running = self.running.lock();
-        let mut tasks: Vec<RunningTaskInfo> = running
-            .iter()
-            .map(|(key, entry)| RunningTaskInfo {
-                key: key.clone(),
-                generation: entry.generation,
-                cancellable: entry.token.is_some(),
-            })
-            .collect();
-        tasks.sort_by(|left, right| left.key.cmp(&right.key));
+        let mut tasks = Vec::new();
+        for (key, entries) in running.iter() {
+            for entry in entries {
+                tasks.push(RunningTaskInfo {
+                    key: key.clone(),
+                    generation: entry.generation,
+                    cancellable: entry.token.is_some(),
+                });
+            }
+        }
+        tasks.sort_by(|left, right| {
+            left.key
+                .cmp(&right.key)
+                .then_with(|| left.generation.cmp(&right.generation))
+        });
         tasks
     }
 
@@ -583,7 +603,7 @@ async fn run_one_shot_worker(key: String) {
 
         tokio::select! {
             _ = tokio::time::sleep_until(deadline) => {
-                let job = {
+                let (job, token, _running) = {
                     let mut jobs = scheduler.jobs.lock();
                     let Some(entry) = jobs.get(&key) else {
                         return;
@@ -591,18 +611,18 @@ async fn run_one_shot_worker(key: String) {
                     if entry.generation != generation {
                         continue;
                     }
-                    jobs.remove(&key).map(|entry| entry.job)
+                    let Some(entry) = jobs.remove(&key) else {
+                        return;
+                    };
+                    let job = entry.job;
+                    let token = match &job {
+                        OneShotJob::Plain(_) => None,
+                        OneShotJob::Cancellable(_) => Some(CancelToken::new()),
+                    };
+                    let running =
+                        RunningTaskGuard::new(key.clone(), generation, token.clone());
+                    (job, token, running)
                 };
-                let Some(job) = job else {
-                    return;
-                };
-
-                let token = match &job {
-                    OneShotJob::Plain(_) => None,
-                    OneShotJob::Cancellable(_) => Some(CancelToken::new()),
-                };
-                let _running =
-                    RunningTaskGuard::new(key.clone(), generation, token.clone());
 
                 log::debug!(target: "app", "one-shot task `{key}` fired");
                 let result = match job {
@@ -634,7 +654,9 @@ impl RunningTaskGuard {
         OneShotScheduler::global()
             .running
             .lock()
-            .insert(key.clone(), RunningEntry { generation, token });
+            .entry(key.clone())
+            .or_default()
+            .push(RunningEntry { generation, token });
         Self { key, generation }
     }
 }
@@ -642,11 +664,12 @@ impl RunningTaskGuard {
 impl Drop for RunningTaskGuard {
     fn drop(&mut self) {
         let mut running = OneShotScheduler::global().running.lock();
-        let is_current = running
-            .get(&self.key)
-            .map(|entry| entry.generation == self.generation)
-            .unwrap_or(false);
-        if is_current {
+        let mut remove_key = false;
+        if let Some(entries) = running.get_mut(&self.key) {
+            entries.retain(|entry| entry.generation != self.generation);
+            remove_key = entries.is_empty();
+        }
+        if remove_key {
             running.remove(&self.key);
         }
     }
