@@ -1,3 +1,4 @@
+use super::scheduler::{JobFn, JobFuture, Schedule, Scheduler};
 use super::{clash_api, logger::Logger};
 use crate::log_err;
 use crate::{config::*, utils::dirs};
@@ -8,7 +9,7 @@ use std::{
     fs,
     io::Write,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
         Arc,
     },
     time::Duration,
@@ -533,25 +534,43 @@ impl CoreManager {
 
     #[cfg(target_os = "windows")]
     fn start_service_monitor(&'static self, generation: u64) {
-        tauri::async_runtime::spawn(async move {
-            let mut consecutive_failures = 0u8;
-            loop {
-                sleep(Duration::from_secs(2)).await;
+        let key = format!("service.monitor:{generation}");
+        let task_key = key.clone();
+        let failures = Arc::new(AtomicU8::new(0));
+        let task_failures = failures.clone();
+
+        let run: JobFn = Arc::new(move || {
+            let key = task_key.clone();
+            let failures = task_failures.clone();
+            let future: JobFuture = Box::pin(async move {
                 if !self.desired_running.load(Ordering::SeqCst)
                     || self.active_generation.load(Ordering::SeqCst) != generation
                     || !*self.use_service_mode.lock()
                 {
-                    return;
+                    log::debug!(
+                        target: "app",
+                        "service monitor stopped: generation={generation}"
+                    );
+                    Scheduler::global().remove(&key)?;
+                    return Ok(());
                 }
 
                 if super::win_service::is_service_core_running().await {
-                    consecutive_failures = 0;
-                    continue;
+                    failures.store(0, Ordering::SeqCst);
+                    log::trace!(
+                        target: "app",
+                        "service monitor tick ok: generation={generation}"
+                    );
+                    return Ok(());
                 }
 
-                consecutive_failures += 1;
-                if consecutive_failures < 3 {
-                    continue;
+                let failure_count = failures.fetch_add(1, Ordering::SeqCst).saturating_add(1);
+                log::debug!(
+                    target: "app",
+                    "service monitor failure: generation={generation}, consecutive={failure_count}"
+                );
+                if failure_count < 3 {
+                    return Ok(());
                 }
 
                 if self
@@ -563,9 +582,22 @@ impl CoreManager {
                     self.core_ready.store(false, Ordering::SeqCst);
                     self.schedule_core_recovery();
                 }
-                return;
-            }
+                Scheduler::global().remove(&key)?;
+                Ok(())
+            });
+            future
         });
+
+        match Scheduler::global().upsert(key, Schedule::Seconds(2), run) {
+            Ok(()) => log::debug!(
+                target: "app",
+                "service monitor registered: generation={generation}, interval=2s"
+            ),
+            Err(err) => log::error!(
+                target: "app",
+                "failed to register service monitor: {err}"
+            ),
+        }
     }
 
     async fn stop_core_async(&self) -> Result<()> {
