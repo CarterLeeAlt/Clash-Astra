@@ -193,13 +193,21 @@ impl Scheduler {
         Ok(true)
     }
 
-    /// 返回指定前缀下已注册的任务 key。
+    /// 返回所有已注册的周期任务 key，按字典序排列。
+    pub fn keys(&self) -> Vec<String> {
+        self.keys_with_prefix("")
+    }
+
+    /// 返回指定前缀下已注册的任务 key，按字典序排列。
     pub fn keys_with_prefix(&self, prefix: &str) -> Vec<String> {
         let jobs = self.jobs.lock();
-        jobs.keys()
+        let mut keys: Vec<String> = jobs
+            .keys()
             .filter(|key| key.starts_with(prefix))
             .cloned()
-            .collect()
+            .collect();
+        keys.sort();
+        keys
     }
 
     fn build_task(&self, task_id: u64, key: &str, schedule: &Schedule, run: JobFn) -> Result<Task> {
@@ -333,19 +341,28 @@ impl OneShotScheduler {
 
     /// 取消所有尚未触发的一次性任务。
     pub fn cancel_all(&self) {
-        let entries: Vec<OneShotEntry> = self.jobs.lock().drain().map(|(_, entry)| entry).collect();
+        let entries: Vec<(String, OneShotEntry)> = self.jobs.lock().drain().collect();
         if entries.is_empty() {
             return;
         }
 
-        for entry in &entries {
+        let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
+        for (_, entry) in &entries {
             entry.handle.abort();
         }
         log::debug!(
             target: "app",
-            "one-shot tasks cancelled: {}",
+            "one-shot tasks cancelled: {} keys: {keys:?}",
             entries.len()
         );
+    }
+
+    /// 返回所有尚未触发的一次性任务 key，按字典序排列。
+    pub fn pending_keys(&self) -> Vec<String> {
+        let jobs = self.jobs.lock();
+        let mut keys: Vec<String> = jobs.keys().cloned().collect();
+        keys.sort();
+        keys
     }
 
     /// 指定一次性任务是否仍在等待触发。
@@ -378,7 +395,7 @@ pub fn init() -> Result<()> {
 
     // 后续新增周期任务时，在这里追加注册调用。
 
-    let task_keys = Scheduler::global().keys_with_prefix("");
+    let task_keys = Scheduler::global().keys();
     log::info!(
         target: "app",
         "scheduler initialized with {} task(s): {task_keys:?}",

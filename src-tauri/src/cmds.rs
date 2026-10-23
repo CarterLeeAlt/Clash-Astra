@@ -440,6 +440,21 @@ pub fn get_window_style_config() -> CmdResult<resolve::WindowStyleConfig> {
     Ok(resolve::get_window_style_config())
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchedulerState {
+    pub periodic_tasks: Vec<String>,
+    pub one_shot_tasks: Vec<String>,
+}
+
+#[tauri::command]
+pub fn get_scheduler_state() -> CmdResult<SchedulerState> {
+    Ok(SchedulerState {
+        periodic_tasks: scheduler::Scheduler::global().keys(),
+        one_shot_tasks: scheduler::OneShotScheduler::global().pending_keys(),
+    })
+}
+
 #[tauri::command]
 pub fn exit_app(app_handle: tauri::AppHandle) {
     shutdown_app(app_handle, 0);

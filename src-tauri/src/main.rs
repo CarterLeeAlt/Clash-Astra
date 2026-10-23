@@ -94,6 +94,7 @@ fn main() -> std::io::Result<()> {
             cmds::frontend_heartbeat,
             cmds::report_frontend_error,
             cmds::get_window_style_config,
+            cmds::get_scheduler_state,
             cmds::set_window_size_locked,
             // profile
             cmds::get_profiles,
