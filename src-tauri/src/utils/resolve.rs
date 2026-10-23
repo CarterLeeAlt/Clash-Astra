@@ -35,6 +35,8 @@ const MAIN_WINDOW_MAX_RECREATE_DESTROYS: u64 = 3;
 const WINDOW_SAVE_DEBOUNCE_MS: u64 = 600;
 const WINDOW_SIZE_POSITION_SAVE_TASK: &str = "window.size_position.save";
 const WINDOW_STATE_SAVE_TASK_PREFIX: &str = "window.state_save";
+const WINDOW_SHOW_AFTER_HIDE_TASK: &str = "window.show.after_hide";
+const WINDOW_SHOW_AFTER_HIDE_DELAY_MS: u64 = 300;
 const HEARTBEAT_WARN_AFTER_MS: u64 = 15_000;
 
 static MAIN_WINDOW_STATE: AtomicU64 = AtomicU64::new(MAIN_WINDOW_STATE_MISSING);
@@ -954,19 +956,43 @@ fn show_existing_window(window: &tauri::Window, request_id: u64, reason: ShowRea
 }
 
 pub fn show_main_window_after_hide_transition(app_handle: AppHandle) {
-    if is_window_hiding_in_progress() {
-        log::warn!(
-            target: "app",
-            "show_main_window delayed because window hide is in progress"
-        );
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            show_main_window(&app_handle);
-        });
+    let scheduler = OneShotScheduler::global();
+    if !is_window_hiding_in_progress() {
+        scheduler.cancel(WINDOW_SHOW_AFTER_HIDE_TASK);
+        show_main_window(&app_handle);
         return;
     }
 
-    show_main_window(&app_handle);
+    log::warn!(
+        target: "app",
+        "show_main_window delayed because window hide is in progress"
+    );
+    let run: JobFn = Arc::new(move || {
+        let app_handle = app_handle.clone();
+        let future: JobFuture = Box::pin(async move {
+            log::debug!(target: "app", "show_main_window delayed task fired");
+            show_main_window(&app_handle);
+            Ok(())
+        });
+        future
+    });
+
+    if let Err(err) = scheduler.schedule_once(
+        WINDOW_SHOW_AFTER_HIDE_TASK,
+        Duration::from_millis(WINDOW_SHOW_AFTER_HIDE_DELAY_MS),
+        run,
+    ) {
+        log::error!(
+            target: "app",
+            "failed to schedule delayed show_main_window: {err}"
+        );
+    } else {
+        log::debug!(
+            target: "app",
+            "show_main_window delayed task scheduled, delay_ms={}, key={WINDOW_SHOW_AFTER_HIDE_TASK}",
+            WINDOW_SHOW_AFTER_HIDE_DELAY_MS
+        );
+    }
 }
 
 /// show and focus the main window
