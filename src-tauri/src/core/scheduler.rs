@@ -386,3 +386,123 @@ pub fn init() -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    type Events = Arc<Mutex<Vec<&'static str>>>;
+
+    fn recording_job(events: Events, value: &'static str) -> JobFn {
+        Arc::new(move || {
+            let events = events.clone();
+            Box::pin(async move {
+                events.lock().unwrap().push(value);
+                Ok(())
+            })
+        })
+    }
+
+    fn wait_until(timeout: Duration, predicate: impl Fn() -> bool) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if predicate() {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        predicate()
+    }
+
+    #[test]
+    fn schedule_rejects_zero_intervals_and_empty_cron() {
+        assert!(Schedule::Seconds(0).validate().is_err());
+        assert!(Schedule::Minutes(0).validate().is_err());
+        assert!(Schedule::Cron("   ".to_string()).validate().is_err());
+        assert!(Schedule::Seconds(1).validate().is_ok());
+    }
+
+    #[test]
+    fn one_shot_rejects_zero_delay() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let result = OneShotScheduler::global().schedule_once(
+            "test.one_shot.zero_delay",
+            Duration::ZERO,
+            recording_job(events, "fired"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn one_shot_runs_once_and_removes_entry() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.runs_once";
+        OneShotScheduler::global()
+            .schedule_once(
+                key,
+                Duration::from_millis(30),
+                recording_job(events.clone(), "fired"),
+            )
+            .unwrap();
+
+        assert!(wait_until(Duration::from_secs(2), || {
+            !events.lock().unwrap().is_empty()
+        }));
+        assert_eq!(events.lock().unwrap().as_slice(), &["fired"]);
+        assert!(!OneShotScheduler::global().is_scheduled(key));
+    }
+
+    #[test]
+    fn debounce_keeps_only_the_last_run() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.debounce";
+        let scheduler = OneShotScheduler::global();
+
+        scheduler
+            .schedule_once(
+                key,
+                Duration::from_millis(80),
+                recording_job(events.clone(), "first"),
+            )
+            .unwrap();
+        scheduler
+            .schedule_once(
+                key,
+                Duration::from_millis(20),
+                recording_job(events.clone(), "second"),
+            )
+            .unwrap();
+
+        assert!(wait_until(Duration::from_secs(2), || {
+            !events.lock().unwrap().is_empty()
+        }));
+        thread::sleep(Duration::from_millis(120));
+        assert_eq!(events.lock().unwrap().as_slice(), &["second"]);
+        assert!(!scheduler.is_scheduled(key));
+    }
+
+    #[test]
+    fn cancel_prevents_pending_run() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.cancel";
+        let scheduler = OneShotScheduler::global();
+
+        scheduler
+            .schedule_once(
+                key,
+                Duration::from_millis(200),
+                recording_job(events.clone(), "cancelled"),
+            )
+            .unwrap();
+        assert!(scheduler.is_scheduled(key));
+        assert!(scheduler.cancel(key));
+        assert!(!scheduler.is_scheduled(key));
+        assert!(!scheduler.cancel(key));
+
+        thread::sleep(Duration::from_millis(250));
+        assert!(events.lock().unwrap().is_empty());
+    }
+}
