@@ -1060,8 +1060,8 @@ fn env_flag_enabled(name: &str) -> bool {
 fn valid_window_size_position(size_pos: &[f64]) -> bool {
     size_pos.len() == 4
         && size_pos.iter().all(|value| value.is_finite())
-        && size_pos[0] >= 600.0
-        && size_pos[1] >= 520.0
+        && size_pos[0] >= 1060.0
+        && size_pos[1] >= 680.0
         && size_pos[0] <= 20_000.0
         && size_pos[1] <= 20_000.0
         && size_pos[2].abs() <= 100_000.0
@@ -1223,20 +1223,20 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         .data_directory(webview_data_dir.clone())
         .visible(false)
         .fullscreen(false)
-        .min_inner_size(600.0, 520.0)
+        .min_inner_size(1060.0, 680.0)
         .resizable(!window_size_locked)
         .maximizable(!window_size_locked);
 
         if use_saved_size_pos {
             if let Some(size_pos) = configured_size_pos.as_ref() {
-                let w = size_pos[0].clamp(600.0, 20_000.0);
-                let h = size_pos[1].clamp(520.0, 20_000.0);
+                let w = size_pos[0].clamp(1060.0, 20_000.0);
+                let h = size_pos[1].clamp(680.0, 20_000.0);
                 builder = builder.inner_size(w, h).position(size_pos[2], size_pos[3]);
             }
         } else {
             #[cfg(target_os = "windows")]
             {
-                builder = builder.inner_size(800.0, 636.0).center();
+                builder = builder.inner_size(1060.0, 680.0).center();
             }
         }
 
@@ -1431,7 +1431,7 @@ pub fn save_window_size_position(app_handle: &AppHandle, save_to_file: bool) -> 
     let pos = pos.to_logical::<f64>(scale);
     let is_maximized = win.is_maximized()?;
     verge.window_is_maximized = Some(is_maximized);
-    if !is_maximized && size.width >= 600.0 && size.height >= 520.0 {
+    if !is_maximized && size.width >= 1060.0 && size.height >= 680.0 {
         verge.window_size_position = Some(vec![size.width, size.height, pos.x, pos.y]);
     }
     if save_to_file {
