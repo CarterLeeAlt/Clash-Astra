@@ -1,5 +1,5 @@
 use crate::config::IVerge;
-use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
+use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler, Scheduler};
 use crate::{config::Config, core::*, utils::dirs, utils::init, utils::server};
 use crate::{log_err, trace_err};
 use anyhow::Result;
@@ -532,6 +532,7 @@ pub fn resolve_setup(app: &mut App) {
 /// reset system proxy
 pub fn resolve_reset() {
     OneShotScheduler::global().cancel_all();
+    log_err!(Scheduler::global().shutdown());
     log_err!(sysopt::Sysopt::global().reset_sysproxy());
     log_err!(CoreManager::global().stop_core());
     #[cfg(target_os = "windows")]

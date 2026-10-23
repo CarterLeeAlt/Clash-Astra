@@ -117,6 +117,50 @@ impl Scheduler {
         self.jobs.lock().contains_key(key)
     }
 
+    /// 停止并移除所有周期任务。
+    ///
+    /// 正在执行的任务不会被强制中断；此方法只保证之后不会再触发。
+    pub fn shutdown(&self) -> Result<()> {
+        let tasks: Vec<(String, u64)> = self
+            .jobs
+            .lock()
+            .drain()
+            .map(|(key, entry)| (key, entry.task_id))
+            .collect();
+
+        if tasks.is_empty() {
+            log::debug!(target: "app", "scheduler shutdown: no tasks");
+            return Ok(());
+        }
+
+        let keys: Vec<&str> = tasks.iter().map(|(key, _)| key.as_str()).collect();
+        let delay_timer = self.delay_timer.lock();
+        let mut failures = Vec::new();
+        for (key, task_id) in &tasks {
+            if let Err(err) = delay_timer.remove_task(*task_id) {
+                log::error!(
+                    target: "app",
+                    "scheduler shutdown failed to remove task `{key}`: {err}"
+                );
+                failures.push(key.clone());
+            }
+        }
+        drop(delay_timer);
+
+        log::info!(
+            target: "app",
+            "scheduler shutdown removed {} task(s): {keys:?}",
+            tasks.len()
+        );
+        if !failures.is_empty() {
+            bail!(
+                "failed to remove {} scheduled task(s) during shutdown: {failures:?}",
+                failures.len()
+            );
+        }
+        Ok(())
+    }
+
     /// 移除任务；任务不存在时直接返回。
     pub fn remove(&self, key: &str) -> Result<()> {
         let mut jobs = self.jobs.lock();
