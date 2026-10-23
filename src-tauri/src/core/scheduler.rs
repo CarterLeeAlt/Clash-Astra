@@ -450,13 +450,31 @@ pub fn init() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use delay_timer::prelude::DelayTimerBuilder;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
     type Events = Arc<Mutex<Vec<&'static str>>>;
+    type Values = Arc<Mutex<Vec<usize>>>;
+
+    /// 调度器测试共享全局单例，串行执行以避免 cancel_all 互相干扰。
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: Mutex<()> = Mutex::new(());
+        LOCK.lock().unwrap_or_else(|err| err.into_inner())
+    }
 
     fn recording_job(events: Events, value: &'static str) -> JobFn {
+        Arc::new(move || {
+            let events = events.clone();
+            Box::pin(async move {
+                events.lock().unwrap().push(value);
+                Ok(())
+            })
+        })
+    }
+
+    fn recording_value_job(events: Values, value: usize) -> JobFn {
         Arc::new(move || {
             let events = events.clone();
             Box::pin(async move {
@@ -477,8 +495,17 @@ mod tests {
         predicate()
     }
 
+    fn test_scheduler() -> Scheduler {
+        Scheduler {
+            delay_timer: parking_lot::Mutex::new(DelayTimerBuilder::default().build()),
+            jobs: parking_lot::Mutex::new(HashMap::new()),
+            next_task_id: AtomicU64::new(1),
+        }
+    }
+
     #[test]
     fn schedule_rejects_zero_intervals_and_empty_cron() {
+        let _guard = test_lock();
         assert!(Schedule::Seconds(0).validate().is_err());
         assert!(Schedule::Minutes(0).validate().is_err());
         assert!(Schedule::Cron("   ".to_string()).validate().is_err());
@@ -487,6 +514,7 @@ mod tests {
 
     #[test]
     fn one_shot_rejects_zero_delay() {
+        let _guard = test_lock();
         let events = Arc::new(Mutex::new(Vec::new()));
         let result = OneShotScheduler::global().schedule_once(
             "test.one_shot.zero_delay",
@@ -498,6 +526,7 @@ mod tests {
 
     #[test]
     fn one_shot_runs_once_and_removes_entry() {
+        let _guard = test_lock();
         let events = Arc::new(Mutex::new(Vec::new()));
         let key = "test.one_shot.runs_once";
         OneShotScheduler::global()
@@ -517,6 +546,7 @@ mod tests {
 
     #[test]
     fn debounce_keeps_only_the_last_run() {
+        let _guard = test_lock();
         let events = Arc::new(Mutex::new(Vec::new()));
         let key = "test.one_shot.debounce";
         let scheduler = OneShotScheduler::global();
@@ -545,7 +575,34 @@ mod tests {
     }
 
     #[test]
+    fn rapid_debounce_updates_only_run_last() {
+        let _guard = test_lock();
+        let events: Values = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.rapid";
+        let scheduler = OneShotScheduler::global();
+        scheduler.cancel_all();
+
+        for value in 0..20 {
+            scheduler
+                .schedule_once(
+                    key,
+                    Duration::from_millis(50),
+                    recording_value_job(events.clone(), value),
+                )
+                .unwrap();
+        }
+
+        assert!(wait_until(Duration::from_secs(2), || {
+            !events.lock().unwrap().is_empty()
+        }));
+        thread::sleep(Duration::from_millis(100));
+        assert_eq!(events.lock().unwrap().as_slice(), &[19]);
+        assert!(!scheduler.is_scheduled(key));
+    }
+
+    #[test]
     fn cancel_prevents_pending_run() {
+        let _guard = test_lock();
         let events = Arc::new(Mutex::new(Vec::new()));
         let key = "test.one_shot.cancel";
         let scheduler = OneShotScheduler::global();
@@ -564,5 +621,64 @@ mod tests {
 
         thread::sleep(Duration::from_millis(250));
         assert!(events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cancel_all_clears_pending_one_shot_tasks() {
+        let _guard = test_lock();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let scheduler = OneShotScheduler::global();
+        scheduler.cancel_all();
+
+        for key in ["test.one_shot.cancel_all.a", "test.one_shot.cancel_all.b"] {
+            scheduler
+                .schedule_once(
+                    key,
+                    Duration::from_millis(200),
+                    recording_job(events.clone(), "should_not_run"),
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            scheduler.pending_keys(),
+            vec![
+                "test.one_shot.cancel_all.a".to_string(),
+                "test.one_shot.cancel_all.b".to_string()
+            ]
+        );
+
+        scheduler.cancel_all();
+        assert!(scheduler.pending_keys().is_empty());
+        thread::sleep(Duration::from_millis(250));
+        assert!(events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn scheduler_shutdown_clears_periodic_tasks() {
+        let _guard = test_lock();
+        let scheduler = test_scheduler();
+        let run: JobFn = Arc::new(|| Box::pin(async { Ok(()) }));
+
+        scheduler
+            .upsert(
+                "test.scheduler.shutdown",
+                Schedule::Seconds(3600),
+                run.clone(),
+            )
+            .unwrap();
+        assert!(scheduler.is_registered("test.scheduler.shutdown"));
+        assert_eq!(
+            scheduler.keys(),
+            vec!["test.scheduler.shutdown".to_string()]
+        );
+
+        scheduler.shutdown().unwrap();
+        assert!(scheduler.keys().is_empty());
+        assert!(!scheduler.is_registered("test.scheduler.shutdown"));
+
+        // 再次停止不应报告错误，也不应改变空注册表。
+        scheduler.shutdown().unwrap();
+        assert!(scheduler.keys().is_empty());
+        drop(run);
     }
 }
