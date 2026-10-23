@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::async_runtime::JoinHandle;
+use tokio::sync::Notify;
 
 use crate::core::timer;
 
@@ -245,8 +246,14 @@ impl Scheduler {
 }
 
 /// 一次性任务条目。
+///
+/// 每个 key 只保留一个等待任务；重复调度只更新截止时间和执行函数，并唤醒
+/// 等待中的 worker，避免事件密集时反复创建和取消任务。
 struct OneShotEntry {
     generation: u64,
+    deadline: tokio::time::Instant,
+    notify: Arc<Notify>,
+    run: JobFn,
     handle: JoinHandle<()>,
 }
 
@@ -278,46 +285,40 @@ impl OneShotScheduler {
 
         let key = key.into();
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
-        let task_key = key.clone();
+        let deadline = tokio::time::Instant::now() + delay;
 
-        // 先持锁再 spawn，确保任务醒来时一定能在注册表中看到本次条目。
         let mut jobs = self.jobs.lock();
-        let handle = tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(delay).await;
+        if let Some(entry) = jobs.get_mut(&key) {
+            entry.generation = generation;
+            entry.deadline = deadline;
+            entry.run = run;
+            entry.notify.notify_one();
+            drop(jobs);
 
-            let scheduler = OneShotScheduler::global();
-            let is_current = {
-                let mut jobs = scheduler.jobs.lock();
-                let is_current = jobs
-                    .get(&task_key)
-                    .map(|entry| entry.generation == generation)
-                    .unwrap_or(false);
-                if is_current {
-                    jobs.remove(&task_key);
-                }
-                is_current
-            };
-            if !is_current {
-                log::trace!(target: "app", "one-shot task `{task_key}` skipped: replaced");
-                return;
-            }
-
-            log::debug!(target: "app", "one-shot task `{task_key}` fired");
-            if let Err(err) = run().await {
-                log::error!(target: "app", "one-shot task `{task_key}` failed: {err:#}");
-            }
-        });
-
-        let replaced = jobs.insert(key.clone(), OneShotEntry { generation, handle });
-        drop(jobs);
-
-        if let Some(replaced) = replaced {
-            replaced.handle.abort();
-            log::trace!(target: "app", "one-shot task `{key}` rescheduled");
-        } else {
-            log::trace!(target: "app", "one-shot task `{key}` scheduled in {delay:?}");
+            log::trace!(target: "app", "one-shot task `{key}` rescheduled in {delay:?}");
+            return Ok(());
         }
 
+        let notify = Arc::new(Notify::new());
+        let worker_key = key.clone();
+
+        // 先持锁再 spawn，确保 worker 第一次读取时一定能看到本次条目。
+        let handle = tauri::async_runtime::spawn(async move {
+            run_one_shot_worker(worker_key).await;
+        });
+        jobs.insert(
+            key.clone(),
+            OneShotEntry {
+                generation,
+                deadline,
+                notify,
+                run,
+                handle,
+            },
+        );
+        drop(jobs);
+
+        log::trace!(target: "app", "one-shot task `{key}` scheduled in {delay:?}");
         Ok(())
     }
 
@@ -328,12 +329,12 @@ impl OneShotScheduler {
 
     /// 取消尚未触发的一次性任务；返回是否确实取消了任务。
     pub fn cancel(&self, key: &str) -> bool {
-        let mut jobs = self.jobs.lock();
-        let Some(entry) = jobs.remove(key) else {
+        let entry = self.jobs.lock().remove(key);
+        let Some(entry) = entry else {
             return false;
         };
-        drop(jobs);
 
+        entry.notify.notify_one();
         entry.handle.abort();
         log::debug!(target: "app", "one-shot task `{key}` cancelled");
         true
@@ -348,6 +349,7 @@ impl OneShotScheduler {
 
         let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
         for (_, entry) in &entries {
+            entry.notify.notify_one();
             entry.handle.abort();
         }
         log::debug!(
@@ -368,6 +370,47 @@ impl OneShotScheduler {
     /// 指定一次性任务是否仍在等待触发。
     pub fn is_scheduled(&self, key: &str) -> bool {
         self.jobs.lock().contains_key(key)
+    }
+}
+
+async fn run_one_shot_worker(key: String) {
+    let scheduler = OneShotScheduler::global();
+
+    loop {
+        let (generation, deadline, notify) = {
+            let jobs = scheduler.jobs.lock();
+            let Some(entry) = jobs.get(&key) else {
+                return;
+            };
+            (entry.generation, entry.deadline, entry.notify.clone())
+        };
+
+        tokio::select! {
+            _ = tokio::time::sleep_until(deadline) => {
+                let run = {
+                    let mut jobs = scheduler.jobs.lock();
+                    let Some(entry) = jobs.get(&key) else {
+                        return;
+                    };
+                    if entry.generation != generation {
+                        continue;
+                    }
+                    jobs.remove(&key).map(|entry| entry.run)
+                };
+                let Some(run) = run else {
+                    return;
+                };
+
+                log::debug!(target: "app", "one-shot task `{key}` fired");
+                if let Err(err) = run().await {
+                    log::error!(target: "app", "one-shot task `{key}` failed: {err:#}");
+                }
+                return;
+            }
+            _ = notify.notified() => {
+                log::trace!(target: "app", "one-shot task `{key}` deadline reset");
+            }
+        }
     }
 }
 
