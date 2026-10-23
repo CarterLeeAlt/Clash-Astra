@@ -277,9 +277,6 @@ pub fn is_window_hiding_in_progress() -> bool {
 }
 
 pub fn schedule_window_state_save(app_handle: AppHandle, delay: Duration) {
-    // 完整保存会读取当前窗口状态并落盘，取消尚未执行的拖动防抖保存。
-    OneShotScheduler::global().cancel(WINDOW_SIZE_POSITION_SAVE_TASK);
-
     let key = format!("{WINDOW_STATE_SAVE_TASK_PREFIX}:{}ms", delay.as_millis());
     let run: JobFn = Arc::new(move || {
         let app_handle = app_handle.clone();
@@ -296,18 +293,22 @@ pub fn schedule_window_state_save(app_handle: AppHandle, delay: Duration) {
         future
     });
 
-    if let Err(err) = OneShotScheduler::global().schedule_once(key.clone(), delay, run) {
+    let scheduler = OneShotScheduler::global();
+    if let Err(err) = scheduler.schedule_once(key.clone(), delay, run) {
         log::error!(
             target: "app",
             "failed to schedule window state save `{key}`: {err}"
         );
-    } else {
-        log::debug!(
-            target: "app",
-            "window state save task scheduled, delay_ms={}, key={key}",
-            delay.as_millis()
-        );
+        return;
     }
+
+    // 完整保存会读取当前窗口状态并落盘，取消尚未执行的拖动防抖保存。
+    scheduler.cancel(WINDOW_SIZE_POSITION_SAVE_TASK);
+    log::debug!(
+        target: "app",
+        "window state save task scheduled, delay_ms={}, key={key}",
+        delay.as_millis()
+    );
 }
 
 pub fn schedule_save_window_size_position(app_handle: AppHandle) {
