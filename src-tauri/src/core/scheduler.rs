@@ -28,7 +28,8 @@ pub type JobFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 pub type JobFn = Arc<dyn Fn() -> JobFuture + Send + Sync>;
 
 /// 任务周期。
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Schedule {
     /// 按秒重复。
     Seconds(u64),
@@ -37,6 +38,23 @@ pub enum Schedule {
     /// 按 cron 表达式重复，使用本地时区。
     #[allow(dead_code)]
     Cron(String),
+}
+
+/// 周期任务快照。
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PeriodicTaskInfo {
+    pub key: String,
+    pub schedule: Schedule,
+}
+
+/// 待触发的一次性任务快照。
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OneShotTaskInfo {
+    pub key: String,
+    pub remaining_ms: u64,
+    pub generation: u64,
 }
 
 struct JobEntry {
@@ -192,6 +210,20 @@ impl Scheduler {
 
         log::debug!(target: "app", "scheduler triggered task `{key}`");
         Ok(true)
+    }
+
+    /// 返回所有已注册的周期任务快照，按 key 字典序排列。
+    pub fn tasks(&self) -> Vec<PeriodicTaskInfo> {
+        let jobs = self.jobs.lock();
+        let mut tasks: Vec<PeriodicTaskInfo> = jobs
+            .iter()
+            .map(|(key, entry)| PeriodicTaskInfo {
+                key: key.clone(),
+                schedule: entry.schedule.clone(),
+            })
+            .collect();
+        tasks.sort_by(|left, right| left.key.cmp(&right.key));
+        tasks
     }
 
     /// 返回所有已注册的周期任务 key，按字典序排列。
@@ -359,7 +391,28 @@ impl OneShotScheduler {
         );
     }
 
+    /// 返回所有尚未触发的一次性任务快照，按 key 字典序排列。
+    pub fn pending_tasks(&self) -> Vec<OneShotTaskInfo> {
+        let now = tokio::time::Instant::now();
+        let jobs = self.jobs.lock();
+        let mut tasks: Vec<OneShotTaskInfo> = jobs
+            .iter()
+            .map(|(key, entry)| OneShotTaskInfo {
+                key: key.clone(),
+                remaining_ms: entry
+                    .deadline
+                    .saturating_duration_since(now)
+                    .as_millis()
+                    .min(u64::MAX as u128) as u64,
+                generation: entry.generation,
+            })
+            .collect();
+        tasks.sort_by(|left, right| left.key.cmp(&right.key));
+        tasks
+    }
+
     /// 返回所有尚未触发的一次性任务 key，按字典序排列。
+    #[allow(dead_code)]
     pub fn pending_keys(&self) -> Vec<String> {
         let jobs = self.jobs.lock();
         let mut keys: Vec<String> = jobs.keys().cloned().collect();

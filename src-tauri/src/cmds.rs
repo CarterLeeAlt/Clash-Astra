@@ -443,15 +443,15 @@ pub fn get_window_style_config() -> CmdResult<resolve::WindowStyleConfig> {
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SchedulerState {
-    pub periodic_tasks: Vec<String>,
-    pub one_shot_tasks: Vec<String>,
+    pub periodic_tasks: Vec<scheduler::PeriodicTaskInfo>,
+    pub one_shot_tasks: Vec<scheduler::OneShotTaskInfo>,
 }
 
 #[tauri::command]
 pub fn get_scheduler_state() -> CmdResult<SchedulerState> {
     Ok(SchedulerState {
-        periodic_tasks: scheduler::Scheduler::global().keys(),
-        one_shot_tasks: scheduler::OneShotScheduler::global().pending_keys(),
+        periodic_tasks: scheduler::Scheduler::global().tasks(),
+        one_shot_tasks: scheduler::OneShotScheduler::global().pending_tasks(),
     })
 }
 
