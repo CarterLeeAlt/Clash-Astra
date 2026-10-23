@@ -39,6 +39,8 @@ const WINDOW_SHOW_AFTER_HIDE_TASK: &str = "window.show.after_hide";
 const WINDOW_SHOW_AFTER_HIDE_DELAY_MS: u64 = 300;
 const WINDOW_SHOW_CREATE_FALLBACK_TASK: &str = "window.show.create_fallback";
 const WINDOW_SHOW_CREATE_FALLBACK_DELAY_MS: u64 = 1500;
+const WINDOW_SHOW_RETRIES_TASK: &str = "window.show.retries";
+const WINDOW_SHOW_RETRIES_DELAY_MS: u64 = 200;
 const HEARTBEAT_WARN_AFTER_MS: u64 = 15_000;
 
 static MAIN_WINDOW_STATE: AtomicU64 = AtomicU64::new(MAIN_WINDOW_STATE_MISSING);
@@ -894,49 +896,88 @@ fn schedule_windows_show_retries(
         request_id,
         reason
     );
-    tauri::async_runtime::spawn(async move {
-        let retries = [(1usize, 200u64), (2, 600)];
-        for (attempt, delay_ms) in retries {
-            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-            let latest_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
-            if latest_request_id != request_id {
-                log::trace!(
-                    "windows delayed retry skipped because stale, request_id={}, latest_request_id={}, attempt={}, delay_ms={}",
-                    request_id,
-                    latest_request_id,
-                    attempt,
-                    delay_ms
-                );
-                break;
-            }
-
-            let (visible, minimized, focused) = window_state(&window);
-            if !window_needs_repair(&window) {
-                log::trace!(
-                    "windows delayed retry skipped because window already visible, request_id={}, attempt={}, visible={}, minimized={}, focused={}",
-                    request_id,
-                    attempt,
-                    visible,
-                    minimized,
-                    focused
-                );
-                log_window_state(&window, "windows delayed retry final healthy");
-                break;
-            }
-
-            window_show_once_repair(
-                &window,
+    let showing_guard = Arc::new(std::sync::Mutex::new(Some(showing_guard)));
+    let run: JobFn = Arc::new(move || {
+        let window = window.clone();
+        let showing_guard = showing_guard.clone();
+        let future: JobFuture = Box::pin(async move {
+            log::debug!(
+                target: "app",
+                "windows delayed retry task fired, request_id={}, reason={:?}",
                 request_id,
-                &format!("windows delayed {}ms", delay_ms),
+                reason
             );
+            let Some(showing_guard) = showing_guard.lock().unwrap().take() else {
+                log::error!(
+                    target: "app",
+                    "windows delayed retry task missing showing guard, request_id={}",
+                    request_id
+                );
+                return Ok(());
+            };
 
-            if attempt == 2 {
-                log_window_state(&window, "windows delayed retry final");
+            let retries = [(1usize, 200u64), (2, 600)];
+            for (attempt, delay_ms) in retries {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                let latest_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
+                if latest_request_id != request_id {
+                    log::trace!(
+                        "windows delayed retry skipped because stale, request_id={}, latest_request_id={}, attempt={}, delay_ms={}",
+                        request_id,
+                        latest_request_id,
+                        attempt,
+                        delay_ms
+                    );
+                    break;
+                }
+
+                let (visible, minimized, focused) = window_state(&window);
+                if !window_needs_repair(&window) {
+                    log::trace!(
+                        "windows delayed retry skipped because window already visible, request_id={}, attempt={}, visible={}, minimized={}, focused={}",
+                        request_id,
+                        attempt,
+                        visible,
+                        minimized,
+                        focused
+                    );
+                    log_window_state(&window, "windows delayed retry final healthy");
+                    break;
+                }
+
+                window_show_once_repair(
+                    &window,
+                    request_id,
+                    &format!("windows delayed {}ms", delay_ms),
+                );
+
+                if attempt == 2 {
+                    log_window_state(&window, "windows delayed retry final");
+                }
             }
-        }
 
-        finish_show_flow(&window, request_id, showing_guard);
+            finish_show_flow(&window, request_id, showing_guard);
+            Ok(())
+        });
+        future
     });
+
+    if let Err(err) = OneShotScheduler::global().schedule_once(
+        WINDOW_SHOW_RETRIES_TASK,
+        Duration::from_millis(WINDOW_SHOW_RETRIES_DELAY_MS),
+        run,
+    ) {
+        log::error!(
+            target: "app",
+            "failed to schedule windows delayed retry: {err}"
+        );
+    } else {
+        log::debug!(
+            target: "app",
+            "windows delayed retry task scheduled, delay_ms={}, key={WINDOW_SHOW_RETRIES_TASK}",
+            WINDOW_SHOW_RETRIES_DELAY_MS
+        );
+    }
 }
 
 fn request_show_existing_window(window: &tauri::Window, request_id: u64, reason: ShowReason) {
