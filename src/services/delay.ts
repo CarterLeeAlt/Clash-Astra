@@ -263,10 +263,10 @@ class DelayManager {
   }
 
   formatDelay(delay: number, timeout = 3000) {
-    if (delay === DELAY_NOT_APPLICABLE) return "SKIP";
+    if (delay === DELAY_NOT_APPLICABLE) return "REJECT";
     if (delay === DELAY_UNREACHABLE) return "BLOCK";
     if (delay < 0) return ""; // 未测或测速中，不显示
-    if (delay > 1e5 || delay >= timeout) return "FAIL";
+    if (delay > 1e5 || delay >= timeout) return "FAILED";
     return `${delay} ms`;
   }
 
