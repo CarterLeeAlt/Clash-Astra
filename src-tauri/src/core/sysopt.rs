@@ -1,3 +1,4 @@
+use crate::core::scheduler::{JobFn, JobFuture, Schedule, Scheduler};
 use crate::{config::Config, core::CoreManager, log_err};
 use anyhow::{anyhow, Context, Result};
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
@@ -12,7 +13,7 @@ use std::{
 use sysproxy::Sysproxy;
 #[cfg(target_os = "windows")]
 use sysproxy::WindowsProxySnapshot;
-use tauri::{async_runtime::Mutex as TokioMutex, utils::platform::current_exe};
+use tauri::utils::platform::current_exe;
 
 pub struct Sysopt {
     /// current system proxy setting
@@ -32,9 +33,6 @@ pub struct Sysopt {
 
     /// helps to auto launch the app
     auto_launch: Arc<Mutex<Option<AutoLaunch>>>,
-
-    /// record whether the guard async is running or not
-    guard_state: Arc<TokioMutex<bool>>,
 
     /// serialize proxy writes, restores, and guard refreshes
     proxy_operation: Arc<Mutex<()>>,
@@ -195,7 +193,6 @@ impl Sysopt {
             #[cfg(target_os = "windows")]
             owned_windows_proxy: Arc::new(Mutex::new(None)),
             auto_launch: Arc::new(Mutex::new(None)),
-            guard_state: Arc::new(TokioMutex::new(false)),
             proxy_operation: Arc::new(Mutex::new(())),
         })
     }
@@ -690,102 +687,142 @@ impl Sysopt {
         Ok(())
     }
 
-    /// launch a system proxy guard
-    /// read config from file directly
+    /// 启动系统代理守护。
+    ///
+    /// 首次检查在 10 秒后；每次执行结束后按最新的 `proxy_guard_duration`
+    /// 重新安排下一次执行。任务已注册时不会重复启动。
     pub fn guard_proxy(&self) {
-        use tokio::time::{sleep, Duration};
+        let scheduler = Scheduler::global();
+        if scheduler.is_registered(GUARD_TASK_KEY) {
+            log::trace!(target: "app", "system proxy guard task already registered");
+            return;
+        }
 
-        let guard_state = self.guard_state.clone();
-
-        tauri::async_runtime::spawn(async move {
-            // if it is running, exit
-            let mut state = guard_state.lock().await;
-            if *state {
-                return;
-            }
-            *state = true;
-            drop(state);
-
-            // default duration is 10s
-            let mut wait_secs = 10u64;
-
-            loop {
-                sleep(Duration::from_secs(wait_secs)).await;
-
-                let (enable, guard, guard_duration, bypass) = {
-                    let verge = Config::verge();
-                    let verge = verge.latest();
-                    (
-                        verge.enable_system_proxy.unwrap_or(false),
-                        verge.enable_proxy_guard.unwrap_or(false),
-                        verge.proxy_guard_duration.unwrap_or(10),
-                        verge.system_proxy_bypass.clone(),
-                    )
-                };
-
-                // stop loop
-                if !enable || !guard {
-                    break;
-                }
-
-                // update duration
-                wait_secs = guard_duration;
-
-                log::debug!(target: "app", "try to guard the system proxy");
-
-                let port = {
-                    Config::verge()
-                        .latest()
-                        .verge_mixed_port
-                        .unwrap_or(Config::clash().data().get_mixed_port())
-                };
-
-                let sysproxy = Sysproxy {
-                    enable: true,
-                    host: "127.0.0.1".into(),
-                    port,
-                    bypass: bypass.unwrap_or(DEFAULT_BYPASS.into()),
-                };
-
-                if let Err(err) = wait_for_local_proxy(port)
-                    .context("wait for local proxy before guarding system proxy")
-                {
-                    log::error!(target: "app", "{err}");
-                    continue;
-                }
-
-                let _operation = Sysopt::global().proxy_operation.lock();
-                let still_enabled = {
-                    let verge = Config::verge();
-                    let verge = verge.latest();
-                    verge.enable_system_proxy.unwrap_or(false)
-                        && verge.enable_proxy_guard.unwrap_or(false)
-                };
-                if !still_enabled {
-                    continue;
-                }
-
-                let guard_result = sysproxy.set_system_proxy().context("guard system proxy");
-
-                #[cfg(target_os = "windows")]
-                if guard_result.is_ok() {
-                    let mut owned = Sysopt::global().owned_windows_proxy.lock();
-                    if let Some(snapshot) = owned.as_mut() {
-                        if let Err(err) = snapshot.refresh_app_owned_values() {
-                            log::warn!(target: "app", "could not refresh Windows proxy ownership snapshot after guard: {err}");
-                        } else if let Err(err) = snapshot.record_owned_recovery(&sysproxy) {
-                            log::warn!(target: "app", "could not refresh persistent Windows proxy ownership after guard: {err}");
-                        }
-                    }
-                }
-                log_err!(guard_result);
-            }
-
-            let mut state = guard_state.lock().await;
-            *state = false;
-            drop(state);
-        });
+        match scheduler.upsert(
+            GUARD_TASK_KEY,
+            Schedule::Seconds(GUARD_INITIAL_DELAY_SECS),
+            guard_job(),
+        ) {
+            Ok(()) => log::debug!(
+                target: "app",
+                "system proxy guard task registered, first check in {GUARD_INITIAL_DELAY_SECS}s"
+            ),
+            Err(err) => log::error!(
+                target: "app",
+                "failed to register system proxy guard task: {err}"
+            ),
+        }
     }
+}
+
+/// 系统代理守护任务。
+const GUARD_TASK_KEY: &str = "system_proxy.guard";
+const GUARD_INITIAL_DELAY_SECS: u64 = 10;
+
+fn guard_job() -> JobFn {
+    Arc::new(|| {
+        let future: JobFuture = Box::pin(run_guard_cycle());
+        future
+    })
+}
+
+async fn run_guard_cycle() -> Result<()> {
+    let (enable, guard, guard_duration, bypass) = {
+        let verge = Config::verge();
+        let verge = verge.latest();
+        (
+            verge.enable_system_proxy.unwrap_or(false),
+            verge.enable_proxy_guard.unwrap_or(false),
+            verge.proxy_guard_duration.unwrap_or(10),
+            verge.system_proxy_bypass.clone(),
+        )
+    };
+
+    log::debug!(
+        target: "app",
+        "system proxy guard tick: enable_system_proxy={enable}, enable_proxy_guard={guard}, duration={guard_duration}s"
+    );
+
+    if !enable || !guard {
+        Scheduler::global().remove(GUARD_TASK_KEY)?;
+        log::debug!(
+            target: "app",
+            "system proxy guard task stopped: enable_system_proxy={enable}, enable_proxy_guard={guard}"
+        );
+        return Ok(());
+    }
+
+    let interval_secs = guard_duration.max(1);
+    if guard_duration == 0 {
+        log::warn!(
+            target: "app",
+            "proxy_guard_duration is 0; using 1s to avoid a busy loop"
+        );
+    }
+
+    let port = {
+        Config::verge()
+            .latest()
+            .verge_mixed_port
+            .unwrap_or(Config::clash().data().get_mixed_port())
+    };
+
+    let sysproxy = Sysproxy {
+        enable: true,
+        host: "127.0.0.1".into(),
+        port,
+        bypass: bypass.unwrap_or(DEFAULT_BYPASS.into()),
+    };
+
+    if let Err(err) =
+        wait_for_local_proxy(port).context("wait for local proxy before guarding system proxy")
+    {
+        log::error!(target: "app", "{err}");
+        return reschedule_guard(interval_secs);
+    }
+
+    {
+        let _operation = Sysopt::global().proxy_operation.lock();
+        let still_enabled = {
+            let verge = Config::verge();
+            let verge = verge.latest();
+            verge.enable_system_proxy.unwrap_or(false) && verge.enable_proxy_guard.unwrap_or(false)
+        };
+        if !still_enabled {
+            log::debug!(target: "app", "system proxy guard skipped: disabled while waiting");
+            return reschedule_guard(interval_secs);
+        }
+
+        let guard_result = sysproxy.set_system_proxy().context("guard system proxy");
+
+        #[cfg(target_os = "windows")]
+        if guard_result.is_ok() {
+            let mut owned = Sysopt::global().owned_windows_proxy.lock();
+            if let Some(snapshot) = owned.as_mut() {
+                if let Err(err) = snapshot.refresh_app_owned_values() {
+                    log::warn!(target: "app", "could not refresh Windows proxy ownership snapshot after guard: {err}");
+                } else if let Err(err) = snapshot.record_owned_recovery(&sysproxy) {
+                    log::warn!(target: "app", "could not refresh persistent Windows proxy ownership after guard: {err}");
+                }
+            }
+        }
+        log_err!(guard_result);
+    }
+
+    reschedule_guard(interval_secs)
+}
+
+fn reschedule_guard(interval_secs: u64) -> Result<()> {
+    Scheduler::global().replace(
+        GUARD_TASK_KEY,
+        Schedule::Seconds(interval_secs),
+        guard_job(),
+    )?;
+    log::debug!(
+        target: "app",
+        "system proxy guard rescheduled in {interval_secs}s"
+    );
+    Ok(())
 }
 
 #[cfg(test)]

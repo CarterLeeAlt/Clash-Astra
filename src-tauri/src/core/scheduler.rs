@@ -22,9 +22,6 @@ pub type JobFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 pub type JobFn = Arc<dyn Fn() -> JobFuture + Send + Sync>;
 
 /// 任务周期。
-///
-/// `Seconds` 与 `Cron` 供后续任务使用；当前内置任务使用 `Minutes`。
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Schedule {
     /// 按秒重复。
@@ -32,6 +29,7 @@ pub enum Schedule {
     /// 按分钟重复。
     Minutes(u64),
     /// 按 cron 表达式重复，使用本地时区。
+    #[allow(dead_code)]
     Cron(String),
 }
 
@@ -69,7 +67,6 @@ impl Scheduler {
     /// 强制替换任务并重置计时，即使周期没有变化。
     ///
     /// 适合需要在每次执行结束后重新计算下一次触发时间的任务。
-    #[allow(dead_code)]
     pub fn replace(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
         self.install(key, schedule, run, true)
     }
@@ -110,7 +107,6 @@ impl Scheduler {
     }
 
     /// 任务是否已注册。
-    #[allow(dead_code)]
     pub fn is_registered(&self, key: &str) -> bool {
         self.jobs.lock().contains_key(key)
     }
