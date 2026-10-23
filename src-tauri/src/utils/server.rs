@@ -27,18 +27,21 @@ impl Drop for SingletonGuard {
 
 #[cfg(target_os = "windows")]
 fn acquire_singleton_mutex() -> Result<bool> {
+    // Local\ 前缀限定在当前登录会话内，避免不同用户会话互相阻塞。
+    const NAME: &str = concat!("Local\\clash-verge-buty-singleton-", env!("CARGO_PKG_NAME"));
+    acquire_singleton_mutex_named(NAME)
+}
+
+#[cfg(target_os = "windows")]
+fn acquire_singleton_mutex_named(name: &str) -> Result<bool> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
     use windows_sys::Win32::System::Threading::CreateMutexW;
 
-    // Local\ 前缀限定在当前登录会话内，避免不同用户会话互相阻塞。
-    let name: Vec<u16> = std::ffi::OsStr::new(concat!(
-        "Local\\clash-verge-buty-singleton-",
-        env!("CARGO_PKG_NAME")
-    ))
-    .encode_wide()
-    .chain(Some(0))
-    .collect();
+    let name: Vec<u16> = std::ffi::OsStr::new(name)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
 
     let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
     if handle == 0 {
@@ -142,8 +145,14 @@ mod singleton_tests {
 
     #[test]
     fn first_acquire_succeeds_and_second_is_rejected() {
+        // 使用测试专用名称，避免本机正在运行的应用占用生产互斥体导致测试失败。
+        let name = format!(
+            "Local\\clash-verge-buty-singleton-test-{}",
+            std::process::id()
+        );
+
         // 首次获取成功；同一进程内再次获取时互斥体已存在，应返回 false
-        assert!(acquire_singleton_mutex().unwrap());
-        assert!(!acquire_singleton_mutex().unwrap());
+        assert!(acquire_singleton_mutex_named(&name).unwrap());
+        assert!(!acquire_singleton_mutex_named(&name).unwrap());
     }
 }
