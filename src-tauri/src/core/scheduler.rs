@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::async_runtime::JoinHandle;
@@ -26,6 +26,44 @@ use crate::core::timer;
 
 pub type JobFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 pub type JobFn = Arc<dyn Fn() -> JobFuture + Send + Sync>;
+pub type CancellableJobFn = Arc<dyn Fn(CancelToken) -> JobFuture + Send + Sync>;
+
+/// 一次性任务的协作式取消令牌。
+///
+/// 令牌只由调度器创建并传给可取消任务。任务应在等待点使用 [`CancelToken::cancelled`]
+/// 或周期检查 [`CancelToken::is_cancelled`]；调度器不能强制中断已经进入用户代码的任务。
+#[derive(Clone)]
+pub struct CancelToken {
+    cancelled: Arc<AtomicBool>,
+    notify: Arc<Notify>,
+}
+
+impl CancelToken {
+    fn new() -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+            notify: Arc::new(Notify::new()),
+        }
+    }
+
+    /// 取消是否已经请求。
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+
+    /// 等待取消请求；已经取消时立即返回。
+    pub async fn cancelled(&self) {
+        if self.is_cancelled() {
+            return;
+        }
+        self.notify.notified().await;
+    }
+
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        self.notify.notify_one();
+    }
+}
 
 /// 任务周期。
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -55,6 +93,15 @@ pub struct OneShotTaskInfo {
     pub key: String,
     pub remaining_ms: u64,
     pub generation: u64,
+}
+
+/// 正在执行的一次性任务快照。
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunningTaskInfo {
+    pub key: String,
+    pub generation: u64,
+    pub cancellable: bool,
 }
 
 struct JobEntry {
@@ -277,6 +324,11 @@ impl Scheduler {
     }
 }
 
+enum OneShotJob {
+    Plain(JobFn),
+    Cancellable(CancellableJobFn),
+}
+
 /// 一次性任务条目。
 ///
 /// 每个 key 只保留一个等待任务；重复调度只更新截止时间和执行函数，并唤醒
@@ -285,17 +337,24 @@ struct OneShotEntry {
     generation: u64,
     deadline: tokio::time::Instant,
     notify: Arc<Notify>,
-    run: JobFn,
+    job: OneShotJob,
     handle: JoinHandle<()>,
+}
+
+#[derive(Clone)]
+struct RunningEntry {
+    generation: u64,
+    token: Option<CancelToken>,
 }
 
 /// 一次性/防抖任务调度器。
 ///
 /// 任务只执行一次，执行前自动从注册表移除。同一个 key 再次调度会取消尚未
 /// 触发的旧任务并重新计时，因此同 key 的重复调用就是尾沿防抖，只保留最后
-/// 一次。已经在执行的任务不会被取消。
+/// 一次。普通任务进入执行后不会被取消；可取消任务可以通过取消令牌协作退出。
 pub struct OneShotScheduler {
     jobs: Mutex<HashMap<String, OneShotEntry>>,
+    running: Mutex<HashMap<String, RunningEntry>>,
     next_generation: AtomicU64,
 }
 
@@ -305,17 +364,31 @@ impl OneShotScheduler {
 
         ONE_SHOT.get_or_init(|| OneShotScheduler {
             jobs: Mutex::new(HashMap::new()),
+            running: Mutex::new(HashMap::new()),
             next_generation: AtomicU64::new(1),
         })
     }
 
     /// 安排一次性任务；同 key 的旧任务会被取消并重新计时。
     pub fn schedule_once(&self, key: impl Into<String>, delay: Duration, run: JobFn) -> Result<()> {
+        self.schedule_one_shot(key.into(), delay, OneShotJob::Plain(run))
+    }
+
+    /// 安排可协作取消的一次性任务。
+    pub fn schedule_once_cancellable(
+        &self,
+        key: impl Into<String>,
+        delay: Duration,
+        run: CancellableJobFn,
+    ) -> Result<()> {
+        self.schedule_one_shot(key.into(), delay, OneShotJob::Cancellable(run))
+    }
+
+    fn schedule_one_shot(&self, key: String, delay: Duration, job: OneShotJob) -> Result<()> {
         if delay.is_zero() {
             bail!("one-shot task delay must be greater than zero");
         }
 
-        let key = key.into();
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
         let deadline = tokio::time::Instant::now() + delay;
 
@@ -323,7 +396,7 @@ impl OneShotScheduler {
         if let Some(entry) = jobs.get_mut(&key) {
             entry.generation = generation;
             entry.deadline = deadline;
-            entry.run = run;
+            entry.job = job;
             entry.notify.notify_one();
             drop(jobs);
 
@@ -344,7 +417,7 @@ impl OneShotScheduler {
                 generation,
                 deadline,
                 notify,
-                run,
+                job,
                 handle,
             },
         );
@@ -359,35 +432,66 @@ impl OneShotScheduler {
         self.schedule_once(key, delay, run)
     }
 
-    /// 取消尚未触发的一次性任务；返回是否确实取消了任务。
+    /// 取消一次性任务；返回是否确实发出了取消。
+    ///
+    /// 待触发任务会立即移除并 abort。已经进入执行的可取消任务只会收到协作
+    /// 取消信号，是否停止由任务自身决定；普通运行中任务无法取消。
     pub fn cancel(&self, key: &str) -> bool {
-        let entry = self.jobs.lock().remove(key);
-        let Some(entry) = entry else {
-            return false;
-        };
+        let pending = self.jobs.lock().remove(key);
+        let mut cancelled = false;
 
-        entry.notify.notify_one();
-        entry.handle.abort();
-        log::debug!(target: "app", "one-shot task `{key}` cancelled");
-        true
+        if let Some(entry) = pending {
+            entry.notify.notify_one();
+            entry.handle.abort();
+            cancelled = true;
+        }
+
+        let token = self
+            .running
+            .lock()
+            .get(key)
+            .and_then(|entry| entry.token.clone());
+        if let Some(token) = token {
+            token.cancel();
+            cancelled = true;
+        }
+
+        if cancelled {
+            log::debug!(target: "app", "one-shot task `{key}` cancel requested");
+        }
+        cancelled
     }
 
-    /// 取消所有尚未触发的一次性任务。
+    /// 取消所有待触发任务，并向所有运行中的可取消任务发出取消信号。
     pub fn cancel_all(&self) {
         let entries: Vec<(String, OneShotEntry)> = self.jobs.lock().drain().collect();
-        if entries.is_empty() {
+        let running: Vec<(String, CancelToken)> = self
+            .running
+            .lock()
+            .iter()
+            .filter_map(|(key, entry)| entry.token.clone().map(|token| (key.clone(), token)))
+            .collect();
+
+        if entries.is_empty() && running.is_empty() {
             return;
         }
 
-        let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
+        let pending_keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
         for (_, entry) in &entries {
             entry.notify.notify_one();
             entry.handle.abort();
         }
+
+        let running_keys: Vec<&str> = running.iter().map(|(key, _)| key.as_str()).collect();
+        for (_, token) in &running {
+            token.cancel();
+        }
+
         log::debug!(
             target: "app",
-            "one-shot tasks cancelled: {} keys: {keys:?}",
-            entries.len()
+            "one-shot tasks cancelled: {} pending keys: {pending_keys:?}, {} running keys: {running_keys:?}",
+            entries.len(),
+            running.len()
         );
     }
 
@@ -420,9 +524,30 @@ impl OneShotScheduler {
         keys
     }
 
+    /// 返回所有正在执行的一次性任务快照，按 key 字典序排列。
+    pub fn running_tasks(&self) -> Vec<RunningTaskInfo> {
+        let running = self.running.lock();
+        let mut tasks: Vec<RunningTaskInfo> = running
+            .iter()
+            .map(|(key, entry)| RunningTaskInfo {
+                key: key.clone(),
+                generation: entry.generation,
+                cancellable: entry.token.is_some(),
+            })
+            .collect();
+        tasks.sort_by(|left, right| left.key.cmp(&right.key));
+        tasks
+    }
+
     /// 指定一次性任务是否仍在等待触发。
     pub fn is_scheduled(&self, key: &str) -> bool {
         self.jobs.lock().contains_key(key)
+    }
+
+    /// 指定一次性任务是否正在执行。
+    #[allow(dead_code)]
+    pub fn is_running(&self, key: &str) -> bool {
+        self.running.lock().contains_key(key)
     }
 }
 
@@ -440,7 +565,7 @@ async fn run_one_shot_worker(key: String) {
 
         tokio::select! {
             _ = tokio::time::sleep_until(deadline) => {
-                let run = {
+                let job = {
                     let mut jobs = scheduler.jobs.lock();
                     let Some(entry) = jobs.get(&key) else {
                         return;
@@ -448,14 +573,28 @@ async fn run_one_shot_worker(key: String) {
                     if entry.generation != generation {
                         continue;
                     }
-                    jobs.remove(&key).map(|entry| entry.run)
+                    jobs.remove(&key).map(|entry| entry.job)
                 };
-                let Some(run) = run else {
+                let Some(job) = job else {
                     return;
                 };
 
+                let token = match &job {
+                    OneShotJob::Plain(_) => None,
+                    OneShotJob::Cancellable(_) => Some(CancelToken::new()),
+                };
+                let _running =
+                    RunningTaskGuard::new(key.clone(), generation, token.clone());
+
                 log::debug!(target: "app", "one-shot task `{key}` fired");
-                if let Err(err) = run().await {
+                let result = match job {
+                    OneShotJob::Plain(run) => run().await,
+                    OneShotJob::Cancellable(run) => {
+                        let token = token.expect("cancellable one-shot task must have a token");
+                        run(token).await
+                    }
+                };
+                if let Err(err) = result {
                     log::error!(target: "app", "one-shot task `{key}` failed: {err:#}");
                 }
                 return;
@@ -463,6 +602,34 @@ async fn run_one_shot_worker(key: String) {
             _ = notify.notified() => {
                 log::trace!(target: "app", "one-shot task `{key}` deadline reset");
             }
+        }
+    }
+}
+
+struct RunningTaskGuard {
+    key: String,
+    generation: u64,
+}
+
+impl RunningTaskGuard {
+    fn new(key: String, generation: u64, token: Option<CancelToken>) -> Self {
+        OneShotScheduler::global()
+            .running
+            .lock()
+            .insert(key.clone(), RunningEntry { generation, token });
+        Self { key, generation }
+    }
+}
+
+impl Drop for RunningTaskGuard {
+    fn drop(&mut self) {
+        let mut running = OneShotScheduler::global().running.lock();
+        let is_current = running
+            .get(&self.key)
+            .map(|entry| entry.generation == self.generation)
+            .unwrap_or(false);
+        if is_current {
+            running.remove(&self.key);
         }
     }
 }
@@ -532,6 +699,18 @@ mod tests {
             let events = events.clone();
             Box::pin(async move {
                 events.lock().unwrap().push(value);
+                Ok(())
+            })
+        })
+    }
+
+    fn cancellable_wait_job(events: Events) -> CancellableJobFn {
+        Arc::new(move |token| {
+            let events = events.clone();
+            Box::pin(async move {
+                events.lock().unwrap().push("started");
+                token.cancelled().await;
+                events.lock().unwrap().push("cancelled");
                 Ok(())
             })
         })
@@ -674,6 +853,80 @@ mod tests {
 
         thread::sleep(Duration::from_millis(250));
         assert!(events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cancel_requests_running_cancellable_task() {
+        let _guard = test_lock();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.cancel_running";
+        let scheduler = OneShotScheduler::global();
+        scheduler.cancel_all();
+
+        scheduler
+            .schedule_once_cancellable(
+                key,
+                Duration::from_millis(20),
+                cancellable_wait_job(events.clone()),
+            )
+            .unwrap();
+
+        assert!(wait_until(Duration::from_secs(2), || {
+            events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|value| *value == "started")
+        }));
+        assert!(scheduler.is_running(key));
+        let running = scheduler.running_tasks();
+        assert_eq!(running.len(), 1);
+        assert_eq!(running[0].key, key);
+        assert!(running[0].cancellable);
+
+        assert!(scheduler.cancel(key));
+        assert!(wait_until(Duration::from_secs(2), || {
+            events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|value| *value == "cancelled")
+        }));
+        assert!(!scheduler.is_running(key));
+    }
+
+    #[test]
+    fn cancel_all_requests_running_cancellable_tasks() {
+        let _guard = test_lock();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let key = "test.one_shot.cancel_all_running";
+        let scheduler = OneShotScheduler::global();
+        scheduler.cancel_all();
+
+        scheduler
+            .schedule_once_cancellable(
+                key,
+                Duration::from_millis(20),
+                cancellable_wait_job(events.clone()),
+            )
+            .unwrap();
+
+        assert!(wait_until(Duration::from_secs(2), || {
+            events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|value| *value == "started")
+        }));
+        scheduler.cancel_all();
+        assert!(wait_until(Duration::from_secs(2), || {
+            events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|value| *value == "cancelled")
+        }));
+        assert!(!scheduler.is_running(key));
     }
 
     #[test]

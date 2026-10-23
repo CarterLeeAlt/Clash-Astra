@@ -1,5 +1,5 @@
 use crate::config::IVerge;
-use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler, Scheduler};
+use crate::core::scheduler::{CancellableJobFn, JobFn, JobFuture, OneShotScheduler, Scheduler};
 use crate::{config::Config, core::*, utils::dirs, utils::init, utils::server};
 use crate::{log_err, trace_err};
 use anyhow::Result;
@@ -897,7 +897,7 @@ fn schedule_windows_show_retries(
         reason
     );
     let showing_guard = Arc::new(std::sync::Mutex::new(Some(showing_guard)));
-    let run: JobFn = Arc::new(move || {
+    let run: CancellableJobFn = Arc::new(move |cancel_token| {
         let window = window.clone();
         let showing_guard = showing_guard.clone();
         let future: JobFuture = Box::pin(async move {
@@ -918,7 +918,29 @@ fn schedule_windows_show_retries(
 
             let retries = [(1usize, 200u64), (2, 600)];
             for (attempt, delay_ms) in retries {
-                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_millis(delay_ms)) => {}
+                    _ = cancel_token.cancelled() => {
+                        log::debug!(
+                            target: "app",
+                            "windows delayed retry task cancelled before attempt, request_id={}, attempt={}",
+                            request_id,
+                            attempt
+                        );
+                        return Ok(());
+                    }
+                }
+
+                if cancel_token.is_cancelled() {
+                    log::debug!(
+                        target: "app",
+                        "windows delayed retry task cancelled after wait, request_id={}, attempt={}",
+                        request_id,
+                        attempt
+                    );
+                    return Ok(());
+                }
+
                 let latest_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
                 if latest_request_id != request_id {
                     log::trace!(
@@ -962,7 +984,7 @@ fn schedule_windows_show_retries(
         future
     });
 
-    if let Err(err) = OneShotScheduler::global().schedule_once(
+    if let Err(err) = OneShotScheduler::global().schedule_once_cancellable(
         WINDOW_SHOW_RETRIES_TASK,
         Duration::from_millis(WINDOW_SHOW_RETRIES_DELAY_MS),
         run,

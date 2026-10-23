@@ -445,6 +445,7 @@ pub fn get_window_style_config() -> CmdResult<resolve::WindowStyleConfig> {
 pub struct SchedulerState {
     pub periodic_tasks: Vec<scheduler::PeriodicTaskInfo>,
     pub one_shot_tasks: Vec<scheduler::OneShotTaskInfo>,
+    pub running_tasks: Vec<scheduler::RunningTaskInfo>,
 }
 
 #[tauri::command]
@@ -452,6 +453,7 @@ pub fn get_scheduler_state() -> CmdResult<SchedulerState> {
     Ok(SchedulerState {
         periodic_tasks: scheduler::Scheduler::global().tasks(),
         one_shot_tasks: scheduler::OneShotScheduler::global().pending_tasks(),
+        running_tasks: scheduler::OneShotScheduler::global().running_tasks(),
     })
 }
 
