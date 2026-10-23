@@ -85,6 +85,7 @@ impl Scheduler {
         if !force {
             if let Some(entry) = jobs.get(&key) {
                 if entry.schedule == schedule {
+                    log::trace!(target: "app", "scheduler task `{key}` unchanged");
                     return Ok(());
                 }
             }
@@ -210,7 +211,11 @@ pub fn init() -> Result<()> {
 
     // 后续新增周期任务时，在这里追加注册调用。
 
-    let task_count = Scheduler::global().keys_with_prefix("").len();
-    log::info!(target: "app", "scheduler initialized with {task_count} task(s)");
+    let task_keys = Scheduler::global().keys_with_prefix("");
+    log::info!(
+        target: "app",
+        "scheduler initialized with {} task(s): {task_keys:?}",
+        task_keys.len()
+    );
     Ok(())
 }
