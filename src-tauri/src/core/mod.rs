@@ -3,6 +3,7 @@ mod core;
 pub mod handle;
 pub mod hotkey;
 pub mod logger;
+pub mod scheduler;
 pub mod sysopt;
 pub mod timer;
 pub mod tray;

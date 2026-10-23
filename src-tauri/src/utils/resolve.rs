@@ -516,7 +516,7 @@ pub fn resolve_setup(app: &mut App) {
 
     log_err!(handle::Handle::update_systray_part());
     log_err!(hotkey::Hotkey::global().init(app.app_handle()));
-    log_err!(timer::Timer::global().init());
+    log_err!(scheduler::init());
 }
 
 /// reset system proxy

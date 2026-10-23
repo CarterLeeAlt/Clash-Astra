@@ -87,7 +87,7 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult {
 #[tauri::command]
 pub fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
     wrap_err!(Config::profiles().data().patch_item(index, profile))?;
-    wrap_err!(timer::Timer::global().refresh())
+    wrap_err!(timer::sync())
 }
 
 #[tauri::command]
