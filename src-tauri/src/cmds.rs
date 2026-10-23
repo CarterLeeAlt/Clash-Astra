@@ -446,6 +446,7 @@ pub struct SchedulerState {
     pub periodic_tasks: Vec<scheduler::PeriodicTaskInfo>,
     pub one_shot_tasks: Vec<scheduler::OneShotTaskInfo>,
     pub running_tasks: Vec<scheduler::RunningTaskInfo>,
+    pub pending_limit: usize,
 }
 
 #[tauri::command]
@@ -454,6 +455,7 @@ pub fn get_scheduler_state() -> CmdResult<SchedulerState> {
         periodic_tasks: scheduler::Scheduler::global().tasks(),
         one_shot_tasks: scheduler::OneShotScheduler::global().pending_tasks(),
         running_tasks: scheduler::OneShotScheduler::global().running_tasks(),
+        pending_limit: scheduler::MAX_PENDING_ONE_SHOT_TASKS,
     })
 }
 

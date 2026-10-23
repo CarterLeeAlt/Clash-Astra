@@ -28,6 +28,12 @@ pub type JobFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 pub type JobFn = Arc<dyn Fn() -> JobFuture + Send + Sync>;
 pub type CancellableJobFn = Arc<dyn Fn(CancelToken) -> JobFuture + Send + Sync>;
 
+/// 待触发一次性任务的数量上限，防止动态 key 无限增长。
+#[cfg(not(test))]
+pub const MAX_PENDING_ONE_SHOT_TASKS: usize = 256;
+#[cfg(test)]
+pub const MAX_PENDING_ONE_SHOT_TASKS: usize = 4;
+
 /// 一次性任务的协作式取消令牌。
 ///
 /// 令牌只由调度器创建并传给可取消任务。任务应在等待点使用 [`CancelToken::cancelled`]
@@ -402,6 +408,18 @@ impl OneShotScheduler {
 
             log::trace!(target: "app", "one-shot task `{key}` rescheduled in {delay:?}");
             return Ok(());
+        }
+
+        if jobs.len() >= MAX_PENDING_ONE_SHOT_TASKS {
+            log::warn!(
+                target: "app",
+                "one-shot task `{key}` rejected: pending limit {} reached",
+                MAX_PENDING_ONE_SHOT_TASKS
+            );
+            bail!(
+                "pending one-shot task limit reached ({}); task `{key}` rejected",
+                MAX_PENDING_ONE_SHOT_TASKS
+            );
         }
 
         let notify = Arc::new(Notify::new());
@@ -927,6 +945,49 @@ mod tests {
                 .any(|value| *value == "cancelled")
         }));
         assert!(!scheduler.is_running(key));
+    }
+
+    #[test]
+    fn pending_limit_rejects_new_keys_but_allows_updates() {
+        let _guard = test_lock();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let scheduler = OneShotScheduler::global();
+        scheduler.cancel_all();
+
+        for index in 0..MAX_PENDING_ONE_SHOT_TASKS {
+            scheduler
+                .schedule_once(
+                    format!("test.one_shot.limit.{index}"),
+                    Duration::from_secs(3600),
+                    recording_job(events.clone(), "unused"),
+                )
+                .unwrap();
+        }
+        assert_eq!(scheduler.pending_keys().len(), MAX_PENDING_ONE_SHOT_TASKS);
+
+        let error = scheduler
+            .schedule_once(
+                "test.one_shot.limit.extra",
+                Duration::from_secs(3600),
+                recording_job(events, "unused"),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("limit"));
+
+        // 已存在的 key 仍然可以更新，不受新增 key 上限影响。
+        scheduler
+            .schedule_once(
+                "test.one_shot.limit.0",
+                Duration::from_secs(3600),
+                recording_job(Arc::new(Mutex::new(Vec::new())), "updated"),
+            )
+            .unwrap();
+        assert!(scheduler
+            .pending_keys()
+            .contains(&"test.one_shot.limit.0".to_string()));
+
+        scheduler.cancel_all();
+        assert!(scheduler.pending_keys().is_empty());
     }
 
     #[test]
