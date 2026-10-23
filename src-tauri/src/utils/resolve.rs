@@ -37,6 +37,8 @@ const WINDOW_SIZE_POSITION_SAVE_TASK: &str = "window.size_position.save";
 const WINDOW_STATE_SAVE_TASK_PREFIX: &str = "window.state_save";
 const WINDOW_SHOW_AFTER_HIDE_TASK: &str = "window.show.after_hide";
 const WINDOW_SHOW_AFTER_HIDE_DELAY_MS: u64 = 300;
+const WINDOW_SHOW_CREATE_FALLBACK_TASK: &str = "window.show.create_fallback";
+const WINDOW_SHOW_CREATE_FALLBACK_DELAY_MS: u64 = 1500;
 const HEARTBEAT_WARN_AFTER_MS: u64 = 15_000;
 
 static MAIN_WINDOW_STATE: AtomicU64 = AtomicU64::new(MAIN_WINDOW_STATE_MISSING);
@@ -1030,57 +1032,79 @@ fn schedule_create_window_show_fallback(
         show_when_ready,
         scheduled_show_request_id
     );
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-        let ready_handled = FRONTEND_READY_HANDLED.load(Ordering::SeqCst);
-        let current_show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
-        let should_show = show_when_ready || current_show_request_id > 0;
+    let run: JobFn = Arc::new(move || {
+        let app_handle = app_handle.clone();
+        let future: JobFuture = Box::pin(async move {
+            log::debug!(target: "app", "create_window show fallback task fired");
+            let ready_handled = FRONTEND_READY_HANDLED.load(Ordering::SeqCst);
+            let current_show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
+            let should_show = show_when_ready || current_show_request_id > 0;
 
-        if !should_show {
-            log::trace!(
-                "create_window show fallback skipped, silent without show request, ready_handled={}, show_request_id={}",
-                ready_handled,
-                current_show_request_id
-            );
-            return;
-        }
+            if !should_show {
+                log::trace!(
+                    "create_window show fallback skipped, silent without show request, ready_handled={}, show_request_id={}",
+                    ready_handled,
+                    current_show_request_id
+                );
+                return Ok(());
+            }
 
-        let Some(window) = app_handle.get_window("main") else {
-            log::trace!(
-                "create_window show fallback skipped, main window missing, ready_handled={}, show_request_id={}",
-                ready_handled,
-                current_show_request_id
-            );
-            return;
-        };
+            let Some(window) = app_handle.get_window("main") else {
+                log::trace!(
+                    "create_window show fallback skipped, main window missing, ready_handled={}, show_request_id={}",
+                    ready_handled,
+                    current_show_request_id
+                );
+                return Ok(());
+            };
 
-        let visible = window.is_visible().unwrap_or(false);
-        let minimized = window.is_minimized().unwrap_or(false);
-        if !ready_handled
-            || current_show_request_id > scheduled_show_request_id
-            || !visible
-            || minimized
-        {
-            log::trace!(
-                "create_window show fallback triggered, ready_handled={}, visible={}, minimized={}, show_when_ready={}, scheduled_show_request_id={}, current_show_request_id={}",
-                ready_handled,
-                visible,
-                minimized,
-                show_when_ready,
-                scheduled_show_request_id,
-                current_show_request_id
-            );
-            show_existing_window(&window, current_show_request_id, ShowReason::CreateFallback);
-        } else {
-            log::trace!(
-                "create_window show fallback skipped, ready already showed window, ready_handled={}, visible={}, minimized={}, show_request_id={}",
-                ready_handled,
-                visible,
-                minimized,
-                current_show_request_id
-            );
-        }
+            let visible = window.is_visible().unwrap_or(false);
+            let minimized = window.is_minimized().unwrap_or(false);
+            if !ready_handled
+                || current_show_request_id > scheduled_show_request_id
+                || !visible
+                || minimized
+            {
+                log::trace!(
+                    "create_window show fallback triggered, ready_handled={}, visible={}, minimized={}, show_when_ready={}, scheduled_show_request_id={}, current_show_request_id={}",
+                    ready_handled,
+                    visible,
+                    minimized,
+                    show_when_ready,
+                    scheduled_show_request_id,
+                    current_show_request_id
+                );
+                show_existing_window(&window, current_show_request_id, ShowReason::CreateFallback);
+            } else {
+                log::trace!(
+                    "create_window show fallback skipped, ready already showed window, ready_handled={}, visible={}, minimized={}, show_request_id={}",
+                    ready_handled,
+                    visible,
+                    minimized,
+                    current_show_request_id
+                );
+            }
+            Ok(())
+        });
+        future
     });
+
+    if let Err(err) = OneShotScheduler::global().schedule_once(
+        WINDOW_SHOW_CREATE_FALLBACK_TASK,
+        Duration::from_millis(WINDOW_SHOW_CREATE_FALLBACK_DELAY_MS),
+        run,
+    ) {
+        log::error!(
+            target: "app",
+            "failed to schedule create_window show fallback: {err}"
+        );
+    } else {
+        log::debug!(
+            target: "app",
+            "create_window show fallback task scheduled, delay_ms={}, key={WINDOW_SHOW_CREATE_FALLBACK_TASK}",
+            WINDOW_SHOW_CREATE_FALLBACK_DELAY_MS
+        );
+    }
 }
 
 #[cfg(target_os = "windows")]
