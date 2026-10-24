@@ -1,8 +1,11 @@
 use crate::config::*;
 use crate::core::*;
 use anyhow::{bail, Result};
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tauri::{AppHandle, ClipboardManager};
 use tokio::time::{sleep, Duration, Instant};
 
@@ -38,9 +41,25 @@ pub struct TestDelayResult {
     pub proxy: Option<String>,
 }
 
-/// 后台自动延迟测试：直接驱动 mihomo 的组测试 API，结果写入内核
-/// delay history。不依赖前端 WebView，窗口隐藏或被节流时照常执行。
+/// 最近一轮自动延迟测试的低值结果（节点名 -> 延迟毫秒）。
+/// 每节点两并发取低值，mihomo history 的写入顺序不保证，展示以此快照为准。
+static LATEST_AUTO_DELAY: Lazy<Mutex<HashMap<String, u32>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// 读取最近一轮自动延迟测试的低值结果。
+pub fn latest_auto_delay_results() -> HashMap<String, u32> {
+    LATEST_AUTO_DELAY.lock().clone()
+}
+
+/// 后台自动延迟测试：逐节点两并发取低值，结果同时写入内核 history
+/// 与内存快照（前端窗口重新可见时经 `get_auto_delay_results` 优先展示）。
+/// 不依赖前端 WebView，窗口隐藏或被节流时照常执行。
 pub async fn run_auto_delay_test() -> Result<()> {
+    /// 同一节点的并发测试轮数；取两轮中的较低值以抑制单次抖动
+    const CONCURRENT_ROUNDS: usize = 2;
+    /// 全局同时在测的节点数上限，避免控制器请求风暴
+    const GLOBAL_CONCURRENCY: usize = 16;
+
     let (test_url, timeout) = {
         let verge = Config::verge();
         let verge = verge.latest();
@@ -52,50 +71,72 @@ pub async fn run_auto_delay_test() -> Result<()> {
 
     let proxies = match clash_api::get_proxies().await {
         Ok(res) => res.proxies,
-        Err(err) => bail!("auto delay test skipped; failed to list proxy groups: {err}"),
+        Err(err) => bail!("auto delay test skipped; failed to list proxies: {err}"),
     };
 
-    let groups: Vec<String> = proxies
-        .iter()
-        .filter(|(name, proxy)| proxy.all.is_some() && name.as_str() != "GLOBAL")
-        .map(|(name, _)| name.clone())
-        .collect();
+    // 收集全部代理组（除 GLOBAL）内的节点并去重；REJECT 无网络路径不测
+    let mut names: HashSet<String> = HashSet::new();
+    for (group, proxy) in proxies.iter() {
+        if proxy.all.is_none() || group.as_str() == "GLOBAL" {
+            continue;
+        }
+        names.extend(
+            proxy
+                .all
+                .iter()
+                .flatten()
+                .filter(|name| name.as_str() != "REJECT")
+                .cloned(),
+        );
+    }
 
-    if groups.is_empty() {
-        log::debug!(target: "app", "auto delay test skipped; no proxy groups");
+    if names.is_empty() {
+        log::debug!(target: "app", "auto delay test skipped; no proxies to test");
         return Ok(());
     }
 
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(GLOBAL_CONCURRENCY));
     let mut set = tokio::task::JoinSet::new();
-    for group in groups {
+
+    for name in names {
+        let semaphore = semaphore.clone();
         let test_url = test_url.clone();
         set.spawn(async move {
-            let result = clash_api::get_group_delay(group.clone(), test_url, timeout).await;
-            (group, result)
+            let _permit = semaphore
+                .acquire_owned()
+                .await
+                .expect("auto delay test semaphore closed");
+
+            debug_assert_eq!(CONCURRENT_ROUNDS, 2);
+            let (first, second) = tokio::join!(
+                clash_api::get_proxy_delay(name.clone(), test_url.clone(), timeout),
+                clash_api::get_proxy_delay(name.clone(), test_url, timeout),
+            );
+
+            let best = [first, second]
+                .into_iter()
+                .filter_map(|result| result.ok().map(|res| res.delay as u32))
+                .min();
+            (name, best)
         });
     }
 
-    let mut succeeded = 0usize;
-    let mut measured = 0usize;
+    let mut latest: HashMap<String, u32> = HashMap::new();
     while let Some(joined) = set.join_next().await {
-        let Ok((group, result)) = joined else {
+        let Ok((name, best)) = joined else {
             log::warn!(target: "app", "auto delay test task panicked");
             continue;
         };
-        match result {
-            Ok(delays) => {
-                succeeded += 1;
-                measured += delays.len();
-            }
-            Err(err) => {
-                log::warn!(target: "app", "auto delay test for group '{group}' failed: {err:#}");
-            }
+        if let Some(delay) = best {
+            latest.insert(name, delay);
         }
     }
 
+    let measured = latest.len();
+    *LATEST_AUTO_DELAY.lock() = latest;
     log::info!(
         target: "app",
-        "auto delay test finished: {succeeded} group(s) ok, {measured} node result(s)"
+        "auto delay test finished: {measured} node(s) with results"
     );
     Ok(())
 }

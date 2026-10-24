@@ -167,7 +167,8 @@ class DelayManager {
 
     const cachedDelay = this.getDelay(proxy.name, group);
     if (cachedDelay === DELAY_PENDING) return cachedDelay;
-    if (!proxy.provider && cachedDelay !== DELAY_UNKNOWN) {
+    // 本地缓存来自手动两并发低值或后端自动测试快照，优先于乱序的 history
+    if (cachedDelay !== DELAY_UNKNOWN) {
       return cachedDelay;
     }
 
@@ -180,17 +181,13 @@ class DelayManager {
     return DELAY_UNKNOWN;
   }
 
-  private isAbortError(_err: any, signal?: AbortSignal) {
-    return signal?.aborted ?? false;
-  }
-
-  private requestDelay(
+  private async requestDelay(
     name: string,
     group: string,
     timeout: number
   ): Promise<number>;
 
-  private requestDelay(
+  private async requestDelay(
     name: string,
     group: string,
     timeout: number,
@@ -206,21 +203,28 @@ class DelayManager {
     // REJECT 不是网络路径，任何地址都只会换来一次注定失败的请求
     if (name === "REJECT") return DELAY_NOT_APPLICABLE;
 
-    let delay = DELAY_FAILED;
+    if (signal?.aborted) return null;
+    const url = this.getUrl(group)?.trim() || DEFAULT_LATENCY_TEST_URL;
 
-    try {
-      if (signal?.aborted) return null;
-      const url = this.getUrl(group)?.trim() || DEFAULT_LATENCY_TEST_URL;
-      const result = await cmdGetProxyDelay(name, timeout, url);
-      if (signal?.aborted) return null;
-      delay = result.delay;
-    } catch (err) {
-      if (this.isAbortError(err, signal)) return null;
-      // DIRECT 失败说明目标对直连不可达，不是节点故障
-      delay = name === "DIRECT" ? DELAY_UNREACHABLE : DELAY_FAILED;
-    }
+    // 同一节点并发两轮，取较低值以抑制单次抖动
+    const settled = await Promise.allSettled([
+      cmdGetProxyDelay(name, timeout, url),
+      cmdGetProxyDelay(name, timeout, url),
+    ]);
+    if (signal?.aborted) return null;
 
-    return delay;
+    const delays = settled
+      .filter(
+        (result): result is PromiseFulfilledResult<{ delay: number }> =>
+          result.status === "fulfilled"
+      )
+      .map((result) => result.value.delay)
+      .filter((delay) => typeof delay === "number" && !Number.isNaN(delay));
+
+    if (delays.length > 0) return Math.min(...delays);
+
+    // 两轮都失败：DIRECT 说明目标对直连不可达，不是节点故障
+    return name === "DIRECT" ? DELAY_UNREACHABLE : DELAY_FAILED;
   }
 
   async checkDelay(name: string, group: string, timeout: number) {

@@ -1,24 +1,60 @@
 import { useEffect } from "react";
 import { mutate } from "swr";
 import { getProxies } from "@/services/api";
+import { getAutoDelayResults } from "@/services/cmds";
 import delayManager from "@/services/delay";
 import { queryKeys } from "@/shared/query/keys";
 
 /**
- * 窗口重新可见时清空本地延迟缓存并刷新代理数据。
- * 自动延迟测试在后端直接驱动 mihomo（结果写入内核 delay history），
- * 本地缓存只反映手动测试；窗口隐藏期间的历史更新需要重新可见时让位展示。
+ * 窗口重新可见时刷新延迟显示：
+ * 1. 清空本地延迟缓存；
+ * 2. 拉取后端自动测试快照（每节点两并发取低值）写入本地缓存，优先于乱序的 history；
+ * 3. 重新拉取代理数据，让内核 history 与选择状态同步。
  */
 export const useDelayRefresh = () => {
   useEffect(() => {
+    let disposed = false;
+
+    const refresh = async () => {
+      try {
+        const snapshot = await getProxies();
+        if (disposed) return;
+
+        delayManager.clearAll();
+
+        try {
+          const results = await getAutoDelayResults();
+          if (!disposed && results) {
+            const groups = [snapshot.global, ...snapshot.groups];
+            for (const group of groups) {
+              for (const proxy of group.all ?? []) {
+                const delay = results[proxy.name];
+                if (typeof delay === "number") {
+                  delayManager.setDelay(proxy.name, group.name, delay, true);
+                }
+              }
+            }
+          }
+        } catch {
+          // 后端快照不可用时退回 history 展示
+        }
+
+        if (!disposed) {
+          mutate(queryKeys.proxies, getProxies());
+        }
+      } catch {
+        // 代理数据拉取失败时保留现有显示
+      }
+    };
+
     const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-      delayManager.clearAll();
-      mutate(queryKeys.proxies, getProxies());
+      if (document.visibilityState !== "visible" || disposed) return;
+      void refresh();
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      disposed = true;
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);

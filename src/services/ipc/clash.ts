@@ -74,6 +74,11 @@ export async function cmdGetProxyDelay(
   });
 }
 
+/// 最近一轮后端自动延迟测试的低值结果（节点名 -> 延迟毫秒）
+export async function getAutoDelayResults() {
+  return invoke<Record<string, number>>("get_auto_delay_results");
+}
+
 export interface ITestDelayResult {
   delay: number;
   proxy?: string;

@@ -63,3 +63,9 @@ pub async fn clash_api_get_proxy_delay(
         Err(err) => Err(err.to_string()),
     }
 }
+
+/// 最近一轮后端自动延迟测试的低值结果（节点名 -> 延迟毫秒）
+#[tauri::command]
+pub fn get_auto_delay_results() -> CmdResult<HashMap<String, u32>> {
+    Ok(feat::latest_auto_delay_results())
+}

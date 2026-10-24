@@ -262,6 +262,12 @@ impl CoreManager {
                 Ok(()) => {
                     self.proxy_initialized.store(true, Ordering::SeqCst);
                     self.sysproxy_failure_count.store(0, Ordering::SeqCst);
+                    // 核心就绪后立即补一轮自动延迟测试，不必等首个 2 分钟周期
+                    tauri::async_runtime::spawn(async {
+                        if let Err(err) = crate::feat::run_auto_delay_test().await {
+                            log::warn!(target: "app", "initial auto delay test failed: {err:#}");
+                        }
+                    });
                     return;
                 }
                 Err(err) => {
