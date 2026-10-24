@@ -3,9 +3,12 @@ import { styled, Box, Typography } from "@mui/material";
 const Item = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  padding: "8px 10px",
+  padding: "6px 10px",
   color: theme.palette.text.primary,
 }));
+
+/// 四列固定行高，保证序号与正文在视觉上垂直居中
+const ROW_LINE_HEIGHT = "22px";
 
 const COLOR = [
   "primary",
@@ -39,7 +42,13 @@ const RuleItem = (props: Props) => {
       <Typography
         color="text.secondary"
         variant="body2"
-        sx={{ flex: "none", minWidth: 30, mr: 2.25, textAlign: "left" }}
+        sx={{
+          flex: "none",
+          width: "32px",
+          mr: 1,
+          textAlign: "left",
+          lineHeight: ROW_LINE_HEIGHT,
+        }}
       >
         {index}
       </Typography>
@@ -49,12 +58,13 @@ const RuleItem = (props: Props) => {
         variant="subtitle1"
         color="text.primary"
         sx={{
-          flex: "1 1 auto",
-          minWidth: 0,
+          flex: "none",
+          width: "380px",
           mr: 2,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          lineHeight: ROW_LINE_HEIGHT,
           userSelect: "text",
         }}
       >
@@ -65,7 +75,13 @@ const RuleItem = (props: Props) => {
         component="span"
         variant="body2"
         color="text.secondary"
-        sx={{ flex: "none", width: 110, mr: 2, userSelect: "text" }}
+        sx={{
+          flex: "none",
+          width: "110px",
+          mr: 2,
+          lineHeight: ROW_LINE_HEIGHT,
+          userSelect: "text",
+        }}
       >
         {value.type}
       </Typography>
@@ -76,10 +92,11 @@ const RuleItem = (props: Props) => {
         color={parseColor(value.proxy)}
         sx={{
           flex: "none",
-          width: 140,
+          width: "150px",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          lineHeight: ROW_LINE_HEIGHT,
           userSelect: "text",
         }}
       >

@@ -48,9 +48,7 @@ export const ProxyItemMini = (props: Props) => {
             "&:hover .the-delay": { display: showDelay ? "block" : "none" },
             "&:hover .the-icon": { display: "none" },
             "&.Mui-selected": {
-              width: `calc(100% + 3px)`,
-              marginLeft: `-3px`,
-              borderLeft: `3px solid ${selectColor}`,
+              boxShadow: `inset 3px 0 0 ${selectColor}`,
               bgcolor:
                 mode === "light"
                   ? alpha(primary.main, 0.15)

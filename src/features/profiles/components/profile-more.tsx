@@ -157,9 +157,7 @@ export const ProfileMore = (props: Props) => {
         sx={
           fixed && fixedColor
             ? {
-                borderLeft: `3px solid ${fixedColor}`,
-                width: "calc(100% + 3px)",
-                marginLeft: "-3px",
+                boxShadow: `inset 3px 0 0 ${fixedColor}`,
               }
             : undefined
         }

@@ -70,7 +70,7 @@ export const ProxyItem = (props: Props) => {
               "&:hover .the-delay": { display: showDelay ? "block" : "none" },
               "&:hover .the-icon": { display: "none" },
               "&.Mui-selected": {
-                borderLeft: `3px solid ${selectColor}`,
+                boxShadow: `inset 3px 0 0 ${selectColor}`,
                 bgcolor:
                   mode === "light"
                     ? alpha(primary.main, 0.15)
