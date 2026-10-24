@@ -28,7 +28,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState({
     stack: "gvisor",
-    device: "clash-verge-buty",
+    device: "clash-astra",
     autoRoute: true,
     autoDetectInterface: true,
     dnsHijack: ["any:53"],
@@ -41,7 +41,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
       setOpen(true);
       setValues({
         stack: clash?.tun.stack ?? "gvisor",
-        device: clash?.tun.device ?? "clash-verge-buty",
+        device: clash?.tun.device ?? "clash-astra",
         autoRoute: clash?.tun["auto-route"] ?? true,
         autoDetectInterface: clash?.tun["auto-detect-interface"] ?? true,
         dnsHijack: clash?.tun["dns-hijack"] ?? ["any:53"],
@@ -59,7 +59,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
         .filter(Boolean);
       let tun = {
         stack: values.stack.toLowerCase(),
-        device: values.device.trim() || "clash-verge-buty",
+        device: values.device.trim() || "clash-astra",
         "auto-route": values.autoRoute,
         "auto-detect-interface": values.autoDetectInterface,
         "dns-hijack": dnsHijack.length ? dnsHijack : ["any:53"],
@@ -92,7 +92,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
             onClick={async () => {
               let tun = {
                 stack: "gvisor",
-                device: "clash-verge-buty",
+                device: "clash-astra",
                 "auto-route": true,
                 "auto-detect-interface": true,
                 "dns-hijack": ["any:53"],
@@ -101,7 +101,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
               };
               setValues({
                 stack: "gvisor",
-                device: "clash-verge-buty",
+                device: "clash-astra",
                 autoRoute: true,
                 autoDetectInterface: true,
                 dnsHijack: ["any:53"],
@@ -153,7 +153,7 @@ export const TunViewer = forwardRef<DialogRef>((props, ref) => {
             spellCheck="false"
             sx={{ width: 250 }}
             value={values.device}
-            placeholder="clash-verge-buty"
+            placeholder="clash-astra"
             onChange={(e) =>
               setValues((v) => ({ ...v, device: e.target.value }))
             }

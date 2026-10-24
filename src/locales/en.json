@@ -178,5 +178,5 @@
   "Portable Updater Error": "The portable version does not support in-app updates. Please manually download and replace it",
   "Tun Mode Info Windows": "The Tun mode requires granting core-related permissions. Please enable service mode before using it",
   "System and Mixed Can Only be Used in Service Mode": "System and Mixed Can Only be Used in Service Mode",
-  "Administrator Required": "Service mode and TUN mode require Clash Verge to be run as administrator."
+  "Administrator Required": "Service mode and TUN mode require Clash Astra to be run as administrator."
 }
