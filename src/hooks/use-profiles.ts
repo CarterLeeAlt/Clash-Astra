@@ -5,10 +5,11 @@ import {
   patchProfilesConfig,
 } from "@/services/cmds";
 import { getProxies, updateProxy } from "@/services/api";
+import { queryKeys } from "@/shared/query/keys";
 
 export const useProfiles = () => {
   const { data: profiles, mutate: mutateProfiles } = useSWR(
-    "getProfiles",
+    queryKeys.profiles,
     getProfiles
   );
 
@@ -59,7 +60,7 @@ export const useProfiles = () => {
 
     if (hasChange) {
       patchProfile(profileData.current!, { selected: newSelected });
-      mutate("getProxies", getProxies());
+      mutate(queryKeys.proxies, getProxies());
     }
   };
 

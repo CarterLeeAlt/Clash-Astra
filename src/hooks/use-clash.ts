@@ -6,29 +6,32 @@ import {
   patchClashConfig,
   getRuntimeConfig,
 } from "@/services/cmds";
+import { queryKeys } from "@/shared/query/keys";
 
 export const useClash = () => {
   const { data: clash, mutate: mutateClash } = useSWR(
-    "getRuntimeConfig",
+    queryKeys.runtimeConfig,
     getRuntimeConfig
   );
 
   const { data: versionData, mutate: mutateVersion } = useSWR(
-    "getVersion",
+    queryKeys.version,
     getVersion
   );
 
   const patchClash = useLockFn(async (patch: Partial<IConfigData>) => {
     const hasAllowLanPatch = patch["allow-lan"] != null;
     const hasRuntimePatch =
-      patch.ipv6 != null || patch["allow-lan"] != null || patch["log-level"] != null;
+      patch.ipv6 != null ||
+      patch["allow-lan"] != null ||
+      patch["log-level"] != null;
 
     if (!hasAllowLanPatch) {
       await updateConfigs(patch);
     }
     await patchClashConfig(patch);
     await mutateClash();
-    await mutate("getClashConfig");
+    await mutate(queryKeys.clashConfig);
 
     if (hasRuntimePatch) {
       await mutateClash();
@@ -52,7 +55,7 @@ export const useClash = () => {
 
 export const useClashInfo = () => {
   const { data: clashInfo, mutate: mutateInfo } = useSWR(
-    "getClashInfo",
+    queryKeys.clashInfo,
     getClashInfo
   );
 
@@ -105,8 +108,7 @@ export const useClashInfo = () => {
 
     await patchClashConfig(patch);
     await mutateInfo();
-    await mutate("getClashInfo");
-    mutate("getClashConfig");
+    mutate(queryKeys.clashConfig);
     // 刷新接口
     await getAxios(true);
   };

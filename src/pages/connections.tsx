@@ -8,7 +8,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  TextField,
 } from "@mui/material";
 import { useRecoilState } from "recoil";
 import { Virtuoso } from "react-virtuoso";
@@ -25,71 +24,12 @@ import {
   ConnectionDetail,
   ConnectionDetailRef,
 } from "@/components/connection/connection-detail";
-
-const initConn = { uploadTotal: 0, downloadTotal: 0, connections: [] };
-
-type OrderFunc = (list: IConnectionsItem[]) => IConnectionsItem[];
-
-const getActiveSpeed = (conn: IConnectionsItem) =>
-  (conn.curDownload ?? 0) + (conn.curUpload ?? 0);
-
-const getTotalTraffic = (conn: IConnectionsItem) =>
-  (conn.download ?? 0) + (conn.upload ?? 0);
-
-const getStartTimestamp = (conn: IConnectionsItem) => {
-  if (!conn.start) return 0;
-  const ts = new Date(conn.start).getTime();
-  return Number.isNaN(ts) ? 0 : ts;
-};
-
-// 用 Map 按 id 匹配新旧快照，保持旧条目原有位置以减少列表跳动（O(n)，替代逐条 findIndex 的 O(n²)）
-const mergeConnectionSnapshot = (
-  oldConn: IConnectionsItem[],
-  incoming: IConnectionsItem[],
-): IConnectionsItem[] => {
-  const maxLen = incoming.length;
-  const oldIndexMap = new Map(oldConn.map((conn, index) => [conn.id, index]));
-  const connections: IConnectionsItem[] = new Array(maxLen);
-  const rest: IConnectionsItem[] = [];
-
-  incoming.forEach((each) => {
-    const index = oldIndexMap.get(each.id);
-    if (index !== undefined && index < maxLen) {
-      const prev = oldConn[index];
-      each.curUpload = (each.upload ?? 0) - (prev.upload ?? 0);
-      each.curDownload = (each.download ?? 0) - (prev.download ?? 0);
-      connections[index] = each;
-    } else {
-      each.curUpload = 0;
-      each.curDownload = 0;
-      rest.push(each);
-    }
-  });
-
-  for (let i = 0; i < maxLen && rest.length > 0; ++i) {
-    if (!connections[i]) {
-      connections[i] = rest.shift()!;
-    }
-  }
-  return connections;
-};
-
-const sortByActiveSpeed = (list: IConnectionsItem[]) =>
-  list
-    .map((item, index) => ({ item, index }))
-    .sort((a, b) => {
-      const activeDiff = getActiveSpeed(b.item) - getActiveSpeed(a.item);
-      if (activeDiff !== 0) return activeDiff;
-
-      const trafficDiff = getTotalTraffic(b.item) - getTotalTraffic(a.item);
-      if (trafficDiff !== 0) return trafficDiff;
-
-      const startDiff = getStartTimestamp(b.item) - getStartTimestamp(a.item);
-      if (startDiff !== 0) return startDiff;
-
-      return a.index - b.index;
-    })
-    .map(({ item }) => item);
+import {
+  connectionOrderOptions,
+  initConn,
+  mergeConnectionSnapshot,
+} from "@/features/connections/model";
+import { FilterTextField } from "@/components/form/filter-text-field";
 
 const ConnectionsPage = () => {
   const { t, i18n } = useTranslation();
@@ -103,17 +43,8 @@ const ConnectionsPage = () => {
 
   const isTableLayout = setting.layout === "table";
 
-  const orderOpts: Record<string, OrderFunc> = {
-    "Active Speed": sortByActiveSpeed,
-    Default: (list) => list,
-    "Upload Speed": (list) =>
-      [...list].sort((a, b) => (b.curUpload ?? 0) - (a.curUpload ?? 0)),
-    "Download Speed": (list) =>
-      [...list].sort((a, b) => (b.curDownload ?? 0) - (a.curDownload ?? 0)),
-  };
-
   const [filterConn] = useMemo(() => {
-    const orderFunc = orderOpts[curOrderOpt];
+    const orderFunc = connectionOrderOptions[curOrderOpt];
     let connections = connData.connections.filter((conn) =>
       (conn.metadata.host || conn.metadata.destinationIP)?.includes(filterText)
     );
@@ -138,7 +69,7 @@ const ConnectionsPage = () => {
   syncConnectionsRef.current = syncConnections;
 
   const [wsState, setWsState] = useState<"connected" | "reconnecting">(
-    "reconnecting",
+    "reconnecting"
   );
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
@@ -201,7 +132,7 @@ const ConnectionsPage = () => {
         setWsState("reconnecting");
         scheduleFallbackPolling();
       },
-    },
+    }
   );
 
   useEffect(() => {
@@ -214,15 +145,21 @@ const ConnectionsPage = () => {
       clearFallbackTimer();
       disconnect();
     };
-  }, [clashInfo?.server, clashInfo?.secret, connect, disconnect, clearFallbackTimer]);
-
+  }, [
+    clashInfo?.server,
+    clashInfo?.secret,
+    connect,
+    disconnect,
+    clearFallbackTimer,
+  ]);
 
   useEffect(() => {
     const onRefresh = () => {
       void syncConnectionsRef.current().catch(() => undefined);
     };
     window.addEventListener("verge://connections-refresh", onRefresh);
-    return () => window.removeEventListener("verge://connections-refresh", onRefresh);
+    return () =>
+      window.removeEventListener("verge://connections-refresh", onRefresh);
   }, []);
   const onCloseAll = useLockFn(async () => {
     await closeAllConnections();
@@ -295,7 +232,7 @@ const ConnectionsPage = () => {
               '[role="button"]': { py: 0.65 },
             }}
           >
-            {Object.keys(orderOpts).map((opt) => (
+            {Object.keys(connectionOrderOptions).map((opt) => (
               <MenuItem key={opt} value={opt}>
                 <span style={{ fontSize: 14 }}>{t(opt)}</span>
               </MenuItem>
@@ -303,18 +240,7 @@ const ConnectionsPage = () => {
           </Select>
         )}
 
-        <TextField
-          hiddenLabel
-          fullWidth
-          size="small"
-          autoComplete="off"
-          spellCheck="false"
-          variant="outlined"
-          placeholder={t("Filter conditions")}
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          sx={{ input: { py: 0.65, px: 1.25 } }}
-        />
+        <FilterTextField value={filterText} onChange={setFilterText} />
       </Box>
 
       <Box height="calc(100% - 50px)" sx={{ userSelect: "text" }}>

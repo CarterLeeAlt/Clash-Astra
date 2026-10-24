@@ -18,6 +18,7 @@ import { useVerge } from "@/hooks/use-verge";
 import type { HeadState } from "./use-head-state";
 import type { ProxySortType } from "./use-filter-sort";
 import delayManager from "@/services/delay";
+import { FilterTextField } from "@/components/form/filter-text-field";
 
 interface Props {
   sx?: SxProps;
@@ -131,14 +132,11 @@ export const ProxyHead = (props: Props) => {
       </IconButton>
 
       {textState === "filter" && (
-        <TextField
+        <FilterTextField
           autoFocus={autoFocus}
-          hiddenLabel
+          fullWidth={false}
           value={filterText}
-          size="small"
-          variant="outlined"
-          placeholder={t("Filter conditions")}
-          onChange={(e) => onHeadState({ filterText: e.target.value })}
+          onChange={(value) => onHeadState({ filterText: value })}
           sx={{ ml: 0.5, flex: "1 1 auto", input: { py: 0.65, px: 1 } }}
         />
       )}

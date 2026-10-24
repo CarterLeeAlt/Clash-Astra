@@ -21,6 +21,7 @@ import { TestViewer, TestViewerRef } from "@/components/test/test-viewer";
 import { TestItem } from "@/components/test/test-item";
 import { emit } from "@tauri-apps/api/event";
 import AppleIcon from "@/assets/image/apple.svg";
+import { normalizeTestList } from "@/features/test/normalize";
 
 const DEFAULT_TEST_LIST: IVergeTestItem[] = [
   {
@@ -50,35 +51,6 @@ const DEFAULT_TEST_MAP = new Map(
   DEFAULT_TEST_LIST.map((item) => [`${item.name}::${item.url}`, item])
 );
 
-const normalizeTestList = (list: IVergeTestItem[]) => {
-  let changed = false;
-  const usedBuiltinUids = new Set<string>();
-
-  const normalized = list.map((item, index) => {
-    const defaultItem = DEFAULT_TEST_MAP.get(`${item.name}::${item.url}`);
-
-    if (!defaultItem) {
-      return item;
-    }
-
-    const uid = usedBuiltinUids.has(defaultItem.uid)
-      ? item.uid === defaultItem.uid
-        ? `${defaultItem.uid}-${index}`
-        : item.uid
-      : defaultItem.uid;
-    usedBuiltinUids.add(defaultItem.uid);
-
-    if (item.builtIn === true && item.uid === uid) {
-      return item;
-    }
-
-    changed = true;
-    return { ...item, uid, builtIn: true };
-  });
-
-  return { normalized, changed };
-};
-
 const TestPage = () => {
   const { t } = useTranslation();
   const sensors = useSensors(
@@ -93,7 +65,7 @@ const TestPage = () => {
   const testList = useMemo(
     () =>
       verge?.test_list
-        ? normalizeTestList(verge.test_list).normalized
+        ? normalizeTestList(verge.test_list, DEFAULT_TEST_MAP).normalized
         : DEFAULT_TEST_LIST,
     [verge?.test_list]
   );
@@ -159,7 +131,10 @@ const TestPage = () => {
       return;
     }
 
-    const { normalized, changed } = normalizeTestList(verge.test_list);
+    const { normalized, changed } = normalizeTestList(
+      verge.test_list,
+      DEFAULT_TEST_MAP
+    );
 
     if (changed) {
       patchVerge({ test_list: normalized });

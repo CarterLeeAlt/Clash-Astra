@@ -36,6 +36,8 @@ import {
   reportFrontendError,
 } from "@/services/cmds";
 import { useNavigate } from "react-router-dom";
+import { queryKeys } from "@/shared/query/keys";
+import { invalidateClashRuntime } from "@/shared/query/invalidate";
 
 dayjs.extend(relativeTime);
 
@@ -82,19 +84,15 @@ const Layout = () => {
       listen("verge://refresh-clash-config", async () => {
         // the clash info may be updated
         await getAxios(true);
-        await mutate("getClashInfo");
-        mutate("getRuntimeConfig");
-        mutate("checkService");
-        mutate("getProxies");
-        mutate("getVersion");
-        mutate("getClashConfig");
-        mutate("getProxyProviders");
+        invalidateClashRuntime();
       })
     );
 
     // update the verge config
     unlistenTasks.push(
-      listen("verge://refresh-verge-config", () => mutate("getVergeConfig"))
+      listen("verge://refresh-verge-config", () =>
+        mutate(queryKeys.vergeConfig)
+      )
     );
 
     // 设置提示监听

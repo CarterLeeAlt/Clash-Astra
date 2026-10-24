@@ -7,7 +7,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  TextField,
   Alert,
 } from "@mui/material";
 import { Virtuoso } from "react-virtuoso";
@@ -16,9 +15,15 @@ import {
   PlayCircleOutlineRounded,
   PauseCircleOutlineRounded,
 } from "@mui/icons-material";
-import { atomEnableLog, atomLogConnState, atomLogData, atomLogError } from "@/services/states";
+import {
+  atomEnableLog,
+  atomLogConnState,
+  atomLogData,
+  atomLogError,
+} from "@/services/states";
 import { BaseEmpty, BasePage } from "@/components/base";
 import LogItem from "@/components/log/log-item";
+import { FilterTextField } from "@/components/form/filter-text-field";
 
 const LogPage = () => {
   const { t } = useTranslation();
@@ -34,7 +39,9 @@ const LogPage = () => {
     return logData.filter((data) => {
       return (
         (filterText.trim() === "" ||
-          data.payload.toLowerCase().includes(filterText.trim().toLowerCase())) &&
+          data.payload
+            .toLowerCase()
+            .includes(filterText.trim().toLowerCase())) &&
         (logState === "all" ? true : data.type.includes(logState))
       );
     });
@@ -105,18 +112,7 @@ const LogPage = () => {
           <MenuItem value="err">ERROR</MenuItem>
         </Select>
 
-        <TextField
-          hiddenLabel
-          fullWidth
-          size="small"
-          autoComplete="off"
-          spellCheck="false"
-          variant="outlined"
-          placeholder={t("Filter conditions")}
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          sx={{ input: { py: 0.65, px: 1.25 } }}
-        />
+        <FilterTextField value={filterText} onChange={setFilterText} />
       </Box>
 
       <Box height="calc(100% - 50px)">

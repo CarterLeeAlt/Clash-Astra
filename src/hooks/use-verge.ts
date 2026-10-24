@@ -5,6 +5,7 @@ import {
   checkService,
 } from "@/services/cmds";
 import { getAxios } from "@/services/api";
+import { queryKeys } from "@/shared/query/keys";
 
 let runtimeRefreshSeq = 0;
 
@@ -15,7 +16,7 @@ function sleep(ms: number) {
 async function waitForServiceActive(maxTry = 5, interval = 3000) {
   for (let i = 0; i < maxTry; i++) {
     const status = await checkService();
-    await mutate("checkService", status, false);
+    await mutate(queryKeys.checkService, status, false);
 
     if (status?.api_ready) {
       return true;
@@ -31,7 +32,7 @@ async function waitForServiceActive(maxTry = 5, interval = 3000) {
 
 export const useVerge = () => {
   const { data: verge, mutate: mutateVerge } = useSWR(
-    "getVergeConfig",
+    queryKeys.vergeConfig,
     getVergeConfig
   );
 
@@ -49,26 +50,26 @@ export const useVerge = () => {
         await waitForServiceActive(5, 3000);
       } else {
         const status = await checkService();
-        await mutate("checkService", status, false);
+        await mutate(queryKeys.checkService, status, false);
       }
 
       await getAxios(true);
-      await mutate("getClashInfo");
-      mutate("getClashConfig");
-      mutate("getProxies");
-      mutate("getVersion");
-      mutate("checkService");
+      await mutate(queryKeys.clashInfo);
+      mutate(queryKeys.clashConfig);
+      mutate(queryKeys.proxies);
+      mutate(queryKeys.version);
+      mutate(queryKeys.checkService);
     }
 
     if (affectsRuntime) {
       const seq = ++runtimeRefreshSeq;
-      mutate("getClashInfo");
-      mutate("getClashConfig");
-      mutate("getRuntimeConfig");
+      mutate(queryKeys.clashInfo);
+      mutate(queryKeys.clashConfig);
+      mutate(queryKeys.runtimeConfig);
       setTimeout(() => {
         if (seq !== runtimeRefreshSeq) return;
-        mutate("getClashInfo");
-        mutate("getClashConfig");
+        mutate(queryKeys.clashInfo);
+        mutate(queryKeys.clashConfig);
       }, 600);
     }
   };
