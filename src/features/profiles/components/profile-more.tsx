@@ -11,6 +11,7 @@ import {
   Menu,
   IconButton,
   LinearProgress,
+  alpha,
 } from "@mui/material";
 import { DragIndicator, FeaturedPlayListRounded } from "@mui/icons-material";
 import { viewProfile } from "@/services/cmds";
@@ -240,8 +241,16 @@ export const ProfileMore = (props: Props) => {
             </Box>
             <LinearProgress
               variant="determinate"
-              value={0}
-              sx={{ visibility: "hidden" }}
+              value={100}
+              sx={(theme) => {
+                const barColor = fixedColor || theme.palette.primary.main;
+                return {
+                  backgroundColor: alpha(barColor, 0.16),
+                  "& .MuiLinearProgress-bar": {
+                    backgroundColor: alpha(barColor, 0.16),
+                  },
+                };
+              }}
             />
           </>
         ) : (

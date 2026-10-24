@@ -2,7 +2,7 @@ import { styled, Box, Typography } from "@mui/material";
 
 const Item = styled(Box)(({ theme }) => ({
   display: "flex",
-  alignItems: "center",
+  alignItems: "baseline",
   padding: "6px 10px",
   color: theme.palette.text.primary,
 }));
@@ -59,7 +59,7 @@ const RuleItem = (props: Props) => {
         color="text.primary"
         sx={{
           flex: "none",
-          width: "380px",
+          width: "260px",
           mr: 2,
           overflow: "hidden",
           textOverflow: "ellipsis",
