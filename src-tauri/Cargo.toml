@@ -1,11 +1,11 @@
 [package]
-name = "clash-verge-buty"
-version = "1.7.2"
-description = "Clash Verge Buty"
-authors = ["Clash Verge Buty"]
+name = "clash-astra"
+version = "1.8.0"
+description = "Clash Astra"
+authors = ["Clash Astra"]
 license = "GPL-3.0-only"
 repository = "https://github.com/CarterLeeAlt/Clash-Verge-Buty.git"
-default-run = "clash-verge-buty"
+default-run = "clash-astra"
 edition = "2021"
 build = "build.rs"
 

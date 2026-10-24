@@ -1,17 +1,17 @@
 {
-  "name": "clash-verge-buty",
-  "version": "1.7.2",
-  "description": "Clash Verge Buty",
+  "name": "clash-astra",
+  "version": "1.8.0",
+  "description": "Clash Astra",
   "license": "GPL-3.0-only",
   "homepage": "https://github.com/CarterLeeAlt/Clash-Verge-Buty",
   "repository": "https://github.com/CarterLeeAlt/Clash-Verge-Buty.git",
   "metadata": {
-    "productName": "Clash Verge Buty",
-    "identifier": "io.github.clash-verge-buty",
+    "productName": "Clash Astra",
+    "identifier": "io.github.clash-astra",
     "authors": [
-      "Clash Verge Buty"
+      "Clash Astra"
     ],
-    "releaseNamePrefix": "Clash Verge Buty v"
+    "releaseNamePrefix": "Clash Astra v"
   },
   "packageManager": "pnpm@11.15.1",
   "engines": {
