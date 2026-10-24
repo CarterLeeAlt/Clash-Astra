@@ -153,6 +153,57 @@ fn resolve_latency_test_url(test_url: Option<String>) -> String {
         .unwrap_or_else(|| DEFAULT_LATENCY_TEST_URL.to_string())
 }
 
+/// GET /group/{name}/delay
+/// 对整个代理组做延迟测试，结果写入内核 delay history。
+/// 全部节点超时时 mihomo 返回 408，视为该组本轮全部失败，返回空表。
+pub async fn get_group_delay(
+    name: String,
+    test_url: Option<String>,
+    timeout: i32,
+) -> Result<HashMap<String, u32>> {
+    let (base_url, headers) = clash_client_info()?;
+    let encoded_name = utf8_percent_encode(&name, NON_ALPHANUMERIC).to_string();
+    let url = format!("{base_url}/group/{encoded_name}/delay");
+
+    let test_url = resolve_latency_test_url(test_url);
+
+    let timeout = if timeout <= 0 {
+        5000
+    } else if timeout > 60000 {
+        60000
+    } else {
+        timeout
+    };
+
+    let client = reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_millis(timeout as u64 + 10_000))
+        .build()?;
+
+    let response = client
+        .get(&url)
+        .headers(headers)
+        .query(&[("timeout", &format!("{timeout}")), ("url", &test_url)])
+        .send()
+        .await
+        .map_err(|err| anyhow::anyhow!("group delay request for '{name}' failed: {err}"))?;
+
+    match response.status().as_u16() {
+        200 => Ok(response
+            .json::<HashMap<String, u32>>()
+            .await
+            .map_err(|err| {
+                anyhow::anyhow!("group delay response for '{name}' is invalid: {err}")
+            })?),
+        408 => {
+            log::warn!(target: "app", "group delay test for '{name}' timed out on every node");
+            Ok(HashMap::new())
+        }
+        status => bail!("group delay test for '{name}' failed with status {status}"),
+    }
+}
+
 /// GET /proxies/{name}/delay
 /// 获取代理延迟
 pub async fn get_proxy_delay(
@@ -167,7 +218,7 @@ pub async fn get_proxy_delay(
     let test_url = resolve_latency_test_url(test_url);
 
     let timeout = if timeout <= 0 {
-        3000
+        5000
     } else if timeout > 60000 {
         60000
     } else {

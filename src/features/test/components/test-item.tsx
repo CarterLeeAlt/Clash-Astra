@@ -240,14 +240,14 @@ export const TestItem = (props: Props) => {
                 e.stopPropagation();
                 onDelay();
               }}
-              color={delayManager.formatDelayColor(delay)}
+              color={delayManager.formatDelayColor(delay, 10000)}
               sx={({ palette }) => ({
                 ":hover": {
                   bgcolor: alpha(palette.primary.main, 0.15),
                 },
               })}
             >
-              <DelayText>{delayManager.formatDelay(delay)}</DelayText>
+              <DelayText>{delayManager.formatDelay(delay, 10000)}</DelayText>
               <DelaySeparator>|</DelaySeparator>
               <ProxyName ref={proxyContainerRef}>
                 <ProxyNameText

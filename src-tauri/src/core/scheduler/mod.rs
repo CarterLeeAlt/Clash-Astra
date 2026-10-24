@@ -61,16 +61,12 @@ pub fn init() -> Result<()> {
     timer::sync()?;
     timer::catch_up()?;
 
-    // 自动节点延迟测试：每 2 分钟通知前端执行一轮测速。
+    // 自动节点延迟测试：每 2 分钟在后端直接驱动 mihomo 组测试 API，
+    // 结果写入内核 delay history；不依赖前端窗口可见性与 WebView 调度。
     Scheduler::global().upsert(
         "proxy.auto_delay_test",
         Schedule::Minutes(2),
-        Arc::new(|| {
-            Box::pin(async {
-                crate::core::handle::Handle::emit_auto_delay_test();
-                Ok(())
-            })
-        }),
+        Arc::new(|| Box::pin(async { crate::feat::run_auto_delay_test().await })),
     )?;
 
     // 后续新增周期任务时，在这里追加注册调用。

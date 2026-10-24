@@ -4,7 +4,7 @@ const hashKey = (name: string, group: string) => `${group ?? ""}::${name}`;
 
 // 所有出口（含 DIRECT/REJECT）统一使用组级 URL，未设置时用默认地址；
 // 只有同一地址下测出的延迟才可比较
-const DEFAULT_LATENCY_TEST_URL = "http://www.google.com/generate_204";
+const DEFAULT_LATENCY_TEST_URL = "http://cp.cloudflare.com/generate_204";
 export { DEFAULT_LATENCY_TEST_URL };
 
 // 延迟结果的哨兵值：负数不是毫秒数
@@ -156,6 +156,11 @@ class DelayManager {
     return -1;
   }
 
+  /** 清空本地延迟缓存（保留监听器），让内核 delay history 的结果重新可见 */
+  clearAll() {
+    this.cache.clear();
+  }
+
   /// 暂时修复provider的节点延迟排序的问题
   getDelayFix(proxy: IProxyItem, group: string) {
     if (proxy.name === "REJECT") return DELAY_NOT_APPLICABLE;
@@ -263,7 +268,7 @@ class DelayManager {
     return this.isCurrentGroupCheck(group, task);
   }
 
-  formatDelay(delay: number, timeout = 3000) {
+  formatDelay(delay: number, timeout = 5000) {
     if (delay === DELAY_NOT_APPLICABLE) return "REJECT";
     if (delay === DELAY_UNREACHABLE) return "BLOCK";
     if (delay < 0) return ""; // 未测或测速中，不显示
@@ -273,7 +278,7 @@ class DelayManager {
 
   // 颜色只表达“能不能用”：绿、橙、深橙表示可用且由快到慢；
   // 红表示不可用（失败、超时、被阻断），灰表示没有可比较的结果。
-  formatDelayColor(delay: number, timeout = 3000) {
+  formatDelayColor(delay: number, timeout = 5000) {
     if (delay === DELAY_NOT_APPLICABLE) return "text.secondary";
     if (delay === DELAY_UNREACHABLE) return "error.main";
     if (delay < 0) return "text.secondary";

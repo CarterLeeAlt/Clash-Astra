@@ -50,13 +50,6 @@ impl Handle {
         }
     }
 
-    /// 通知前端执行一轮自动节点延迟测试。
-    pub fn emit_auto_delay_test() {
-        if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://auto-delay-test", "yes"));
-        }
-    }
-
     pub fn emit_log<T: Into<String>, M: Into<String>>(level: T, msg: M) {
         if let Some(window) = Self::global().get_window() {
             let event = AppLogEvent {

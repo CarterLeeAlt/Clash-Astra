@@ -1,6 +1,6 @@
 use crate::config::*;
 use crate::core::*;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use tauri::{AppHandle, ClipboardManager};
@@ -36,6 +36,68 @@ pub fn copy_clash_env(app_handle: &AppHandle) {
 pub struct TestDelayResult {
     pub delay: u32,
     pub proxy: Option<String>,
+}
+
+/// 后台自动延迟测试：直接驱动 mihomo 的组测试 API，结果写入内核
+/// delay history。不依赖前端 WebView，窗口隐藏或被节流时照常执行。
+pub async fn run_auto_delay_test() -> Result<()> {
+    let (test_url, timeout) = {
+        let verge = Config::verge();
+        let verge = verge.latest();
+        (
+            verge.default_latency_test.clone(),
+            verge.default_latency_timeout.unwrap_or(5000),
+        )
+    };
+
+    let proxies = match clash_api::get_proxies().await {
+        Ok(res) => res.proxies,
+        Err(err) => bail!("auto delay test skipped; failed to list proxy groups: {err}"),
+    };
+
+    let groups: Vec<String> = proxies
+        .iter()
+        .filter(|(name, proxy)| proxy.all.is_some() && name.as_str() != "GLOBAL")
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    if groups.is_empty() {
+        log::debug!(target: "app", "auto delay test skipped; no proxy groups");
+        return Ok(());
+    }
+
+    let mut set = tokio::task::JoinSet::new();
+    for group in groups {
+        let test_url = test_url.clone();
+        set.spawn(async move {
+            let result = clash_api::get_group_delay(group.clone(), test_url, timeout).await;
+            (group, result)
+        });
+    }
+
+    let mut succeeded = 0usize;
+    let mut measured = 0usize;
+    while let Some(joined) = set.join_next().await {
+        let Ok((group, result)) = joined else {
+            log::warn!(target: "app", "auto delay test task panicked");
+            continue;
+        };
+        match result {
+            Ok(delays) => {
+                succeeded += 1;
+                measured += delays.len();
+            }
+            Err(err) => {
+                log::warn!(target: "app", "auto delay test for group '{group}' failed: {err:#}");
+            }
+        }
+    }
+
+    log::info!(
+        target: "app",
+        "auto delay test finished: {succeeded} group(s) ok, {measured} node result(s)"
+    );
+    Ok(())
 }
 
 struct TestDelayMatchContext {
