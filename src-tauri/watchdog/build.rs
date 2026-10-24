@@ -22,7 +22,7 @@ fn main() {
         .set("ProductName", product)
         .set("FileVersion", version)
         .set("ProductVersion", version)
-        .set("OriginalFilename", "clash-verge-buty-watchdog.exe")
+        .set("OriginalFilename", "clash-astra-watchdog.exe")
         .set("LegalCopyright", "GPL-3.0-only");
     resource.compile().expect("compile Watchdog resources");
 }

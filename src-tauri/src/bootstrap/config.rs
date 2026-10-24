@@ -29,17 +29,17 @@ pub fn init_config() -> Result<()> {
 
     let path = dirs::clash_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IClashTemp::template().0, Some("# Clash Verge Buty"))?;
+        help::save_yaml(&path, &IClashTemp::template().0, Some("# Clash Astra"))?;
     }
 
     let path = dirs::verge_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IVerge::template(), Some("# Clash Verge Buty"))?;
+        help::save_yaml(&path, &IVerge::template(), Some("# Clash Astra"))?;
     }
 
     let path = dirs::profiles_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IProfiles::template(), Some("# Clash Verge Buty"))?;
+        help::save_yaml(&path, &IProfiles::template(), Some("# Clash Astra"))?;
     }
 
     Ok(())

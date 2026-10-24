@@ -270,7 +270,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
             "main".to_string(),
             tauri::WindowUrl::App("index.html".into()),
         )
-        .title("Clash Verge Buty")
+        .title("Clash Astra")
         .data_directory(webview_data_dir.clone())
         .visible(false)
         .fullscreen(false)

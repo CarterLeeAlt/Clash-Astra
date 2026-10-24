@@ -112,7 +112,7 @@ impl CoreManager {
                         log::error!(target: "app", "Service Mode failed; service could not start Mihomo core. {err}");
                         if tun_enabled {
                             bail!(
-                                "Tun mode requires a working clash-verge-buty-service on Windows: {err}"
+                                "Tun mode requires a working clash-astra-service on Windows: {err}"
                             );
                         }
                         bail!("Service Mode failed; service could not start Mihomo core. {err}");
@@ -242,7 +242,7 @@ impl CoreManager {
                 log::warn!(target: "app", "Current process is not elevated. If service mode is unavailable, Tun setup may fail due to missing admin privileges/wintun route permissions.");
                 Handle::emit_log("warn", "[service] Current process is not elevated. Tun setup may fail due to missing admin privileges/wintun route permissions.");
             }
-            log::info!(target: "app", "Windows Tun diagnostics: ensure clash-verge-buty-service is active, wintun driver can be loaded, and firewall allows route/DNS hijack operations.");
+            log::info!(target: "app", "Windows Tun diagnostics: ensure clash-astra-service is active, wintun driver can be loaded, and firewall allows route/DNS hijack operations.");
             Handle::emit_log("info", "[tun] Windows Tun diagnostics: ensure service active, wintun loadable, and firewall allows route/DNS hijack operations.");
         }
     }

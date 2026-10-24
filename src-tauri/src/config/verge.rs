@@ -248,7 +248,7 @@ impl IVerge {
         help::save_yaml(
             &dirs::verge_path()?,
             &self,
-            Some("# Clash Verge Buty Config"),
+            Some("# Clash Astra Config"),
         )
     }
 

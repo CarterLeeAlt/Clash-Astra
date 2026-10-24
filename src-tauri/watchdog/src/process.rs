@@ -14,7 +14,7 @@ impl Instance {
         for byte in exe.to_string_lossy().to_lowercase().as_bytes() {
             hash = (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3);
         }
-        let name: Vec<u16> = format!("Local\\clash-verge-buty-watchdog-{hash:016x}")
+        let name: Vec<u16> = format!("Local\\clash-astra-watchdog-{hash:016x}")
             .encode_utf16()
             .chain(Some(0))
             .collect();

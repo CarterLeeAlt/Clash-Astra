@@ -28,7 +28,7 @@ impl Drop for SingletonGuard {
 #[cfg(target_os = "windows")]
 fn acquire_singleton_mutex() -> Result<bool> {
     // Local\ 前缀限定在当前登录会话内，避免不同用户会话互相阻塞。
-    const NAME: &str = concat!("Local\\clash-verge-buty-singleton-", env!("CARGO_PKG_NAME"));
+    const NAME: &str = "Local\\clash-astra-singleton";
     acquire_singleton_mutex_named(NAME)
 }
 
@@ -166,7 +166,7 @@ mod singleton_tests {
     fn first_acquire_succeeds_and_second_is_rejected() {
         // 使用测试专用名称，避免本机正在运行的应用占用生产互斥体导致测试失败。
         let name = format!(
-            "Local\\clash-verge-buty-singleton-test-{}",
+            "Local\\clash-astra-singleton-test-{}",
             std::process::id()
         );
 

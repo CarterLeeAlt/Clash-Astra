@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use tauri::{api::path::resource_dir, Env};
 
 #[cfg(not(feature = "verge-dev"))]
-pub static APP_ID: &str = "io.github.clash-verge-buty";
+pub static APP_ID: &str = "io.github.clash-astra";
 #[cfg(feature = "verge-dev")]
-pub static APP_ID: &str = "io.github.clash-verge-buty.dev";
+pub static APP_ID: &str = "io.github.clash-astra.dev";
 
 static CLASH_CONFIG: &str = "config.yaml";
 static VERGE_CONFIG: &str = "verge.yaml";
@@ -94,12 +94,12 @@ pub fn clash_pid_path() -> Result<PathBuf> {
 
 #[cfg(windows)]
 pub fn service_path() -> Result<PathBuf> {
-    Ok(app_resources_dir()?.join("clash-verge-buty-service.exe"))
+    Ok(app_resources_dir()?.join("clash-astra-service.exe"))
 }
 
 #[cfg(windows)]
 pub fn firewall_helper_path() -> Result<PathBuf> {
-    Ok(app_resources_dir()?.join("clash-verge-buty-firewall-helper.exe"))
+    Ok(app_resources_dir()?.join("clash-astra-firewall-helper.exe"))
 }
 
 #[cfg(windows)]
