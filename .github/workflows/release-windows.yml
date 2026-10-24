@@ -113,6 +113,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -121,6 +124,12 @@ jobs:
           $newText = $rx.Replace($text, ('$1"' + $env:VERSION + '"'), 1)
           Set-Content -Path package.json -Value $newText -NoNewline -Encoding UTF8
           pnpm sync-metadata
+
+          $pkgVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).package.version
+          if ($pkgVersion -ne $env:VERSION -or $tauriVersion -ne $env:VERSION) {
+            throw "version sync failed: package=$pkgVersion tauri=$tauriVersion expected=$env:VERSION"
+          }
 
           $lockPath = "src-tauri/Cargo.lock"
           $lines = Get-Content $lockPath
@@ -136,10 +145,36 @@ jobs:
           Set-Content -Path $lockPath -Value $lines
 
           git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          $staged = git diff --cached --name-only
+          if (-not $staged) {
+            throw "version bump produced no staged changes"
+          }
+
+          $before = git rev-parse HEAD
           git commit -m "chore(release): v$env:VERSION [skip ci]"
-          git pull --rebase origin main
-          git tag "v$env:VERSION"
-          git push origin HEAD:main --tags
+          $after = git rev-parse HEAD
+          if ($before -eq $after) {
+            throw "version bump commit was not created"
+          }
+
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
+
+          $localHead = (git rev-parse HEAD).Trim()
+          $remoteHead = ((git ls-remote origin refs/heads/main) -split '\s+')[0].Trim()
+          if ($localHead -ne $remoteHead) {
+            throw "main push verification failed: local=$localHead remote=$remoteHead"
+          }
+
+          $tagName = "v$env:VERSION"
+          git tag $tagName
+          git push origin "refs/tags/$tagName"
+
+          $remoteTag = ((git ls-remote origin "refs/tags/$tagName") -split '\s+')[0].Trim()
+          if ($remoteTag -ne $localHead) {
+            throw "tag push verification failed: tag=$remoteTag head=$localHead"
+          }
 
       - name: Build Windows service binaries from source
         shell: pwsh
