@@ -3,14 +3,17 @@
     windows_subsystem = "windows"
 )]
 
+mod bootstrap;
 mod cmds;
 mod commands;
 mod config;
 mod core;
 mod enhance;
 mod feat;
+mod features;
 mod logging;
 mod utils;
+mod window;
 
 use crate::utils::{init, resolve, server};
 use std::time::Duration;
