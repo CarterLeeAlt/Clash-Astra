@@ -20,18 +20,24 @@ import { TestBox } from "./test-box";
 import delayManager from "@/services/delay";
 import { cmdTestDelay } from "@/services/cmds";
 import { utf8ToBase64 } from "@/utils/base64";
-import { listen } from "@tauri-apps/api/event";
 
 interface Props {
   id: string;
   itemData: IVergeTestItem;
+  testAllTick: number;
   editable?: boolean;
   onEdit: () => void;
   onDelete: (uid: string) => void;
 }
 
 export const TestItem = (props: Props) => {
-  const { itemData, editable = true, onEdit, onDelete: onDeleteItem } = props;
+  const {
+    itemData,
+    testAllTick,
+    editable = true,
+    onEdit,
+    onDelete: onDeleteItem,
+  } = props;
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: props.id });
 
@@ -44,6 +50,7 @@ export const TestItem = (props: Props) => {
   const [proxyScrollDistance, setProxyScrollDistance] = useState(0);
   const proxyContainerRef = useRef<HTMLSpanElement>(null);
   const proxyTextRef = useRef<HTMLSpanElement>(null);
+  const lastTestAllTickRef = useRef(testAllTick);
   const [iconLoadFailed, setIconLoadFailed] = useState(false);
   const { uid, name, icon, url } = itemData;
 
@@ -113,24 +120,10 @@ export const TestItem = (props: Props) => {
   }, [proxy, delay]);
 
   useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-
-    listen("verge://test-all", () => {
-      onDelay();
-    }).then((fn) => {
-      if (disposed) {
-        fn();
-        return;
-      }
-      unlisten = fn;
-    });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [onDelay]);
+    if (testAllTick === lastTestAllTickRef.current) return;
+    lastTestAllTickRef.current = testAllTick;
+    void onDelay();
+  }, [testAllTick, onDelay]);
 
   return (
     <Box

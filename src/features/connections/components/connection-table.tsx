@@ -28,7 +28,7 @@ const loadColumnVisible = (): GridColumnVisibilityModel => {
     const parsed = JSON.parse(saved) as GridColumnVisibilityModel;
     // 校验值必须是布尔，防止脏数据进入 DataGrid
     return Object.fromEntries(
-      Object.entries(parsed).filter(([, v]) => typeof v === "boolean"),
+      Object.entries(parsed).filter(([, v]) => typeof v === "boolean")
     );
   } catch {
     return DEFAULT_COLUMN_VISIBLE;
