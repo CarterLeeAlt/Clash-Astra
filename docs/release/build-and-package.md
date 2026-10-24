@@ -36,7 +36,7 @@ node scripts/pnpm.mjs run build
 
 1. `tauri build --bundles none`，其中 `beforeBuildCommand` 会运行 `web:build`（`tsc` + `vite build`）。
 2. `scripts/build/build-watchdog.mjs` 构建并放置 Watchdog。
-3. `scripts/build/normalize-main-exe.mjs` 把 Tauri 主程序改名为 `clash-verge-buty.exe`。
+3. `scripts/build/normalize-main-exe.mjs` 把 Tauri 主程序改名为 `clash-astra.exe`。
 
 只构建 Watchdog 时：
 
@@ -86,7 +86,7 @@ node scripts/pnpm.mjs run portable x86_64-pc-windows-msvc
 输出：
 
 ```text
-artifacts/portable/clash-verge-buty_<version>_x64_portable_unsigned.zip
+artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 ```
 
 未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 GUI、Watchdog、`mihomo.exe`、`mihomo-alpha.exe` 和 `resources/`。

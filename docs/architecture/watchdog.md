@@ -6,8 +6,8 @@
 
 | 组件     | 文件                             | 说明                               |
 | -------- | -------------------------------- | ---------------------------------- |
-| GUI      | `clash-verge-buty.exe`           | 只承载界面与业务，不再内置监督逻辑 |
-| Watchdog | `clash-verge-buty-watchdog.exe`  | 独立监督进程，文件名全小写         |
+| GUI      | `clash-astra.exe`                | 只承载界面与业务，不再内置监督逻辑 |
+| Watchdog | `clash-astra-watchdog.exe`       | 独立监督进程，文件名全小写         |
 | 内核     | `mihomo.exe`、`mihomo-alpha.exe` | 上游内核，保持原名                 |
 
 显示名、机器名和注册表/服务名的唯一规范见 [命名规范](../reference/naming.md)。
@@ -21,13 +21,13 @@
 - 外部应用：通过托盘或外部方式启动的其他程序不会被 Watchdog 结束。
 - “系统代理守卫”仍由 GUI 负责，与 Watchdog 的职责分离。
 - 启动时依据前次核心 PID、可执行文件路径和 `-d` 配置目录核验并清理残留 Mihomo。
-- 日志位于应用配置目录下的 `logs/watchdog/`（`.config/io.github.clash-verge-buty/logs/watchdog/`）。
+- 日志位于应用配置目录下的 `logs/watchdog/`（`.config/io.github.clash-astra/logs/watchdog/`）。
 
 ## 图标与显示名
 
 - GUI 使用完整蓝猫图标；Watchdog 使用同一形状的黄色版本。黄色取自仓库自带 `tray-icon-sys.png` 的原始色板，`tray-icon-sys.png` 本身不修改。
 - 图标由 `scripts/build/generate-watchdog-icon.ps1` 生成，输出 16、32、48、64、128、256 像素 ICO 与 PNG。
-- GUI 的任务管理器显示名来自 `src-tauri/Cargo.toml` 的 `description`；Watchdog 的显示名在 `src-tauri/watchdog/build.rs` 中固定为 `Clash Verge Buty-Watchdog`。
+- GUI 的任务管理器显示名来自 `src-tauri/Cargo.toml` 的 `description`；Watchdog 的显示名在 `src-tauri/watchdog/build.rs` 中固定为 `Clash Astra-Watchdog`。
 
 ## 构建
 

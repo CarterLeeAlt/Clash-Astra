@@ -9,7 +9,7 @@
 ## 目录
 
 ```text
-Clash-Verge-Buty/
+Clash-Astra/
 ├─ src/                          # React 前端源码
 ├─ src-tauri/                    # Tauri/Rust 主程序
 │  ├─ src/
@@ -30,28 +30,28 @@ Clash-Verge-Buty/
 
 ## 职责
 
-| 路径                             | 类型      | 用途                                                        |
-| -------------------------------- | --------- | ----------------------------------------------------------- |
-| `src/`                           | 源码      | 前端页面、组件、状态与样式                                  |
-| `src-tauri/src/`                 | 源码      | Tauri 主程序                                                |
-| `src-tauri/watchdog/`            | 源码      | 独立 Watchdog crate                                         |
-| `src-tauri/windows-service-src/` | 源码      | Windows service 与 helper                                   |
-| `src-tauri/vendor-crates/`       | 源码      | 内部 vendored crate                                         |
-| `src-tauri/icons/`               | 源码/资源 | Tauri 图标与托盘资源                                        |
-| `src-tauri/sidecar/`             | 生成输入  | `prepare:runtime` 下载的内核，构建时打包                    |
-| `src-tauri/resources/`           | 生成输入  | Geo 数据、service 二进制等打包资源                          |
-| `src-tauri/local-binaries/`      | 生成输入  | 本地 service 二进制输出                                     |
-| `src-tauri/target/`              | 生成      | Rust 构建输出，不提交                                       |
-| `scripts/`                       | 源码      | 构建、校验、发布脚本；入口和用途见 `scripts/README.md`      |
-| `docs/`                          | 源码      | 当前说明、参考、发布流程与历史归档                          |
-| `third-party/licenses/`          | 源码      | 第三方许可证原文                                            |
-| `artifacts/portable/`            | 生成      | 便携包（`clash-verge-buty_<version>_<arch>_portable*.zip`） |
-| `artifacts/staging/`             | 生成      | CI 发布/alpha 的临时 staging                                |
-| `dist/`                          | 生成      | Vite 前端产物；`vite build` 会整体清空                      |
-| `.toolchain/`                    | 生成      | 工作区本地 Node/pnpm 与 pnpm store/cache/state              |
-| `.cargo/` `.rustup/`             | 生成      | 工作区本地 Rust 工具链与缓存                                |
-| `node_modules/`                  | 生成      | 前端依赖                                                    |
-| `.tmp/`                          | 生成      | 任务临时目录；wrapper 的共享临时目录为 `.tmp/host-temp/`    |
+| 路径                             | 类型      | 用途                                                     |
+| -------------------------------- | --------- | -------------------------------------------------------- |
+| `src/`                           | 源码      | 前端页面、组件、状态与样式                               |
+| `src-tauri/src/`                 | 源码      | Tauri 主程序                                             |
+| `src-tauri/watchdog/`            | 源码      | 独立 Watchdog crate                                      |
+| `src-tauri/windows-service-src/` | 源码      | Windows service 与 helper                                |
+| `src-tauri/vendor-crates/`       | 源码      | 内部 vendored crate                                      |
+| `src-tauri/icons/`               | 源码/资源 | Tauri 图标与托盘资源                                     |
+| `src-tauri/sidecar/`             | 生成输入  | `prepare:runtime` 下载的内核，构建时打包                 |
+| `src-tauri/resources/`           | 生成输入  | Geo 数据、service 二进制等打包资源                       |
+| `src-tauri/local-binaries/`      | 生成输入  | 本地 service 二进制输出                                  |
+| `src-tauri/target/`              | 生成      | Rust 构建输出，不提交                                    |
+| `scripts/`                       | 源码      | 构建、校验、发布脚本；入口和用途见 `scripts/README.md`   |
+| `docs/`                          | 源码      | 当前说明、参考、发布流程与历史归档                       |
+| `third-party/licenses/`          | 源码      | 第三方许可证原文                                         |
+| `artifacts/portable/`            | 生成      | 便携包（`clash-astra_<version>_<arch>_portable*.zip`）   |
+| `artifacts/staging/`             | 生成      | CI 发布/alpha 的临时 staging                             |
+| `dist/`                          | 生成      | Vite 前端产物；`vite build` 会整体清空                   |
+| `.toolchain/`                    | 生成      | 工作区本地 Node/pnpm 与 pnpm store/cache/state           |
+| `.cargo/` `.rustup/`             | 生成      | 工作区本地 Rust 工具链与缓存                             |
+| `node_modules/`                  | 生成      | 前端依赖                                                 |
+| `.tmp/`                          | 生成      | 任务临时目录；wrapper 的共享临时目录为 `.tmp/host-temp/` |
 
 ## 放置规则
 

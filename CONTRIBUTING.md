@@ -1,6 +1,6 @@
 # CONTRIBUTING
 
-Thank you for your interest in contributing to Clash Verge Buty! This document covers the local development workflow.
+Thank you for your interest in contributing to Clash Astra! This document covers the local development workflow.
 
 ## Development Setup
 

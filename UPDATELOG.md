@@ -1,8 +1,8 @@
 # Update Log
 
-Clash Verge Buty 的变更日志。基于 clash-verge-rev 的上游历史变更不再在此保留，可通过 git 历史（fork 起点：Initial commit 2026-04-23）查阅。
+Clash Astra 的变更日志。基于 clash-verge-rev 的上游历史变更不再在此保留，可通过 git 历史（fork 起点：Initial commit 2026-04-23）查阅。
 
-## Unreleased
+## 1.8.0
 
 ### Added
 
@@ -11,6 +11,8 @@ Clash Verge Buty 的变更日志。基于 clash-verge-rev 的上游历史变更�
 
 ### Changed
 
+- 项目更名为 Clash Astra，应用标识、可执行文件、Windows 服务、配置目录、注册表与系统集成同步更新
+- 仓库地址迁移为 `CarterLeeAlt/Clash-Astra`
 - 构建工具链使用工作区本地 Node 24 / pnpm 11，pnpm store、缓存、状态与临时目录全部留在工作区
 - 发布交付物统一放到 `artifacts/portable/`，`dist/` 只保留 Vite 前端产物；移除 `dist/watchdog-fix` 旧约定
 - 脚本按用途整理到 `scripts/build`、`release`、`verify`、`sidecars`、`metadata`；删除无用的 `sync-version`

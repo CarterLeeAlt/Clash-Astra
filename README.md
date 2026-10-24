@@ -1,7 +1,7 @@
 <h1 align="center">
-  <img src="./src/assets/image/logo.png" alt="Clash" width="128" />
+  <img src="./src/assets/image/logo.png" alt="Clash Astra" width="128" />
   <br>
-  Clash Verge Buty
+  Clash Astra
   <br>
 </h1>
 
@@ -19,7 +19,7 @@ A Mihomo GUI based on Tauri (Just a Modified Version).
 
 ## Acknowledgement
 
-Clash Verge Buty was based on or inspired by these projects and so on:
+Clash Astra was based on or inspired by these projects and so on:
 
 - [clash-verge-rev/clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev): A Mihomo GUI based on Tauri.
 - [zzzgydi/clash-verge](https://github.com/zzzgydi/clash-verge): A Clash GUI based on tauri. Supports Windows, macOS and Linux.
