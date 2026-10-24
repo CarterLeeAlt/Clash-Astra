@@ -18,7 +18,7 @@ If you're a Windows user, you may need to perform some additional steps:
 
 ### Workspace-local toolchain
 
-This repository uses a toolchain that lives inside the working copy: `.toolchain\` (Node.js and pnpm), `.cargo\` and `.rustup\` (Rust), and `.tmp\` (temporary files). They are git-ignored and must not be replaced by system-wide installations. Run every pnpm command through `node scripts/pnpm.mjs`, never through a system-wide `pnpm`: pnpm 10+ ignores the relative `store-dir` in `.npmrc` and puts its store at the drive root (for example `D:\.pnpm-store`). `node scripts/check-workspace-hygiene.mjs` verifies the layout.
+This repository uses a toolchain that lives inside the working copy: `.toolchain\` (Node.js 24.18.0 and pnpm 11.15.1), `.cargo\` and `.rustup\` (Rust), and `.tmp\` (temporary files). They are git-ignored and must not be replaced by system-wide installations. Run every pnpm command through `node scripts/pnpm.mjs`, never through a system-wide `pnpm`. pnpm 11 reads install locations from `pnpm-workspace.yaml` (`storeDir`, `cacheDir`, `stateDir`), not from `.npmrc`; older pnpm versions ignore that file and put the store at the drive root (for example `D:\.pnpm-store`). `node scripts/check-workspace-hygiene.mjs` verifies the layout.
 
 ### Install Node.js Packages
 

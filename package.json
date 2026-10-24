@@ -13,7 +13,10 @@
     ],
     "releaseNamePrefix": "Clash Verge Buty v"
   },
-  "packageManager": "pnpm@8.15.9",
+  "packageManager": "pnpm@11.15.1",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "tauri dev",
     "dev:diff": "tauri dev -f verge-dev",

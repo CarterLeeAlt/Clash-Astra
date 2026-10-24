@@ -28,7 +28,7 @@ pnpm build:watchdog --target x86_64-pc-windows-msvc
 
 GUI 的任务管理器显示名来自 `Cargo.toml` 的 `description`（与 `package.json.description`、`tauri.conf.json` 的 short/longDescription 同步为 `Clash Verge Buty`）；Watchdog 的显示名在其 `build.rs` 中固定为 `Clash Verge Buty-Watchdog`。
 
-本地宿主：Windows 10 x64、Visual Studio 2022 Community 17.14.18、Rust 1.85.1、Node 20.20.0、pnpm 8.15.9。Rust/Node/包管理器与缓存均放在工作区内，未更改全局 PATH。
+本地宿主：Windows 10 x64、Visual Studio 2022 Community 17.14.18、Rust 1.85.1、Node 24.18.0、pnpm 11.15.1。Rust/Node/包管理器与缓存均放在工作区内，未更改全局 PATH。
 
 ## 验证
 

@@ -16,8 +16,8 @@
 ## 工具链与依赖（全部工作区本地）
 
 - Rust：工作区 `.rustup\` 与 `.cargo\`，通过命令级环境变量 `RUSTUP_HOME`、`CARGO_HOME` 指定，并把 `.cargo\bin` 前置到命令级 `PATH`；离线构建用 `CARGO_NET_OFFLINE=true`。
-- Node.js：工作区 `.toolchain\node-v20.20.0-win-x64\`，命令级 `PATH` 前置。
-- pnpm：工作区 `.toolchain\pnpm\`（本地 npm 安装）。pnpm 命令一律用 `node scripts/pnpm.mjs <命令>` 执行：该入口把 store 固定为 `.toolchain\pnpm-store\`、缓存固定为 `.toolchain\npm-cache\`、`TEMP`/`TMP`/`TMPDIR` 固定为 `.tmp\host-temp\`，并前置本地 node、pnpm 与 Rust 工具链。禁止直接调用 `pnpm`：裸命令会命中系统全局 pnpm（当前为 11.x），它不读 `.npmrc` 的相对 `store-dir`，会在盘根创建 `D:\.pnpm-store`。
+- Node.js：工作区 `.toolchain\node-v24.18.0-win-x64\`（pnpm 11 要求 Node ≥22.13），命令级 `PATH` 前置。
+- pnpm：工作区 `.toolchain\pnpm\`（pnpm 11.15.1，本地 npm 安装）。pnpm 命令一律用 `node scripts/pnpm.mjs <命令>` 执行：该入口前置本地 node、pnpm 与 Rust 工具链，并把 `TEMP`/`TMP`/`TMPDIR` 固定到 `.tmp\host-temp\`、`XDG_*` 固定到 `.toolchain\`。store/cache/state 由 `pnpm-workspace.yaml` 的 `storeDir`/`cacheDir`/`stateDir` 固定在工作区；`.npmrc` 只放认证与 registry（pnpm 11 不读其中的安装位置设置），依赖构建脚本用 `allowBuilds` 白名单（当前为 `esbuild`）。不要使用 pnpm 8 或其他版本：它们不认 workspace 配置，会把 store 建到盘根 `D:\.pnpm-store`。
 - 进程级 `TEMP`/`TMP` 必须指向 `<工作区>\.tmp\<任务标识>\host-temp\` 之类的目录，防止工具链向系统 Temp 写文件；经 `scripts/pnpm.mjs` 启动的命令已自动指向 `.tmp\host-temp\`。直接运行 `cargo` 时先设置 `CARGO_HOME=.cargo`、`RUSTUP_HOME=.rustup`、`PATH` 前置 `.cargo\bin`，并同样设置 `TEMP`/`TMP`。
 - MSVC 链接依赖系统安装的 Visual Studio Build Tools（宿主平台，允许使用系统版本，不要求复制进工作区）。
 - 安装依赖前先检查工作区内是否已有可用副本，禁止重复下载；外部网络访问遵循全局网络路由技能的判定。

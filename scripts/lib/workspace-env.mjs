@@ -12,6 +12,10 @@ export const workspacePaths = {
   pnpmCache: path.join(repoRoot, ".toolchain", "npm-cache"),
   pnpmHome: path.join(repoRoot, ".toolchain", "pnpm-home"),
   pnpmState: path.join(repoRoot, ".toolchain", "pnpm-state"),
+  xdgCache: path.join(repoRoot, ".toolchain", "xdg-cache"),
+  xdgState: path.join(repoRoot, ".toolchain", "xdg-state"),
+  xdgData: path.join(repoRoot, ".toolchain", "xdg-data"),
+  xdgConfig: path.join(repoRoot, ".toolchain", "xdg-config"),
   cargoHome: path.join(repoRoot, ".cargo"),
   rustupHome: path.join(repoRoot, ".rustup"),
   hostTemp: path.join(repoRoot, ".tmp", "host-temp"),
@@ -82,6 +86,10 @@ export function ensureWorkspaceDirs() {
     workspacePaths.pnpmCache,
     workspacePaths.pnpmHome,
     workspacePaths.pnpmState,
+    workspacePaths.xdgCache,
+    workspacePaths.xdgState,
+    workspacePaths.xdgData,
+    workspacePaths.xdgConfig,
     workspacePaths.hostTemp,
   ]) {
     fs.mkdirSync(dir, { recursive: true });
@@ -109,8 +117,9 @@ export function createWorkspaceEnv(baseEnv = process.env) {
   env.TMPDIR = workspacePaths.hostTemp;
   env.PNPM_HOME = workspacePaths.pnpmHome;
   env.npm_config_cache = workspacePaths.pnpmCache;
-  env.pnpm_config_cache_dir = workspacePaths.pnpmCache;
-  env.pnpm_config_store_dir = workspacePaths.pnpmStore;
-  env.pnpm_config_state_dir = workspacePaths.pnpmState;
+  env.XDG_CACHE_HOME = workspacePaths.xdgCache;
+  env.XDG_STATE_HOME = workspacePaths.xdgState;
+  env.XDG_DATA_HOME = workspacePaths.xdgData;
+  env.XDG_CONFIG_HOME = workspacePaths.xdgConfig;
   return env;
 }

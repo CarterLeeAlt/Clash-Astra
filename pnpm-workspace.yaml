@@ -1,0 +1,9 @@
+# pnpm 11 的项目级设置入口（.npmrc 只保留认证与 registry）。
+# 相对路径以本文件所在的仓库根为基准。
+storeDir: .toolchain/pnpm-store
+cacheDir: .toolchain/npm-cache
+stateDir: .toolchain/pnpm-state
+
+# 依赖安装脚本白名单：pnpm 11 用 allowBuilds，未列出的包默认不执行脚本。
+allowBuilds:
+  esbuild: true
