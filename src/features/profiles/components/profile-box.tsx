@@ -18,23 +18,13 @@ export const ProfileBox = styled(Box)(
 
     const h2color = "#000000";
 
-    const borderSelect = {
-      "light-true": {
-        borderLeft: `3px solid ${primary.main}`,
-        width: `calc(100% + 3px)`,
-        marginLeft: `-3px`,
-      },
-      "light-false": {
-        width: "100%",
-      },
-      "dark-true": {
-        borderLeft: `3px solid ${primary.main}`,
-        width: `calc(100% + 3px)`,
-        marginLeft: `-3px`,
-      },
-      "dark-false": {
-        width: "100%",
-      },
+    // 选中态用 inset 阴影画左侧强调条：不改变盒子尺寸和位置，
+    // 卡片外边缘始终落在网格的 10px 基准线上（负 margin 会让卡片左移）。
+    const selectionAccent = {
+      "light-true": { boxShadow: `inset 3px 0 0 ${primary.main}` },
+      "light-false": {},
+      "dark-true": { boxShadow: `inset 3px 0 0 ${primary.main}` },
+      "dark-false": {},
     }[key];
 
     return {
@@ -45,7 +35,7 @@ export const ProfileBox = styled(Box)(
       padding: "8px 16px",
       boxSizing: "border-box",
       backgroundColor,
-      ...borderSelect,
+      ...selectionAccent,
       borderRadius: "8px",
       color,
       "& h2": { color: h2color },

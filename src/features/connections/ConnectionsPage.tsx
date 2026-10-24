@@ -87,7 +87,7 @@ const ConnectionsPage = () => {
       }
     >
       {wsState === "reconnecting" && (
-        <Box sx={{ px: "10px", pb: 0.5 }}>
+        <Box sx={{ pl: "10px", pr: "18px", pb: 0.5 }}>
           <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
             连接流短暂中断，正在自动重连…
           </Alert>

@@ -75,7 +75,7 @@ const LogPage = () => {
       }
     >
       {enableLog && logConnState === "reconnecting" && (
-        <Box sx={{ px: "10px", pb: 0.5 }}>
+        <Box sx={{ pl: "10px", pr: "18px", pb: 0.5 }}>
           <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
             {logError || "日志流短暂中断，正在自动重连…"}
           </Alert>

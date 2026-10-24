@@ -42,7 +42,7 @@ export const ProxyRender = (props: RenderProps) => {
 
   if (type === 0 && !group.hidden) {
     return (
-      <Box sx={{ px: 1, py: 0.5 }}>
+      <Box sx={{ pl: "10px", pr: "18px", py: 0.5 }}>
         <ListItemButton
           dense
           sx={{
@@ -114,7 +114,7 @@ export const ProxyRender = (props: RenderProps) => {
   if (type === 1 && !group.hidden) {
     return (
       <ProxyHead
-        sx={{ pl: "5px", pr: 3, mt: indent ? 1 : 0.5, mb: 1 }}
+        sx={{ pl: "5px", pr: "18px", mt: indent ? 1 : 0.5, mb: 1 }}
         groupName={group.name}
         headState={headState!}
         onLocation={() => onLocation(group)}
