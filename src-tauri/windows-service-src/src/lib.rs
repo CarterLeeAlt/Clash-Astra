@@ -1,10 +1,10 @@
 // Keep these constants aligned with src-tauri/src/core/win_service.rs.
-pub const SERVICE_NAME: &str = "clash-verge-buty-service";
-pub const SERVICE_DISPLAY_NAME: &str = "Clash Verge Buty Service";
-pub const SERVICE_BINARY: &str = "clash-verge-buty-service.exe";
-pub const INSTALL_HELPER: &str = "clash-verge-buty-service-install.exe";
-pub const UNINSTALL_HELPER: &str = "clash-verge-buty-service-uninstall.exe";
-pub const FIREWALL_HELPER: &str = "clash-verge-buty-firewall-helper.exe";
+pub const SERVICE_NAME: &str = "clash-astra-service";
+pub const SERVICE_DISPLAY_NAME: &str = "Clash Astra Service";
+pub const SERVICE_BINARY: &str = "clash-astra-service.exe";
+pub const INSTALL_HELPER: &str = "clash-astra-service-install.exe";
+pub const UNINSTALL_HELPER: &str = "clash-astra-service-uninstall.exe";
+pub const FIREWALL_HELPER: &str = "clash-astra-firewall-helper.exe";
 
 pub const API_ADDR: &str = "127.0.0.1:33211";
 pub const API_HEALTH: &str = "/health";

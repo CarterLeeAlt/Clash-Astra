@@ -1,24 +1,24 @@
 [package]
-name = "clash-verge-buty-service-src"
+name = "clash-astra-service-src"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
 [[bin]]
-name = "clash-verge-buty-service"
-path = "src/bin/clash-verge-buty-service.rs"
+name = "clash-astra-service"
+path = "src/bin/clash-astra-service.rs"
 
 [[bin]]
-name = "clash-verge-buty-service-install"
-path = "src/bin/clash-verge-buty-service-install.rs"
+name = "clash-astra-service-install"
+path = "src/bin/clash-astra-service-install.rs"
 
 [[bin]]
-name = "clash-verge-buty-service-uninstall"
-path = "src/bin/clash-verge-buty-service-uninstall.rs"
+name = "clash-astra-service-uninstall"
+path = "src/bin/clash-astra-service-uninstall.rs"
 
 [[bin]]
-name = "clash-verge-buty-firewall-helper"
-path = "src/bin/clash-verge-buty-firewall-helper.rs"
+name = "clash-astra-firewall-helper"
+path = "src/bin/clash-astra-firewall-helper.rs"
 
 [dependencies]
 anyhow = "1"
