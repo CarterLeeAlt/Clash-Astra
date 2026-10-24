@@ -4,6 +4,7 @@
 )]
 
 mod cmds;
+mod commands;
 mod config;
 mod core;
 mod enhance;
