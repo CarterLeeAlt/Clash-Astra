@@ -1,5 +1,3 @@
-import { useEffect, useState } from "react";
-import { useLockFn } from "ahooks";
 import { CheckCircleOutlineRounded } from "@mui/icons-material";
 import {
   alpha,
@@ -19,7 +17,7 @@ import delayManager, {
   DELAY_UNKNOWN,
   hasDelayResult,
 } from "@/services/delay";
-import { useVerge } from "@/hooks/use-verge";
+import { useProxyDelay } from "@/features/proxies/use-proxy-delay";
 
 interface Props {
   groupName: string;
@@ -52,29 +50,7 @@ export const ProxyItem = (props: Props) => {
   const { groupName, proxy, selected, showType = true, sx, onClick } = props;
 
   // 负数哨兵见 delay.ts：-1 未测、-2 测速中、-3 不适用、-4 预期不可达
-  const [delay, setDelay] = useState(DELAY_UNKNOWN);
-  const { verge } = useVerge();
-  const rawTimeout = Number(verge?.default_latency_timeout);
-  const timeout =
-    Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 3000;
-
-  useEffect(() => {
-    delayManager.setListener(proxy.name, groupName, setDelay);
-
-    return () => {
-      delayManager.removeListener(proxy.name, groupName, setDelay);
-    };
-  }, [proxy.name, groupName]);
-
-  useEffect(() => {
-    if (!proxy) return;
-    setDelay(delayManager.getDelayFix(proxy, groupName));
-  }, [proxy, groupName]);
-
-  const onDelay = useLockFn(async () => {
-    setDelay(-2);
-    setDelay(await delayManager.checkDelay(proxy.name, groupName, timeout));
-  });
+  const { delay, onDelay, timeout } = useProxyDelay(proxy, groupName);
 
   return (
     <ListItem sx={sx}>
