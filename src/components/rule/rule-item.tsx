@@ -2,7 +2,8 @@ import { styled, Box, Typography } from "@mui/material";
 
 const Item = styled(Box)(({ theme }) => ({
   display: "flex",
-  padding: "4px 10px",
+  alignItems: "center",
+  padding: "8px 10px",
   color: theme.palette.text.primary,
 }));
 
@@ -38,33 +39,52 @@ const RuleItem = (props: Props) => {
       <Typography
         color="text.secondary"
         variant="body2"
-        sx={{ lineHeight: 2, minWidth: 30, mr: 2.25, textAlign: "left" }}
+        sx={{ flex: "none", minWidth: 30, mr: 2.25, textAlign: "left" }}
       >
         {index}
       </Typography>
 
-      <Box sx={{ userSelect: "text" }}>
-        <Typography component="h6" variant="subtitle1" color="text.primary">
-          {value.payload || "-"}
-        </Typography>
+      <Typography
+        component="span"
+        variant="subtitle1"
+        color="text.primary"
+        sx={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          mr: 2,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          userSelect: "text",
+        }}
+      >
+        {value.payload || "-"}
+      </Typography>
 
-        <Typography
-          component="span"
-          variant="body2"
-          color="text.secondary"
-          sx={{ mr: 3, minWidth: 120, display: "inline-block" }}
-        >
-          {value.type}
-        </Typography>
+      <Typography
+        component="span"
+        variant="body2"
+        color="text.secondary"
+        sx={{ flex: "none", width: 110, mr: 2, userSelect: "text" }}
+      >
+        {value.type}
+      </Typography>
 
-        <Typography
-          component="span"
-          variant="body2"
-          color={parseColor(value.proxy)}
-        >
-          {value.proxy}
-        </Typography>
-      </Box>
+      <Typography
+        component="span"
+        variant="body2"
+        color={parseColor(value.proxy)}
+        sx={{
+          flex: "none",
+          width: 140,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          userSelect: "text",
+        }}
+      >
+        {value.proxy}
+      </Typography>
     </Item>
   );
 };
