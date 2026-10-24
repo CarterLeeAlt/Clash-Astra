@@ -2,7 +2,7 @@ import { styled, Box, Typography } from "@mui/material";
 
 const Item = styled(Box)(({ theme }) => ({
   display: "flex",
-  padding: "4px 16px",
+  padding: "4px 10px",
   color: theme.palette.text.primary,
 }));
 
@@ -38,7 +38,7 @@ const RuleItem = (props: Props) => {
       <Typography
         color="text.secondary"
         variant="body2"
-        sx={{ lineHeight: 2, minWidth: 30, mr: 2.25, textAlign: "center" }}
+        sx={{ lineHeight: 2, minWidth: 30, mr: 2.25, textAlign: "left" }}
       >
         {index}
       </Typography>

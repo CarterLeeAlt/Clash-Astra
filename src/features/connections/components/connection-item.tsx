@@ -38,6 +38,7 @@ export const ConnectionItem = (props: Props) => {
   return (
     <ListItem
       dense
+      sx={{ pl: "10px" }}
       secondaryAction={
         <IconButton edge="end" color="inherit" onClick={onDelete}>
           <CloseRounded />

@@ -142,7 +142,12 @@ export const ConnectionTable = (props: Props) => {
       columns={columns}
       onRowClick={(e) => onShowDetail(e.row.connectionData)}
       density="compact"
-      sx={{ border: "none", "div:focus": { outline: "none !important" } }}
+      sx={{
+        border: "none",
+        "& .MuiDataGrid-cell:first-of-type": { pl: "10px" },
+        "& .MuiDataGrid-columnHeader:first-of-type": { pl: "10px" },
+        "div:focus": { outline: "none !important" },
+      }}
       columnVisibilityModel={columnVisible}
       onColumnVisibilityModelChange={onColumnVisibleChange}
       initialState={{

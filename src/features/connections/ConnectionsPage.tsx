@@ -98,7 +98,8 @@ const ConnectionsPage = () => {
         sx={{
           pt: 1,
           mb: 0.5,
-          mx: "10px",
+          ml: "10px",
+          mr: "18px",
           height: "36px",
           display: "flex",
           alignItems: "center",

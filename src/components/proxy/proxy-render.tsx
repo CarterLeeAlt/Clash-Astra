@@ -114,7 +114,7 @@ export const ProxyRender = (props: RenderProps) => {
   if (type === 1 && !group.hidden) {
     return (
       <ProxyHead
-        sx={{ pl: 2, pr: 3, mt: indent ? 1 : 0.5, mb: 1 }}
+        sx={{ pl: "5px", pr: 3, mt: indent ? 1 : 0.5, mb: 1 }}
         groupName={group.name}
         headState={headState!}
         onLocation={() => onLocation(group)}

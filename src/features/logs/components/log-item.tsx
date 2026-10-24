@@ -2,7 +2,7 @@ import { styled, Box } from "@mui/material";
 
 const Item = styled(Box)(({ theme: { palette, typography } }) => ({
   padding: "8px 0",
-  margin: "0 12px",
+  margin: "0 10px",
   lineHeight: 1.35,
   borderBottom: `1px solid ${palette.divider}`,
   fontSize: "0.875rem",
