@@ -154,7 +154,6 @@ const buildAndCiFiles = [
   "scripts/build/normalize-main-exe.mjs",
   "scripts/release/portable.mjs",
   ".github/workflows/release-windows.yml",
-  ".github/actions/alpha-windows/action.yml",
 ];
 const legacyPatterns = [
   ["Clash_Verge_Buty", /Clash_Verge_Buty/],

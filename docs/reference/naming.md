@@ -47,6 +47,7 @@ GitHub 仓库地址属于外部既有标识，保持原样，不参与本地显�
 clash-verge-buty_<version>_<arch>_<kind>
 ```
 
+- `version`：以 `package.json` 的 `version` 为准，例如 1.7.0。
 - `arch`：`x64` 或 `arm64`。
 - `kind`：`portable` 或 `source`。
 - 未签名构建在 `kind` 后加 `_unsigned`。
@@ -56,10 +57,12 @@ clash-verge-buty_<version>_<arch>_<kind>
 示例：
 
 ```text
-clash-verge-buty_1.6.9_x64_portable.zip
-clash-verge-buty_1.6.9_x64_portable_unsigned.zip
-clash-verge-buty_1.6.9_source.zip
+clash-verge-buty_<version>_x64_portable.zip
+clash-verge-buty_<version>_x64_portable_unsigned.zip
+clash-verge-buty_<version>_source.zip
 ```
+
+本地打包输出到 `artifacts/portable/`；CI 的 release staging 在 `artifacts/staging/`。发布脚本只接受规范化后的主程序，缺失时直接失败，不再猜测其他文件名。
 
 ## 不再使用的名称
 
@@ -76,14 +79,14 @@ clash-verge-buty_1.6.9_source.zip
 - `Clash-Verge-Buty` TUN 设备名
 - `clash://` URL 协议注册
 
-构建产物先由 Tauri 按显示名生成，再由 `scripts/build/normalize-main-exe.mjs` 改名为机器名。发布脚本只接受规范化后的主程序，缺失时直接失败，不再猜测其他文件名。
+构建产物先由 Tauri 按显示名生成，再由 `scripts/build/normalize-main-exe.mjs` 改名为机器名。
 
 ## 检查
 
-执行以下命令检查配置文件和构建/CI 脚本是否仍使用旧名称：
+从仓库根执行：
 
 ```text
 node scripts/pnpm.mjs run check:naming
 ```
 
-该检查同时核对应用标识、服务名、主程序名、TUN 默认值和构建/CI 脚本中的旧名称。
+该检查核对应用标识、服务名、主程序名、TUN 默认值、构建/CI 脚本和发布脚本中的旧名称。

@@ -10,6 +10,10 @@ Clash Verge Buty 的变更日志。基于 clash-verge-rev 的上游历史变更�
 
 ### Changed
 
+- 构建工具链使用工作区本地 Node 24 / pnpm 11，pnpm store、缓存、状态与临时目录全部留在工作区
+- 发布交付物统一放到 `artifacts/portable/`，`dist/` 只保留 Vite 前端产物；移除 `dist/watchdog-fix` 旧约定
+- 脚本按用途整理到 `scripts/build`、`release`、`verify`、`sidecars`、`metadata`；删除无用的 `sync-version`
+- 文档按架构、参考、发布与归档重组；移除手动 alpha 构建工作流，保留 `mihomo-alpha.exe` 上游内核
 - 界面英文字体使用内置 Bitstream Charter（`CharterBT`，Regular / Bold），中日韩与等宽字符沿用 Noto 系列
 - 仅保留 Windows 平台：移除 macOS/Linux 死代码、平台专属资源与过期文档，修正 issue 模板与元数据署名
 

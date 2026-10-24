@@ -270,7 +270,7 @@ jobs:
         if: steps.sign_mode.outputs.mode == 'ossign' && steps.sign_mode.outputs.can_sign == 'true'
         shell: pwsh
         run: |
-          throw "OSSign mode selected. Please wire your OSSign action/CLI command in this step per docs/windows-signing.md."
+          throw "OSSign mode selected. Please wire your OSSign action/CLI command in this step per docs/release/windows-signing.md."
 
       - name: Verify final signatures
         if: steps.sign_mode.outputs.mode != 'unsigned' && steps.sign_mode.outputs.can_sign == 'true'

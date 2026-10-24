@@ -1,70 +1,58 @@
 # CONTRIBUTING
 
-Thank you for your interest in contributing to Clash Verge Buty! This document provides guidelines and instructions to help you set up your development environment and start contributing.
+Thank you for your interest in contributing to Clash Verge Buty! This document covers the local development workflow.
 
 ## Development Setup
 
-Before you start contributing to the project, you need to set up your development environment. Here are the steps you need to follow:
-
 ### Prerequisites
 
-1. **Install Rust and Node.js**: Our project requires both Rust and Node.js. Please follow the instructions provided [here](https://tauri.app/v1/guides/getting-started/prerequisites) to install them on your system.
+- Windows 10/11 with WebView2 and Visual Studio Build Tools (MSVC).
+- A workspace-local toolchain: `.toolchain/` (Node.js, pnpm), `.cargo/` and `.rustup/` (Rust), and `.tmp/` for temporary files. These directories are git-ignored and must not be replaced by system-wide installations. Versions are defined by `package.json` and `AGENTS.md`; see [仓库目录与产物边界](docs/architecture/repository-layout.md).
 
-### Setup for Windows Users
-
-If you're a Windows user, you may need to perform some additional steps:
-
-- Make sure to add Rust and Node.js to your system's PATH. This is usually done during the installation process, but you can verify and manually add them if necessary.
-
-### Workspace-local toolchain
-
-This repository uses a toolchain that lives inside the working copy: `.toolchain\` (Node.js 24.18.0 and pnpm 11.15.1), `.cargo\` and `.rustup\` (Rust), and `.tmp\` (temporary files). They are git-ignored and must not be replaced by system-wide installations. Run every pnpm command through `node scripts/pnpm.mjs`, never through a system-wide `pnpm`. pnpm 11 reads install locations from `pnpm-workspace.yaml` (`storeDir`, `cacheDir`, `stateDir`), not from `.npmrc`; older pnpm versions ignore that file and put the store at the drive root (for example `D:\.pnpm-store`). `node scripts/check-workspace-hygiene.mjs` verifies the layout.
+The repository assumes the workspace-local toolchain is already provisioned. Do not install dependencies into global locations.
 
 ### Install Node.js Packages
-
-After setting up the workspace-local toolchain, install the necessary Node.js packages:
 
 ```shell
 node scripts/pnpm.mjs install
 ```
 
-### Download the Mihomo Binary
+### Prepare Runtime Assets
 
-You have two options for downloading the Mihomo binary:
+Download the Mihomo cores and Geo data, and build the Windows service binaries:
 
-- Automatically download it via the provided script:
-  ```shell
-  node scripts/pnpm.mjs run prepare:runtime
-  # Use '--force' to force update to the latest version
-  # node scripts/pnpm.mjs run prepare:runtime --force
-  ```
-- Manually download it from the [Mihomo releases](https://github.com/MetaCubeX/mihomo/releases). After downloading, rename the binary according to the [Tauri configuration](https://tauri.app/v1/api/config#bundleconfig.externalbin).
+```shell
+node scripts/pnpm.mjs run prepare:runtime
+```
+
+Existing assets are reused; add `--force` to update them. The step is also run by CI before packaging.
 
 ### Run the Development Server
 
-To run the development server, use the following command:
-
 ```shell
 node scripts/pnpm.mjs run dev
-# If an app instance already exists, use a different command
+# If an app instance already exists
 node scripts/pnpm.mjs run dev:diff
 ```
 
-### Build the Project
-
-If you want to build the project, use:
+### Build and Package
 
 ```shell
 node scripts/pnpm.mjs run build
 ```
 
-## Contributing Your Changes
+The full build, verification, and portable packaging workflow is documented in [构建、检查与打包](docs/release/build-and-package.md).
 
-Once you have made your changes:
+## Contributing Your Changes
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
 3. Commit your changes with clear and concise commit messages.
-4. Push your branch to your fork and submit a pull request to our repository.
+4. Push your branch to your fork and submit a pull request.
 
-We appreciate your contributions and look forward to your active participation in our project!
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Build, check and package](docs/release/build-and-package.md)
+- [Naming](docs/reference/naming.md)
+- [Watchdog](docs/architecture/watchdog.md)

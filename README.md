@@ -9,6 +9,14 @@
 A Mihomo GUI based on Tauri (Just a Modified Version).
 </h3>
 
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Repository layout and artifact boundaries](docs/architecture/repository-layout.md)
+- [Build, check and package](docs/release/build-and-package.md)
+- [Watchdog design](docs/architecture/watchdog.md)
+- [Naming](docs/reference/naming.md)
+
 ## Acknowledgement
 
 Clash Verge Buty was based on or inspired by these projects and so on:

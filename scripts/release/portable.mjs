@@ -5,7 +5,6 @@ import { createRequire } from "module";
 import { getOctokit, context } from "@actions/github";
 
 const target = process.argv.slice(2)[0];
-const alpha = process.argv.slice(2)[1];
 
 const MACHINE_NAME = "clash-verge-buty";
 const OUTPUT_DIR = path.join("artifacts", "portable");
@@ -194,7 +193,7 @@ async function resolvePortable() {
 
   const options = { owner: context.repo.owner, repo: context.repo.repo };
   const github = getOctokit(process.env.GITHUB_TOKEN);
-  const tag = alpha ? "alpha" : process.env.TAG_NAME || `v${version}`;
+  const tag = process.env.TAG_NAME || `v${version}`;
   console.log("[INFO]: upload to ", tag);
 
   const { data: release } = await github.rest.repos.getReleaseByTag({
