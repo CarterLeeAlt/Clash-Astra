@@ -1,7 +1,5 @@
 use anyhow::{Context, Result};
-use clash_astra_service_src::{
-    api_token_path, SERVICE_BINARY, SERVICE_DISPLAY_NAME, SERVICE_NAME,
-};
+use clash_astra_service_src::{api_token_path, SERVICE_BINARY, SERVICE_DISPLAY_NAME, SERVICE_NAME};
 use rand::{rngs::OsRng, RngCore};
 use std::ffi::OsString;
 use std::fs;

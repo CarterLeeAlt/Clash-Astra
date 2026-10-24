@@ -165,10 +165,7 @@ mod singleton_tests {
     #[test]
     fn first_acquire_succeeds_and_second_is_rejected() {
         // 使用测试专用名称，避免本机正在运行的应用占用生产互斥体导致测试失败。
-        let name = format!(
-            "Local\\clash-astra-singleton-test-{}",
-            std::process::id()
-        );
+        let name = format!("Local\\clash-astra-singleton-test-{}", std::process::id());
 
         // 首次获取成功；同一进程内再次获取时互斥体已存在，应返回 false
         assert!(acquire_singleton_mutex_named(&name).unwrap());

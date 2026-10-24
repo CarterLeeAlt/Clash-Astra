@@ -1,7 +1,5 @@
 use anyhow::Result;
-use clash_astra_service_src::{
-    api_token_path, remove_token_file_and_empty_parent, SERVICE_NAME,
-};
+use clash_astra_service_src::{api_token_path, remove_token_file_and_empty_parent, SERVICE_NAME};
 use windows_service::service::{ServiceAccess, ServiceState};
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 

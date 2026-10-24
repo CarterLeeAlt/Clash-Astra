@@ -69,8 +69,7 @@ fn run() -> io::Result<i32> {
             }
             Ok(RESTART_EXIT_CODE) => {
                 let now = std::time::Instant::now();
-                restart_times
-                    .retain(|t| now.duration_since(*t).as_secs() < RESTART_WINDOW_SECS);
+                restart_times.retain(|t| now.duration_since(*t).as_secs() < RESTART_WINDOW_SECS);
 
                 if restart_times.len() >= RESTART_LIMIT_PER_WINDOW {
                     logger.write(&format!(

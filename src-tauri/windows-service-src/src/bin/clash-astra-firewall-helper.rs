@@ -46,9 +46,7 @@ fn install_dir() -> Result<PathBuf> {
         .file_name()
         .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("resources"))
     {
-        bail!(
-            "clash-astra-firewall-helper.exe must run from the application resources directory"
-        );
+        bail!("clash-astra-firewall-helper.exe must run from the application resources directory");
     }
     resources
         .parent()
@@ -188,10 +186,7 @@ mod tests {
 
     #[test]
     fn uses_stable_distinct_rule_names() {
-        assert_eq!(
-            rule_name(CORE_BINARIES[0]),
-            "Clash Astra LAN - mihomo.exe"
-        );
+        assert_eq!(rule_name(CORE_BINARIES[0]), "Clash Astra LAN - mihomo.exe");
         assert_eq!(
             rule_name(CORE_BINARIES[1]),
             "Clash Astra LAN - mihomo-alpha.exe"
