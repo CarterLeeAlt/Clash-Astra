@@ -411,6 +411,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
+          # 根据上一个 tag 到本 tag 的提交自动生成发布说明
+          generate_release_notes: true
           # 用通配符覆盖签名与未签名两种便携包命名
           files: |
             artifacts/staging/release/clash-verge-buty_${{ env.VERSION }}_x64_portable*.zip
