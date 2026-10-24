@@ -151,7 +151,7 @@ jobs:
           }
 
           $before = git rev-parse HEAD
-          git commit -m "chore(release): v$env:VERSION [skip ci]"
+          git commit --no-verify -m "chore(release): v$env:VERSION [skip ci]"
           $after = git rev-parse HEAD
           if ($before -eq $after) {
             throw "version bump commit was not created"
