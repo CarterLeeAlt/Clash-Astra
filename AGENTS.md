@@ -17,8 +17,8 @@
 
 - Rust：工作区 `.rustup\` 与 `.cargo\`，通过命令级环境变量 `RUSTUP_HOME`、`CARGO_HOME` 指定，并把 `.cargo\bin` 前置到命令级 `PATH`；离线构建用 `CARGO_NET_OFFLINE=true`。
 - Node.js：工作区 `.toolchain\node-v20.20.0-win-x64\`，命令级 `PATH` 前置。
-- pnpm：工作区 `.toolchain\pnpm\`（本地 npm 安装）；npm 缓存用环境变量 `NPM_CONFIG_CACHE` 指向 `.toolchain\npm-cache\`，pnpm store 用 `--store-dir` 指向 `.toolchain\pnpm-store\`。
-- 进程级 `TEMP`/`TMP` 必须指向 `<工作区>\.tmp\<任务标识>\host-temp\` 之类的目录，防止工具链向系统 Temp 写文件。
+- pnpm：工作区 `.toolchain\pnpm\`（本地 npm 安装）。pnpm 命令一律用 `node scripts/pnpm.mjs <命令>` 执行：该入口把 store 固定为 `.toolchain\pnpm-store\`、缓存固定为 `.toolchain\npm-cache\`、`TEMP`/`TMP`/`TMPDIR` 固定为 `.tmp\host-temp\`，并前置本地 node、pnpm 与 Rust 工具链。禁止直接调用 `pnpm`：裸命令会命中系统全局 pnpm（当前为 11.x），它不读 `.npmrc` 的相对 `store-dir`，会在盘根创建 `D:\.pnpm-store`。
+- 进程级 `TEMP`/`TMP` 必须指向 `<工作区>\.tmp\<任务标识>\host-temp\` 之类的目录，防止工具链向系统 Temp 写文件；经 `scripts/pnpm.mjs` 启动的命令已自动指向 `.tmp\host-temp\`。直接运行 `cargo` 时先设置 `CARGO_HOME=.cargo`、`RUSTUP_HOME=.rustup`、`PATH` 前置 `.cargo\bin`，并同样设置 `TEMP`/`TMP`。
 - MSVC 链接依赖系统安装的 Visual Studio Build Tools（宿主平台，允许使用系统版本，不要求复制进工作区）。
 - 安装依赖前先检查工作区内是否已有可用副本，禁止重复下载；外部网络访问遵循全局网络路由技能的判定。
 
@@ -39,9 +39,10 @@
 
 提交前按修改范围运行：
 
-- 前端改动：`pnpm exec tsc --noEmit`
-- Rust 改动：`cargo fmt` 和 `cargo check`
+- 前端改动：`node scripts/pnpm.mjs exec tsc --noEmit`
+- Rust 改动：`cargo fmt` 和 `cargo check`（按上节设置工作区环境，或经 `node scripts/pnpm.mjs exec cargo ...` 执行）
+- 工具链与缓存位置：`node scripts/check-workspace-hygiene.mjs`
 
-`pnpm check` 不是代码检查：它下载 mihomo、geo 数据等 sidecar 资源并构建 Windows service 二进制，前端类型检查与 Rust 编译检查都不包含在内。
+`node scripts/pnpm.mjs run check` 不是代码检查：它下载 mihomo、geo 数据等 sidecar 资源并构建 Windows service 二进制，前端类型检查与 Rust 编译检查都不包含在内。
 
 如果检查因环境限制失败，必须说明原因；不要把 `cargo fmt` 当成编译检查，也不要声称未通过的检查已通过。

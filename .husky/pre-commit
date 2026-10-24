@@ -1,4 +1,5 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-pnpm pretty-quick --staged
+node scripts/pnpm.mjs exec pretty-quick --staged
+node scripts/check-workspace-hygiene.mjs

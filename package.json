@@ -25,9 +25,10 @@
     "web:serve": "vite preview",
     "check": "node scripts/check.mjs",
     "check:naming": "node scripts/check-naming.mjs",
+    "check:workspace": "node scripts/check-workspace-hygiene.mjs",
     "portable": "node scripts/portable.mjs",
     "sync-metadata": "node scripts/sync-metadata.mjs",
-    "sync-version": "pnpm sync-metadata",
+    "sync-version": "node scripts/sync-metadata.mjs",
     "prepare": "husky install"
   },
   "dependencies": {

@@ -16,12 +16,16 @@ If you're a Windows user, you may need to perform some additional steps:
 
 - Make sure to add Rust and Node.js to your system's PATH. This is usually done during the installation process, but you can verify and manually add them if necessary.
 
+### Workspace-local toolchain
+
+This repository uses a toolchain that lives inside the working copy: `.toolchain\` (Node.js and pnpm), `.cargo\` and `.rustup\` (Rust), and `.tmp\` (temporary files). They are git-ignored and must not be replaced by system-wide installations. Run every pnpm command through `node scripts/pnpm.mjs`, never through a system-wide `pnpm`: pnpm 10+ ignores the relative `store-dir` in `.npmrc` and puts its store at the drive root (for example `D:\.pnpm-store`). `node scripts/check-workspace-hygiene.mjs` verifies the layout.
+
 ### Install Node.js Packages
 
-After installing Rust and Node.js, install the necessary Node.js packages:
+After setting up the workspace-local toolchain, install the necessary Node.js packages:
 
 ```shell
-pnpm i
+node scripts/pnpm.mjs install
 ```
 
 ### Download the Mihomo Binary
@@ -30,9 +34,9 @@ You have two options for downloading the Mihomo binary:
 
 - Automatically download it via the provided script:
   ```shell
-  pnpm run check
+  node scripts/pnpm.mjs run check
   # Use '--force' to force update to the latest version
-  # pnpm run check --force
+  # node scripts/pnpm.mjs run check --force
   ```
 - Manually download it from the [Mihomo releases](https://github.com/MetaCubeX/mihomo/releases). After downloading, rename the binary according to the [Tauri configuration](https://tauri.app/v1/api/config#bundleconfig.externalbin).
 
@@ -41,9 +45,9 @@ You have two options for downloading the Mihomo binary:
 To run the development server, use the following command:
 
 ```shell
-pnpm dev
+node scripts/pnpm.mjs run dev
 # If an app instance already exists, use a different command
-pnpm dev:diff
+node scripts/pnpm.mjs run dev:diff
 ```
 
 ### Build the Project
@@ -51,7 +55,7 @@ pnpm dev:diff
 If you want to build the project, use:
 
 ```shell
-pnpm build
+node scripts/pnpm.mjs run build
 ```
 
 ## Contributing Your Changes
