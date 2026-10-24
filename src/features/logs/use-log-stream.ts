@@ -18,7 +18,7 @@ const LOG_FLUSH_INTERVAL = 200;
 const FALLBACK_SYNC_INTERVAL = 4000;
 const RECONNECTING_HINT_DELAY = 8000;
 
-export const useLogSetup = () => {
+export const useLogStream = () => {
   const { clashInfo } = useClashInfo();
   const enableLog = useRecoilValue(atomEnableLog);
   const setLogData = useSetRecoilState(atomLogData);
@@ -85,6 +85,12 @@ export const useLogSetup = () => {
     if (batch.length === 0) return;
     setLogData((old) => mergeLogBatch(old, batch));
   }, [setLogData]);
+
+  const clearLogs = useCallback(() => {
+    pendingRef.current = [];
+    clearFlushTimer();
+    setLogData([]);
+  }, [clearFlushTimer, setLogData]);
 
   // 高频日志先入缓冲，200ms 批量合并一次，避免逐条触发整表重渲
   const mergeLogs = useCallback(
@@ -280,4 +286,6 @@ export const useLogSetup = () => {
     setLogError,
     wsUrl,
   ]);
+
+  return { clearLogs };
 };

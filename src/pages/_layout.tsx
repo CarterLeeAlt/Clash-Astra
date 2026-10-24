@@ -26,7 +26,7 @@ import { LayoutItem } from "@/components/layout/layout-item";
 import { LayoutControl } from "@/components/layout/layout-control";
 import { LayoutTraffic } from "@/components/layout/layout-traffic";
 import { useCustomTheme } from "@/components/layout/use-custom-theme";
-import { useLogSetup } from "@/components/layout/use-log-setup";
+import { LogStreamProvider } from "@/features/logs/log-stream-provider";
 import getSystem from "@/utils/get-system";
 import "dayjs/locale/ru";
 import "dayjs/locale/zh-cn";
@@ -66,8 +66,6 @@ const Layout = () => {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   const location = useLocation();
-
-  useLogSetup();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -165,95 +163,97 @@ const Layout = () => {
 
   return (
     <SWRConfig value={{ errorRetryCount: 3 }}>
-      <ThemeProvider theme={theme}>
-        <NoticeManager />
-        <Paper
-          square
-          elevation={0}
-          className={`${OS} layout ${
-            nativeDecorations
-              ? "native-decorated-window"
-              : "custom-frameless-window"
-          }`}
-          onPointerDown={(e: any) => {
-            if (!nativeDecorations && e.target?.dataset?.windrag) {
-              appWindow.startDragging();
-            }
-          }}
-          onContextMenu={(e) => {
-            // only prevent it on Windows
-            const validList = ["input", "textarea"];
-            const target = e.currentTarget;
-            if (
-              OS === "windows" &&
-              !(
-                validList.includes(
-                  (e.target as HTMLElement).tagName.toLowerCase()
-                ) || (e.target as HTMLElement).isContentEditable
-              )
-            ) {
-              e.preventDefault();
-            }
-          }}
-          sx={[
-            ({ palette }) => ({
-              bgcolor: palette.background.paper,
-            }),
-          ]}
-        >
-          <div className="layout__left" data-windrag>
-            <div className="the-logo" data-windrag>
-              {!isDark ? <LogoSvg /> : <LogoSvg_dark />}
-            </div>
-
-            <List className="the-menu">
-              {routers.map((router) => (
-                <LayoutItem
-                  key={router.label}
-                  to={router.link}
-                  icon={router.icon}
-                >
-                  {t(router.label)}
-                </LayoutItem>
-              ))}
-            </List>
-
-            <div className="the-traffic" data-windrag>
-              <LayoutTraffic />
-            </div>
-          </div>
-
-          <div className="layout__right" data-windrag>
-            {OS === "windows" && !nativeDecorations && (
-              <div className="the-bar">
-                <LayoutControl nativeDecorations={nativeDecorations} />
+      <LogStreamProvider>
+        <ThemeProvider theme={theme}>
+          <NoticeManager />
+          <Paper
+            square
+            elevation={0}
+            className={`${OS} layout ${
+              nativeDecorations
+                ? "native-decorated-window"
+                : "custom-frameless-window"
+            }`}
+            onPointerDown={(e: any) => {
+              if (!nativeDecorations && e.target?.dataset?.windrag) {
+                appWindow.startDragging();
+              }
+            }}
+            onContextMenu={(e) => {
+              // only prevent it on Windows
+              const validList = ["input", "textarea"];
+              const target = e.currentTarget;
+              if (
+                OS === "windows" &&
+                !(
+                  validList.includes(
+                    (e.target as HTMLElement).tagName.toLowerCase()
+                  ) || (e.target as HTMLElement).isContentEditable
+                )
+              ) {
+                e.preventDefault();
+              }
+            }}
+            sx={[
+              ({ palette }) => ({
+                bgcolor: palette.background.paper,
+              }),
+            ]}
+          >
+            <div className="layout__left" data-windrag>
+              <div className="the-logo" data-windrag>
+                {!isDark ? <LogoSvg /> : <LogoSvg_dark />}
               </div>
-            )}
 
-            <TransitionGroup className="the-content">
-              <CSSTransition
-                key={location.pathname}
-                timeout={300}
-                classNames="page"
-              >
-                <Routes>
-                  {routers.map(({ label, link, ele: Ele }) => (
-                    <Route
-                      key={label}
-                      path={link}
-                      element={
-                        <BaseErrorBoundary key={label}>
-                          <Ele />
-                        </BaseErrorBoundary>
-                      }
-                    />
-                  ))}
-                </Routes>
-              </CSSTransition>
-            </TransitionGroup>
-          </div>
-        </Paper>
-      </ThemeProvider>
+              <List className="the-menu">
+                {routers.map((router) => (
+                  <LayoutItem
+                    key={router.label}
+                    to={router.link}
+                    icon={router.icon}
+                  >
+                    {t(router.label)}
+                  </LayoutItem>
+                ))}
+              </List>
+
+              <div className="the-traffic" data-windrag>
+                <LayoutTraffic />
+              </div>
+            </div>
+
+            <div className="layout__right" data-windrag>
+              {OS === "windows" && !nativeDecorations && (
+                <div className="the-bar">
+                  <LayoutControl nativeDecorations={nativeDecorations} />
+                </div>
+              )}
+
+              <TransitionGroup className="the-content">
+                <CSSTransition
+                  key={location.pathname}
+                  timeout={300}
+                  classNames="page"
+                >
+                  <Routes>
+                    {routers.map(({ label, link, ele: Ele }) => (
+                      <Route
+                        key={label}
+                        path={link}
+                        element={
+                          <BaseErrorBoundary key={label}>
+                            <Ele />
+                          </BaseErrorBoundary>
+                        }
+                      />
+                    ))}
+                  </Routes>
+                </CSSTransition>
+              </TransitionGroup>
+            </div>
+          </Paper>
+        </ThemeProvider>
+      </LogStreamProvider>
     </SWRConfig>
   );
 };
