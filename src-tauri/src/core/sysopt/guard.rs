@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::core::handle::Handle;
 use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
 use anyhow::{Context, Result};
 use std::sync::Arc;
@@ -109,18 +108,9 @@ async fn run_guard_cycle() -> Result<()> {
                         }
                     }
                 }
-                *Sysopt::global().guard_failure_notified.lock() = false;
             }
             Err(err) => {
-                log::error!(target: "app", "system proxy guard failed to reapply the proxy: {err:#}");
-                let mut notified = Sysopt::global().guard_failure_notified.lock();
-                if !*notified {
-                    *notified = true;
-                    Handle::notice_message(
-                        "set_config::error",
-                        format!("System proxy guard failed to reapply the proxy: {err:#}"),
-                    );
-                }
+                log::warn!(target: "app", "system proxy guard failed to reapply the proxy: {err:#}");
             }
         }
     }

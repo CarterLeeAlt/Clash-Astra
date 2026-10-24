@@ -69,6 +69,18 @@ pub fn init() -> Result<()> {
         Arc::new(|| Box::pin(async { crate::feat::run_auto_delay_test().await })),
     )?;
 
+    // 系统代理自愈：开关开启时每 10 秒核对实际状态，漂移即重新应用。
+    Scheduler::global().upsert(
+        "proxy.sysproxy.heal",
+        Schedule::Seconds(10),
+        Arc::new(|| {
+            Box::pin(async {
+                crate::core::sysopt::Sysopt::global().heal_sysproxy();
+                Ok(())
+            })
+        }),
+    )?;
+
     // 后续新增周期任务时，在这里追加注册调用。
 
     let task_keys = Scheduler::global().keys();

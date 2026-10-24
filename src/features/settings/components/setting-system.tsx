@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Box, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, Tooltip } from "@mui/material";
 import {
   PrivacyTipRounded,
   Settings,
   InfoRounded,
-  RefreshRounded,
+  CheckCircleRounded,
+  WarningAmberRounded,
 } from "@mui/icons-material";
-import { getSystemProxy, isElevated, repairSystemProxy } from "@/services/cmds";
+import { getSystemProxy, isElevated } from "@/services/cmds";
 import { useVerge } from "@/hooks/use-verge";
 import { DialogRef, Notice, Switch } from "@/components/base";
 import { SettingList, SettingItem } from "./mods/setting-comp";
@@ -77,7 +78,7 @@ const SettingSystem = ({ onError }: Props) => {
     }
   };
 
-  // 开关为 ON 时轮询真实系统代理状态，与配置分叉时在界面上标出
+  // 开关为 ON 时轮询真实系统代理状态，驱动状态图标
   useEffect(() => {
     if (!enable_system_proxy) {
       setProxyMismatch(false);
@@ -96,16 +97,6 @@ const SettingSystem = ({ onError }: Props) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enable_system_proxy, verge_mixed_port]);
-
-  const onReapplySysProxy = async () => {
-    try {
-      await repairSystemProxy();
-      await verifySystemProxy();
-      Notice.success(t("System Proxy Reapplied"));
-    } catch (err: any) {
-      Notice.error(`${SYS_PROXY_WRITE_FAILED_TIP} ${err?.message ?? err}`);
-    }
-  };
 
   const serviceChecking = isWIN && serviceStatus == null;
   const serviceInstalled = !!serviceStatus?.installed;
@@ -266,41 +257,9 @@ const SettingSystem = ({ onError }: Props) => {
       )}
 
       <SettingItem
-        label={
-          <Box
-            component="span"
-            sx={{ display: "inline-flex", alignItems: "center" }}
-          >
-            {t("System Proxy")}
-            {enable_system_proxy && proxyMismatch && (
-              <Typography
-                component="span"
-                variant="caption"
-                color="error"
-                sx={{ ml: 0.75 }}
-              >
-                {t("System Proxy Not Effective")}
-              </Typography>
-            )}
-          </Box>
-        }
+        label={t("System Proxy")}
         extra={
           <>
-            {enable_system_proxy && proxyMismatch && (
-              <Tooltip title={t("Reapply System Proxy")} placement="top">
-                <IconButton
-                  color="warning"
-                  size="small"
-                  disabled={switchesBusy}
-                  onClick={onReapplySysProxy}
-                >
-                  <RefreshRounded
-                    fontSize="inherit"
-                    style={{ cursor: "pointer", opacity: 0.9 }}
-                  />
-                </IconButton>
-              </Tooltip>
-            )}
             <IconButton
               color="inherit"
               size="small"
@@ -312,6 +271,26 @@ const SettingSystem = ({ onError }: Props) => {
                 style={{ cursor: "pointer", opacity: 0.75 }}
               />
             </IconButton>
+            {enable_system_proxy && (
+              <Box
+                component="span"
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  ml: 0.5,
+                }}
+              >
+                {proxyMismatch ? (
+                  <WarningAmberRounded
+                    sx={{ fontSize: 16, color: "warning.main" }}
+                  />
+                ) : (
+                  <CheckCircleRounded
+                    sx={{ fontSize: 16, color: "success.main" }}
+                  />
+                )}
+              </Box>
+            )}
           </>
         }
       >

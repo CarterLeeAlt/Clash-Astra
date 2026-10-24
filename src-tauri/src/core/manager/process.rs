@@ -261,7 +261,6 @@ impl CoreManager {
             match crate::core::sysopt::Sysopt::global().init_sysproxy() {
                 Ok(()) => {
                     self.proxy_initialized.store(true, Ordering::SeqCst);
-                    self.sysproxy_failure_count.store(0, Ordering::SeqCst);
                     // 核心就绪后立即补一轮自动延迟测试，不必等首个 2 分钟周期
                     tauri::async_runtime::spawn(async {
                         if let Err(err) = crate::feat::run_auto_delay_test().await {
@@ -272,15 +271,6 @@ impl CoreManager {
                 }
                 Err(err) => {
                     log::error!(target: "app", "system proxy initialization failed; retrying: {err}");
-                    let failures = self.sysproxy_failure_count.fetch_add(1, Ordering::SeqCst) + 1;
-                    if failures == 1 || failures % 5 == 0 {
-                        crate::core::handle::Handle::notice_message(
-                            "set_config::error",
-                            format!(
-                                "System proxy is enabled but not applied (attempt {failures}): {err:#}"
-                            ),
-                        );
-                    }
                 }
             }
             // Keep the guard chain registered even while initialization keeps

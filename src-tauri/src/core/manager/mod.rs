@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use std::fs;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::{Pid, System};
@@ -31,7 +31,6 @@ pub struct CoreManager {
     core_ready: AtomicBool,
     recovery_scheduled: AtomicBool,
     proxy_initialized: AtomicBool,
-    sysproxy_failure_count: AtomicU32,
 }
 
 impl CoreManager {
@@ -49,7 +48,6 @@ impl CoreManager {
             core_ready: AtomicBool::new(false),
             recovery_scheduled: AtomicBool::new(false),
             proxy_initialized: AtomicBool::new(false),
-            sysproxy_failure_count: AtomicU32::new(0),
         })
     }
 

@@ -31,9 +31,6 @@ pub struct Sysopt {
 
     /// serialize proxy writes, restores, and guard refreshes
     proxy_operation: Arc<Mutex<()>>,
-
-    /// edge-triggered notice flag: guard transitioned from ok to failed
-    guard_failure_notified: Arc<Mutex<bool>>,
 }
 
 #[cfg(target_os = "windows")]
@@ -52,7 +49,6 @@ impl Sysopt {
             owned_windows_proxy: Arc::new(Mutex::new(None)),
             auto_launch: Arc::new(Mutex::new(None)),
             proxy_operation: Arc::new(Mutex::new(())),
-            guard_failure_notified: Arc::new(Mutex::new(false)),
         })
     }
 }

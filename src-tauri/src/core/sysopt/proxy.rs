@@ -480,6 +480,52 @@ impl Sysopt {
         Ok(())
     }
 
+    /// 系统代理状态自愈：开关为开启但实际系统代理与目标不一致时重新应用。
+    /// 失败只记日志，不通知前端；由周期任务驱动，不依赖窗口是否打开。
+    pub fn heal_sysproxy(&self) {
+        let (enable, bypass, port) = {
+            let verge = Config::verge();
+            let verge = verge.latest();
+            (
+                verge.enable_system_proxy.unwrap_or(false),
+                verge.system_proxy_bypass.clone(),
+                verge
+                    .verge_mixed_port
+                    .unwrap_or(Config::clash().data().get_mixed_port()),
+            )
+        };
+
+        if !enable {
+            return;
+        }
+
+        let target = Sysproxy {
+            enable: true,
+            host: "127.0.0.1".into(),
+            port,
+            bypass: bypass.unwrap_or(DEFAULT_BYPASS.into()),
+        };
+
+        let actual = match Sysproxy::get_system_proxy() {
+            Ok(actual) => actual,
+            Err(err) => {
+                log::warn!(target: "app", "system proxy heal skipped; readback failed: {err}");
+                return;
+            }
+        };
+
+        if is_sysproxy_match(&actual, &target) {
+            return;
+        }
+
+        log::info!(target: "app", "system proxy drift detected; reapplying");
+        if let Err(err) = self.update_sysproxy() {
+            log::warn!(target: "app", "system proxy heal failed: {err:#}");
+        } else {
+            self.guard_proxy();
+        }
+    }
+
     /// reset the sysproxy
     pub fn reset_sysproxy(&self) -> Result<()> {
         let _operation = self.proxy_operation.lock();
