@@ -56,8 +56,7 @@ import { ProfileMore } from "./components/profile-more";
 import { useProfiles } from "@/hooks/use-profiles";
 import { ConfigViewer } from "@/features/settings/components/mods/config-viewer";
 import { throttle } from "lodash-es";
-
-const GLOBAL_SCRIPT_UID = "__global_script__";
+import { classifyProfiles, GLOBAL_SCRIPT_UID } from "./model";
 
 const ProfilePage = () => {
   const { t } = useTranslation();
@@ -89,26 +88,10 @@ const ProfilePage = () => {
   const configRef = useRef<DialogRef>(null);
 
   // distinguish type
-  const { regularItems, globalScriptItem, enhanceItems } = useMemo(() => {
-    const items = profiles.items || [];
-    const chain = profiles.chain || [];
-
-    const type1 = ["local", "remote"];
-    const type2 = ["merge", "script"];
-
-    const globalScriptItem = items.find((i) => i.uid === GLOBAL_SCRIPT_UID);
-    const regularItems = items.filter((i) => i && type1.includes(i.type!));
-    const restItems = items.filter(
-      (i) => i && type2.includes(i.type!) && i.uid !== GLOBAL_SCRIPT_UID
-    );
-    const restMap = Object.fromEntries(restItems.map((i) => [i.uid, i]));
-    const enhanceItems = chain
-      .map((i) => restMap[i]!)
-      .filter(Boolean)
-      .concat(restItems.filter((i) => !chain.includes(i.uid)));
-
-    return { regularItems, globalScriptItem, enhanceItems };
-  }, [profiles]);
+  const { regularItems, globalScriptItem, enhanceItems } = useMemo(
+    () => classifyProfiles(profiles.items || [], profiles.chain || []),
+    [profiles]
+  );
 
   const onImport = async () => {
     if (!url) return;
