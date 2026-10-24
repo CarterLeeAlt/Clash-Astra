@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import {
   PrivacyTipRounded,
   Settings,
@@ -266,13 +266,23 @@ const SettingSystem = ({ onError }: Props) => {
       )}
 
       <SettingItem
-        label={t("System Proxy")}
-        secondary={
-          enable_system_proxy && proxyMismatch ? (
-            <Typography variant="body2" color="error">
-              {t("System Proxy Not Effective")}
-            </Typography>
-          ) : undefined
+        label={
+          <Box
+            component="span"
+            sx={{ display: "inline-flex", alignItems: "center" }}
+          >
+            {t("System Proxy")}
+            {enable_system_proxy && proxyMismatch && (
+              <Typography
+                component="span"
+                variant="caption"
+                color="error"
+                sx={{ ml: 0.75 }}
+              >
+                {t("System Proxy Not Effective")}
+              </Typography>
+            )}
+          </Box>
         }
         extra={
           <>

@@ -90,7 +90,7 @@
   "Silent Start": "Silent Start",
   "System Proxy": "System Proxy",
   "System Proxy Setting": "System Proxy Setting",
-  "System Proxy Not Effective": "Toggle is on, but the Windows system proxy is not active",
+  "System Proxy Not Effective": "Inactive",
   "Reapply System Proxy": "Reapply system proxy",
   "System Proxy Reapplied": "System proxy reapplied",
   "Proxy Guard Not Running": "Guard task is not running; re-save settings or reapply the system proxy to restore it",

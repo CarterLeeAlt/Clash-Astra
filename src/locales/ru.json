@@ -87,7 +87,7 @@
   "Silent Start": "Тихий запуск",
   "System Proxy": "Системный прокси",
   "System Proxy Setting": "Настройка системного прокси",
-  "System Proxy Not Effective": "Переключатель включён, но системный прокси Windows не активен",
+  "System Proxy Not Effective": "Неактивен",
   "Reapply System Proxy": "Применить системный прокси снова",
   "System Proxy Reapplied": "Системный прокси применён снова",
   "Proxy Guard Not Running": "Задача защиты не запущена; пересохраните настройки или примените системный прокси снова",
