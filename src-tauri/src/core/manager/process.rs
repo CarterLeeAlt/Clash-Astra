@@ -261,12 +261,25 @@ impl CoreManager {
             match crate::core::sysopt::Sysopt::global().init_sysproxy() {
                 Ok(()) => {
                     self.proxy_initialized.store(true, Ordering::SeqCst);
+                    self.sysproxy_failure_count.store(0, Ordering::SeqCst);
                     return;
                 }
                 Err(err) => {
                     log::error!(target: "app", "system proxy initialization failed; retrying: {err}");
+                    let failures = self.sysproxy_failure_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    if failures == 1 || failures % 5 == 0 {
+                        crate::core::handle::Handle::notice_message(
+                            "set_config::error",
+                            format!(
+                                "System proxy is enabled but not applied (attempt {failures}): {err:#}"
+                            ),
+                        );
+                    }
                 }
             }
+            // Keep the guard chain registered even while initialization keeps
+            // failing, so every guard cycle also retries applying the proxy.
+            crate::core::sysopt::Sysopt::global().guard_proxy();
             sleep(retry_delay).await;
             retry_delay = (retry_delay * 2).min(Duration::from_secs(15));
         }

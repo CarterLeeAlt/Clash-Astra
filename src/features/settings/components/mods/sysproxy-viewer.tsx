@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useVerge } from "@/hooks/use-verge";
-import { getSystemProxy } from "@/services/cmds";
+import { getSchedulerState, getSystemProxy } from "@/services/cmds";
 import {
   BaseDialog,
   DialogRef,
@@ -30,6 +30,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
 
   type SysProxy = Awaited<ReturnType<typeof getSystemProxy>>;
   const [sysproxy, setSysproxy] = useState<SysProxy>();
+  const [guardRunning, setGuardRunning] = useState(true);
 
   const {
     enable_system_proxy: enabled,
@@ -44,6 +45,8 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     duration: proxy_guard_duration ?? 10,
   });
 
+  const GUARD_TASK_KEY = "system_proxy.guard";
+
   useImperativeHandle(ref, () => ({
     open: () => {
       setOpen(true);
@@ -53,6 +56,18 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
         duration: proxy_guard_duration ?? 10,
       });
       getSystemProxy().then((p) => setSysproxy(p));
+      if (enabled && enable_proxy_guard) {
+        getSchedulerState()
+          .then((state) => {
+            const alive =
+              state.oneShotTasks.some((task) => task.key === GUARD_TASK_KEY) ||
+              state.runningTasks.some((task) => task.key === GUARD_TASK_KEY);
+            setGuardRunning(alive);
+          })
+          .catch(() => setGuardRunning(true));
+      } else {
+        setGuardRunning(true);
+      }
     },
     close: () => setOpen(false),
   }));
@@ -96,7 +111,16 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     >
       <List>
         <ListItem sx={{ padding: "5px 2px" }}>
-          <ListItemText primary={t("Proxy Guard")} />
+          <ListItemText
+            primary={t("Proxy Guard")}
+            secondary={
+              enabled && enable_proxy_guard && !guardRunning ? (
+                <Typography variant="body2" color="error">
+                  {t("Proxy Guard Not Running")}
+                </Typography>
+              ) : undefined
+            }
+          />
           <Switch
             edge="end"
             disabled={!enabled}

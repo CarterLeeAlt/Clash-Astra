@@ -1,5 +1,6 @@
 use super::CmdResult;
 use crate::{
+    core::sysopt,
     ret_err,
     utils::{dirs, resolve},
     wrap_err,
@@ -22,6 +23,14 @@ pub fn get_sys_proxy() -> CmdResult<Mapping> {
     map.insert("bypass".into(), current.bypass.into());
 
     Ok(map)
+}
+
+/// reapply the system proxy from the current verge config
+#[tauri::command]
+pub fn repair_system_proxy() -> CmdResult<()> {
+    wrap_err!(sysopt::Sysopt::global().update_sysproxy())?;
+    sysopt::Sysopt::global().guard_proxy();
+    Ok(())
 }
 
 #[tauri::command]

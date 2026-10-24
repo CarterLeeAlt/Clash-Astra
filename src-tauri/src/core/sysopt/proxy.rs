@@ -11,7 +11,7 @@ use sysproxy::WindowsProxySnapshot;
 
 use super::{Sysopt, DEFAULT_BYPASS};
 
-fn is_sysproxy_match(actual: &Sysproxy, expected: &Sysproxy) -> bool {
+pub(super) fn is_sysproxy_match(actual: &Sysproxy, expected: &Sysproxy) -> bool {
     if actual.enable != expected.enable {
         return false;
     }
@@ -79,7 +79,7 @@ fn set_system_proxy_once(
     }
 }
 
-fn set_system_proxy_with_retry(
+pub(super) fn set_system_proxy_with_retry(
     target: &Sysproxy,
     action: &str,
     allow_registry_fallback: bool,

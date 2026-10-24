@@ -77,7 +77,13 @@ pub fn toggle_system_proxy() {
         .await
         {
             Ok(_) => handle::Handle::refresh_verge(),
-            Err(err) => log::error!(target: "app", "{err}"),
+            Err(err) => {
+                log::error!(target: "app", "{err}");
+                handle::Handle::notice_message(
+                    "set_config::error",
+                    format!("Failed to toggle system proxy: {err:#}"),
+                );
+            }
         }
     });
 }

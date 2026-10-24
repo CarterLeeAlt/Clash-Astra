@@ -43,6 +43,10 @@ export async function getSystemProxy() {
   }>("get_sys_proxy");
 }
 
+export async function repairSystemProxy() {
+  return invoke<void>("repair_system_proxy");
+}
+
 export async function copyIconFile(
   path: string,
   name: "common.png" | "sysproxy.png" | "tun.png"

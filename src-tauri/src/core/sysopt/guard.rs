@@ -1,11 +1,12 @@
+use crate::config::Config;
+use crate::core::handle::Handle;
 use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
-use crate::{config::Config, log_err};
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::time::Duration;
 use sysproxy::Sysproxy;
 
-use super::proxy::wait_for_local_proxy;
+use super::proxy::{set_system_proxy_with_retry, wait_for_local_proxy};
 use super::{Sysopt, DEFAULT_BYPASS};
 
 /// 系统代理守护任务。
@@ -89,20 +90,39 @@ async fn run_guard_cycle() -> Result<()> {
             return Ok(());
         }
 
-        let guard_result = sysproxy.set_system_proxy().context("guard system proxy");
+        let guard_result = set_system_proxy_with_retry(
+            &sysproxy,
+            "guard system proxy",
+            cfg!(target_os = "windows"),
+        );
 
-        #[cfg(target_os = "windows")]
-        if guard_result.is_ok() {
-            let mut owned = Sysopt::global().owned_windows_proxy.lock();
-            if let Some(snapshot) = owned.as_mut() {
-                if let Err(err) = snapshot.refresh_app_owned_values() {
-                    log::warn!(target: "app", "could not refresh Windows proxy ownership snapshot after guard: {err}");
-                } else if let Err(err) = snapshot.record_owned_recovery(&sysproxy) {
-                    log::warn!(target: "app", "could not refresh persistent Windows proxy ownership after guard: {err}");
+        match &guard_result {
+            Ok(()) => {
+                #[cfg(target_os = "windows")]
+                {
+                    let mut owned = Sysopt::global().owned_windows_proxy.lock();
+                    if let Some(snapshot) = owned.as_mut() {
+                        if let Err(err) = snapshot.refresh_app_owned_values() {
+                            log::warn!(target: "app", "could not refresh Windows proxy ownership snapshot after guard: {err}");
+                        } else if let Err(err) = snapshot.record_owned_recovery(&sysproxy) {
+                            log::warn!(target: "app", "could not refresh persistent Windows proxy ownership after guard: {err}");
+                        }
+                    }
+                }
+                *Sysopt::global().guard_failure_notified.lock() = false;
+            }
+            Err(err) => {
+                log::error!(target: "app", "system proxy guard failed to reapply the proxy: {err:#}");
+                let mut notified = Sysopt::global().guard_failure_notified.lock();
+                if !*notified {
+                    *notified = true;
+                    Handle::notice_message(
+                        "set_config::error",
+                        format!("System proxy guard failed to reapply the proxy: {err:#}"),
+                    );
                 }
             }
         }
-        log_err!(guard_result);
     }
 
     reschedule_guard(interval_secs)

@@ -1,8 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { IconButton, Tooltip } from "@mui/material";
-import { PrivacyTipRounded, Settings, InfoRounded } from "@mui/icons-material";
-import { isElevated } from "@/services/cmds";
+import { IconButton, Tooltip, Typography } from "@mui/material";
+import {
+  PrivacyTipRounded,
+  Settings,
+  InfoRounded,
+  RefreshRounded,
+} from "@mui/icons-material";
+import { getSystemProxy, isElevated, repairSystemProxy } from "@/services/cmds";
 import { useVerge } from "@/hooks/use-verge";
 import { DialogRef, Notice, Switch } from "@/components/base";
 import { SettingList, SettingItem } from "./mods/setting-comp";
@@ -44,6 +49,7 @@ const SettingSystem = ({ onError }: Props) => {
     enable_service_mode,
     enable_silent_start,
     enable_system_proxy,
+    verge_mixed_port,
   } = verge ?? {};
 
   const onSwitchFormat = (_e: any, value: boolean) => value;
@@ -51,12 +57,54 @@ const SettingSystem = ({ onError }: Props) => {
     "tun" | "service" | "sysproxy" | null
   >(null);
   const switchesBusy = pendingSwitch !== null;
+  const [proxyMismatch, setProxyMismatch] = useState(false);
   const onChangeData = (patch: Partial<IVergeConfig>) => {
     mutateVerge({ ...verge, ...patch }, false);
   };
   const onSwitchCatch = (err: Error) => {
     if (isSwitchOperationInProgressError(err)) return;
     onError?.(err);
+  };
+
+  const verifySystemProxy = async () => {
+    try {
+      const actual = await getSystemProxy();
+      const port = verge_mixed_port ?? 7897;
+      const effective = actual.enable && actual.server === `127.0.0.1:${port}`;
+      setProxyMismatch(!effective);
+    } catch {
+      // 读取实际状态失败时保留上一次结果，避免瞬时误报
+    }
+  };
+
+  // 开关为 ON 时轮询真实系统代理状态，与配置分叉时在界面上标出
+  useEffect(() => {
+    if (!enable_system_proxy) {
+      setProxyMismatch(false);
+      return;
+    }
+    let disposed = false;
+    const check = async () => {
+      if (disposed) return;
+      await verifySystemProxy();
+    };
+    check();
+    const timer = window.setInterval(check, 5000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enable_system_proxy, verge_mixed_port]);
+
+  const onReapplySysProxy = async () => {
+    try {
+      await repairSystemProxy();
+      await verifySystemProxy();
+      Notice.success(t("System Proxy Reapplied"));
+    } catch (err: any) {
+      Notice.error(`${SYS_PROXY_WRITE_FAILED_TIP} ${err?.message ?? err}`);
+    }
   };
 
   const serviceChecking = isWIN && serviceStatus == null;
@@ -219,18 +267,42 @@ const SettingSystem = ({ onError }: Props) => {
 
       <SettingItem
         label={t("System Proxy")}
+        secondary={
+          enable_system_proxy && proxyMismatch ? (
+            <Typography variant="body2" color="error">
+              {t("System Proxy Not Effective")}
+            </Typography>
+          ) : undefined
+        }
         extra={
-          <IconButton
-            color="inherit"
-            size="small"
-            disabled={switchesBusy}
-            onClick={() => sysproxyRef.current?.open()}
-          >
-            <Settings
-              fontSize="inherit"
-              style={{ cursor: "pointer", opacity: 0.75 }}
-            />
-          </IconButton>
+          <>
+            {enable_system_proxy && proxyMismatch && (
+              <Tooltip title={t("Reapply System Proxy")} placement="top">
+                <IconButton
+                  color="warning"
+                  size="small"
+                  disabled={switchesBusy}
+                  onClick={onReapplySysProxy}
+                >
+                  <RefreshRounded
+                    fontSize="inherit"
+                    style={{ cursor: "pointer", opacity: 0.9 }}
+                  />
+                </IconButton>
+              </Tooltip>
+            )}
+            <IconButton
+              color="inherit"
+              size="small"
+              disabled={switchesBusy}
+              onClick={() => sysproxyRef.current?.open()}
+            >
+              <Settings
+                fontSize="inherit"
+                style={{ cursor: "pointer", opacity: 0.75 }}
+              />
+            </IconButton>
+          </>
         }
       >
         <GuardState
