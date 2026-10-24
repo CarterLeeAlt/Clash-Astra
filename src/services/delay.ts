@@ -5,6 +5,7 @@ const hashKey = (name: string, group: string) => `${group ?? ""}::${name}`;
 // 所有出口（含 DIRECT/REJECT）统一使用组级 URL，未设置时用默认地址；
 // 只有同一地址下测出的延迟才可比较
 const DEFAULT_LATENCY_TEST_URL = "http://www.google.com/generate_204";
+export { DEFAULT_LATENCY_TEST_URL };
 
 // 延迟结果的哨兵值：负数不是毫秒数
 export const DELAY_UNKNOWN = -1;

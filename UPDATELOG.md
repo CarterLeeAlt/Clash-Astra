@@ -6,6 +6,7 @@ Clash Verge Buty 的变更日志。基于 clash-verge-rev 的上游历史变更�
 
 ### Added
 
+- 每 2 分钟自动测速：后端调度器触发，前端批量更新节点延迟数字；代理列表直接显示最新测速结果
 - 连接页默认启用进程识别（`find-process-mode: always`），表格显示发起连接的程序
 
 ### Changed

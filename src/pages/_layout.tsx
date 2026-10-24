@@ -21,6 +21,7 @@ import { LayoutTraffic } from "@/components/layout/layout-traffic";
 import { useCustomTheme } from "@/components/layout/use-custom-theme";
 import { LogStreamProvider } from "@/features/logs/log-stream-provider";
 import { useAppEvents } from "@/app/use-app-events";
+import { useAutoDelayTest } from "@/features/proxies/use-auto-delay-test";
 import getSystem from "@/utils/get-system";
 import "dayjs/locale/ru";
 import "dayjs/locale/zh-cn";
@@ -39,6 +40,7 @@ const Layout = () => {
   const { verge } = useVerge();
   const { language, start_page } = verge || {};
   const windowStyle = useAppEvents();
+  useAutoDelayTest();
   const nativeDecorations = windowStyle.nativeDecorations;
   const navigate = useNavigate();
   // useNavigate 的返回函数在每次路由变化时都会换新引用（其内部 useCallback

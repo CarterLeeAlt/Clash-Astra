@@ -61,6 +61,18 @@ pub fn init() -> Result<()> {
     timer::sync()?;
     timer::catch_up()?;
 
+    // 自动节点延迟测试：每 2 分钟通知前端执行一轮测速。
+    Scheduler::global().upsert(
+        "proxy.auto_delay_test",
+        Schedule::Minutes(2),
+        Arc::new(|| {
+            Box::pin(async {
+                crate::core::handle::Handle::emit_auto_delay_test();
+                Ok(())
+            })
+        }),
+    )?;
+
     // 后续新增周期任务时，在这里追加注册调用。
 
     let task_keys = Scheduler::global().keys();
