@@ -48,6 +48,8 @@ const RuleItem = (props: Props) => {
           mr: 1,
           textAlign: "left",
           lineHeight: ROW_LINE_HEIGHT,
+          position: "relative",
+          top: "1px",
         }}
       >
         {index}
