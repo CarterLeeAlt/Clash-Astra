@@ -99,7 +99,7 @@ runs:
 
     - name: Check target
       shell: pwsh
-      run: pnpm check ${{ inputs.target }}
+      run: pnpm prepare:runtime ${{ inputs.target }}
 
     - name: Tauri build
       shell: pwsh
@@ -118,7 +118,7 @@ runs:
 
     - name: Normalize main executable name
       shell: pwsh
-      run: node scripts/normalize-main-exe.mjs --target ${{ inputs.target }}
+      run: node scripts/build/normalize-main-exe.mjs --target ${{ inputs.target }}
 
     - name: Detect signing availability
       id: sign_mode

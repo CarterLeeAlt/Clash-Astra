@@ -43,6 +43,6 @@
 - Rust 改动：`cargo fmt` 和 `cargo check`（按上节设置工作区环境，或经 `node scripts/pnpm.mjs exec cargo ...` 执行）
 - 工具链与缓存位置：`node scripts/check-workspace-hygiene.mjs`
 
-`node scripts/pnpm.mjs run check` 不是代码检查：它下载 mihomo、geo 数据等 sidecar 资源并构建 Windows service 二进制，前端类型检查与 Rust 编译检查都不包含在内。
+`node scripts/pnpm.mjs run prepare:runtime` 不是代码检查：它下载 mihomo、geo 数据等 sidecar 资源并构建 Windows service 二进制，前端类型检查与 Rust 编译检查都不包含在内。
 
 如果检查因环境限制失败，必须说明原因；不要把 `cargo fmt` 当成编译检查，也不要声称未通过的检查已通过。

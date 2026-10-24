@@ -4,7 +4,7 @@
 # never modified. Mapping is a per-channel linear RGB transform anchored at
 # the dominant body colors, so gradients match the stock shading.
 $ErrorActionPreference = 'Stop'
-$icons = Join-Path $PSScriptRoot '..\src-tauri\icons'
+$icons = Join-Path $PSScriptRoot '..\..\src-tauri\icons'
 Add-Type -AssemblyName System.Drawing
 
 function Get-DominantColor([Drawing.Bitmap]$bitmap) {

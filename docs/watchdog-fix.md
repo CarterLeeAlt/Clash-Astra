@@ -24,7 +24,7 @@ pnpm build:watchdog --target x86_64-pc-windows-msvc
 
 指定目标时，GUI 可使用 `pnpm tauri build --bundles none --target x86_64-pc-windows-msvc`，随后执行同目标的 `pnpm build:watchdog`。正式/alpha CI 已加入 helper 构建、复制和便携包完整性检查。开发模式 `beforeDevCommand` 会构建并放置 debug helper。
 
-图标由 `scripts/generate-watchdog-icon.ps1` 生成：以完整蓝猫资源为形状，按仓库自带 `tray-icon-sys.png` 的主体色做逐通道线性映射，提供 16、32、48、64、128、256 像素 ICO 与 PNG。
+图标由 `scripts/build/generate-watchdog-icon.ps1` 生成：以完整蓝猫资源为形状，按仓库自带 `tray-icon-sys.png` 的主体色做逐通道线性映射，提供 16、32、48、64、128、256 像素 ICO 与 PNG。
 
 GUI 的任务管理器显示名来自 `Cargo.toml` 的 `description`（与 `package.json.description`、`tauri.conf.json` 的 short/longDescription 同步为 `Clash Verge Buty`）；Watchdog 的显示名在其 `build.rs` 中固定为 `Clash Verge Buty-Watchdog`。
 
@@ -34,13 +34,13 @@ GUI 的任务管理器显示名来自 `Cargo.toml` 的 `description`（与 `pack
 
 - 前端 `tsc` 与 Vite 发布构建通过。
 - 主程序 `cargo fmt`、`cargo check --locked`、Windows x64 release 构建通过；稳定版 rustfmt 对项目原有 nightly-only 配置给出警告，不影响格式化和编译。
-- Watchdog release 构建通过。`cargo test` 当前没有单元测试，行为验收使用 `scripts/test-watchdog.ps1` 黑盒回归：正常退出、失败一次后恢复、退出 42 重启、四次启动后耗尽三次重试、互斥单实例、外部应用继续存活，均通过。
+- Watchdog release 构建通过。`cargo test` 当前没有单元测试，行为验收使用 `scripts/verify/test-watchdog.ps1` 黑盒回归：正常退出、失败一次后恢复、退出 42 重启、四次启动后耗尽三次重试、互斥单实例、外部应用继续存活，均通过。
 - 实际 GUI 使用工作区隔离配置测试，关闭系统代理、自启、TUN，使用 43331/17897/19097 端口。启动与重复启动后恰好一个 GUI 和一个 Watchdog。
 - 强制结束实际测试 GUI 后，监督程序自动恢复 GUI，旧核心退出、新核心重新监听 17897，验证通过。
 - 便携包五种场景通过：完整、缺 helper、helper 为目录、只有 helper 没有 GUI、非标准 GUI 名称 fallback。
 - 内嵌大/小图标提取成功，实际资源为完整黄色猫（原版珊瑚橙色板）；文件描述分别为 `Clash Verge Buty` 与 `Clash Verge Buty-Watchdog`。
 
-使用项目本地 Rust 环境执行 `pwsh -File scripts/test-watchdog.ps1` 可复跑六项行为回归。测试产物位于工作区 `.tmp` 的独立目录。
+使用项目本地 Rust 环境执行 `pwsh -File scripts/verify/test-watchdog.ps1` 可复跑六项行为回归。测试产物位于工作区 `.tmp` 的独立目录。
 
 ## 便携包
 

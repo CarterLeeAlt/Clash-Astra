@@ -138,9 +138,9 @@ const requiredSourceFragments = [
     "src/components/setting/mods/tun-viewer.tsx",
     'placeholder="clash-verge-buty"',
   ],
-  ["scripts/normalize-main-exe.mjs", `"${expected.mainExe}"`],
-  ["scripts/portable.mjs", 'const MACHINE_NAME = "clash-verge-buty";'],
-  ["scripts/check.mjs", `"${expected.serviceExe}"`],
+  ["scripts/build/normalize-main-exe.mjs", `"${expected.mainExe}"`],
+  ["scripts/release/portable.mjs", 'const MACHINE_NAME = "clash-verge-buty";'],
+  ["scripts/sidecars/prepare-runtime.mjs", `"${expected.serviceExe}"`],
 ];
 
 for (const [relativePath, fragment] of requiredSourceFragments) {
@@ -151,8 +151,8 @@ for (const [relativePath, fragment] of requiredSourceFragments) {
 }
 
 const buildAndCiFiles = [
-  "scripts/normalize-main-exe.mjs",
-  "scripts/portable.mjs",
+  "scripts/build/normalize-main-exe.mjs",
+  "scripts/release/portable.mjs",
   ".github/workflows/release-windows.yml",
   ".github/actions/alpha-windows/action.yml",
 ];

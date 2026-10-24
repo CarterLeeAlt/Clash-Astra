@@ -1,6 +1,6 @@
 param([string]$WorkDir, [string]$WatchdogPath)
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not $WorkDir) { $WorkDir = Join-Path $root ('.tmp\watchdog-test-' + [guid]::NewGuid().ToString('N')) }
 $WorkDir = [IO.Path]::GetFullPath($WorkDir)
 if (-not $WorkDir.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Test output must be inside the workspace' }

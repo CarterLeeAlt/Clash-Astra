@@ -1,1 +1,0 @@
-import './sync-metadata.mjs';

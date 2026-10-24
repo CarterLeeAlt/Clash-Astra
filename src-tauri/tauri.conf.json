@@ -6,7 +6,7 @@
   "build": {
     "distDir": "../dist",
     "devPath": "http://localhost:3000/",
-    "beforeDevCommand": "node scripts/build-watchdog.mjs --debug && pnpm run web:dev",
+    "beforeDevCommand": "node scripts/build/build-watchdog.mjs --debug && pnpm run web:dev",
     "beforeBuildCommand": "pnpm run web:build"
   },
   "tauri": {

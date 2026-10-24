@@ -34,9 +34,9 @@ You have two options for downloading the Mihomo binary:
 
 - Automatically download it via the provided script:
   ```shell
-  node scripts/pnpm.mjs run check
+  node scripts/pnpm.mjs run prepare:runtime
   # Use '--force' to force update to the latest version
-  # node scripts/pnpm.mjs run check --force
+  # node scripts/pnpm.mjs run prepare:runtime --force
   ```
 - Manually download it from the [Mihomo releases](https://github.com/MetaCubeX/mihomo/releases). After downloading, rename the binary according to the [Tauri configuration](https://tauri.app/v1/api/config#bundleconfig.externalbin).
 

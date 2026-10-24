@@ -76,14 +76,14 @@ clash-verge-buty_1.6.9_source.zip
 - `Clash-Verge-Buty` TUN 设备名
 - `clash://` URL 协议注册
 
-构建产物先由 Tauri 按显示名生成，再由 `scripts/normalize-main-exe.mjs` 改名为机器名。发布脚本只接受规范化后的主程序，缺失时直接失败，不再猜测其他文件名。
+构建产物先由 Tauri 按显示名生成，再由 `scripts/build/normalize-main-exe.mjs` 改名为机器名。发布脚本只接受规范化后的主程序，缺失时直接失败，不再猜测其他文件名。
 
 ## 检查
 
 执行以下命令检查配置文件和构建/CI 脚本是否仍使用旧名称：
 
 ```text
-pnpm check:naming
+node scripts/pnpm.mjs run check:naming
 ```
 
 该检查同时核对应用标识、服务名、主程序名、TUN 默认值和构建/CI 脚本中的旧名称。

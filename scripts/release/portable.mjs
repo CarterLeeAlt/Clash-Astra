@@ -71,7 +71,7 @@ async function resolvePortable() {
   );
   if (!mainExeSource) {
     throw new Error(
-      `Portable main exe not found under ${releaseDir}; run scripts/normalize-main-exe.mjs first`
+      `Portable main exe not found under ${releaseDir}; run scripts/build/normalize-main-exe.mjs first`
     );
   }
 
