@@ -1,45 +1,15 @@
-use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
-use crate::{config::Config, core::CoreManager, log_err};
+use crate::{config::Config, core::CoreManager};
 use anyhow::{anyhow, Context, Result};
-use auto_launch::{AutoLaunch, AutoLaunchBuilder};
-use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
 use std::{
     net::{SocketAddr, TcpStream},
-    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
 use sysproxy::Sysproxy;
 #[cfg(target_os = "windows")]
 use sysproxy::WindowsProxySnapshot;
-use tauri::utils::platform::current_exe;
 
-pub struct Sysopt {
-    /// current system proxy setting
-    cur_sysproxy: Arc<Mutex<Option<Sysproxy>>>,
-
-    /// record the original system proxy
-    /// recover it when exit
-    old_sysproxy: Arc<Mutex<Option<Sysproxy>>>,
-
-    /// exact Windows registry state before this app owns the proxy
-    #[cfg(target_os = "windows")]
-    old_windows_proxy: Arc<Mutex<Option<WindowsProxySnapshot>>>,
-
-    /// Windows registry state immediately after this app set the proxy
-    #[cfg(target_os = "windows")]
-    owned_windows_proxy: Arc<Mutex<Option<WindowsProxySnapshot>>>,
-
-    /// helps to auto launch the app
-    auto_launch: Arc<Mutex<Option<AutoLaunch>>>,
-
-    /// serialize proxy writes, restores, and guard refreshes
-    proxy_operation: Arc<Mutex<()>>,
-}
-
-#[cfg(target_os = "windows")]
-static DEFAULT_BYPASS: &str = "localhost;127.*;192.168.*;10.*;172.16.*;<local>";
+use super::{Sysopt, DEFAULT_BYPASS};
 
 fn is_sysproxy_match(actual: &Sysproxy, expected: &Sysproxy) -> bool {
     if actual.enable != expected.enable {
@@ -55,7 +25,7 @@ fn is_sysproxy_match(actual: &Sysproxy, expected: &Sysproxy) -> bool {
         && actual.bypass == expected.bypass
 }
 
-fn wait_for_local_proxy(port: u16) -> Result<()> {
+pub(super) fn wait_for_local_proxy(port: u16) -> Result<()> {
     const READY_TIMEOUT: Duration = Duration::from_secs(5);
     const CONNECT_TIMEOUT: Duration = Duration::from_millis(200);
     const RETRY_DELAY: Duration = Duration::from_millis(100);
@@ -182,21 +152,6 @@ fn rearm_windows_proxy_recovery(
 }
 
 impl Sysopt {
-    pub fn global() -> &'static Sysopt {
-        static SYSOPT: OnceCell<Sysopt> = OnceCell::new();
-
-        SYSOPT.get_or_init(|| Sysopt {
-            cur_sysproxy: Arc::new(Mutex::new(None)),
-            old_sysproxy: Arc::new(Mutex::new(None)),
-            #[cfg(target_os = "windows")]
-            old_windows_proxy: Arc::new(Mutex::new(None)),
-            #[cfg(target_os = "windows")]
-            owned_windows_proxy: Arc::new(Mutex::new(None)),
-            auto_launch: Arc::new(Mutex::new(None)),
-            proxy_operation: Arc::new(Mutex::new(())),
-        })
-    }
-
     /// Recover a Windows proxy session left by an unclean shutdown before the
     /// rest of application startup can perform network access.
     pub fn recover_pending_sysproxy(&self) -> Result<()> {
@@ -638,226 +593,11 @@ impl Sysopt {
 
         Ok(())
     }
-
-    /// init the auto launch
-    pub fn init_launch(&self) -> Result<()> {
-        let app_exe = current_exe()?;
-        let app_exe = dunce::canonicalize(app_exe)?;
-        let app_name = app_exe
-            .file_stem()
-            .and_then(|f| f.to_str())
-            .ok_or(anyhow!("failed to get file stem"))?;
-
-        let app_path = app_exe
-            .as_os_str()
-            .to_str()
-            .ok_or(anyhow!("failed to get app_path"))?
-            .to_string();
-
-        // fix issue #26
-        let app_path = format!("\"{app_path}\"");
-
-        let auto = AutoLaunchBuilder::new()
-            .set_app_name(app_name)
-            .set_app_path(&app_path)
-            .build()?;
-
-        *self.auto_launch.lock() = Some(auto);
-
-        Ok(())
-    }
-
-    /// update the startup
-    pub fn update_launch(&self) -> Result<()> {
-        let auto_launch = self.auto_launch.lock();
-
-        if auto_launch.is_none() {
-            drop(auto_launch);
-            return self.init_launch();
-        }
-        let enable = { Config::verge().latest().enable_auto_launch };
-        let enable = enable.unwrap_or(false);
-        let auto_launch = auto_launch.as_ref().unwrap();
-
-        match enable {
-            true => auto_launch.enable()?,
-            false => log_err!(auto_launch.disable()), // 忽略关闭的错误
-        };
-
-        Ok(())
-    }
-
-    /// 启动系统代理守护。
-    ///
-    /// 首次检查在 10 秒后；每次执行结束后按最新的 `proxy_guard_duration`
-    /// 重新安排下一次执行。守护由一次性任务调度器驱动，任务执行期间不会
-    /// 删除自己的底层周期任务，因此不会触发 `delay_timer` 的 `finish_task`
-    /// 竞态错误。
-    pub fn guard_proxy(&self) {
-        let scheduler = OneShotScheduler::global();
-        let (enable, guard) = {
-            let verge = Config::verge();
-            let verge = verge.latest();
-            (
-                verge.enable_system_proxy.unwrap_or(false),
-                verge.enable_proxy_guard.unwrap_or(false),
-            )
-        };
-
-        if !system_proxy_guard_enabled(enable, guard) {
-            if scheduler.cancel(GUARD_TASK_KEY) {
-                log::debug!(
-                    target: "app",
-                    "system proxy guard task cancelled: enable_system_proxy={enable}, enable_proxy_guard={guard}"
-                );
-            } else {
-                log::trace!(
-                    target: "app",
-                    "system proxy guard task not needed: enable_system_proxy={enable}, enable_proxy_guard={guard}"
-                );
-            }
-            return;
-        }
-
-        if scheduler.is_scheduled(GUARD_TASK_KEY) {
-            log::trace!(target: "app", "system proxy guard task already scheduled");
-            return;
-        }
-
-        match scheduler.schedule_once(
-            GUARD_TASK_KEY,
-            Duration::from_secs(GUARD_INITIAL_DELAY_SECS),
-            guard_job(),
-        ) {
-            Ok(()) => log::debug!(
-                target: "app",
-                "system proxy guard task registered, first check in {GUARD_INITIAL_DELAY_SECS}s"
-            ),
-            Err(err) => log::error!(
-                target: "app",
-                "failed to register system proxy guard task: {err}"
-            ),
-        }
-    }
-}
-
-/// 系统代理守护任务。
-const GUARD_TASK_KEY: &str = "system_proxy.guard";
-const GUARD_INITIAL_DELAY_SECS: u64 = 10;
-
-fn system_proxy_guard_enabled(enable_system_proxy: bool, enable_proxy_guard: bool) -> bool {
-    enable_system_proxy && enable_proxy_guard
-}
-
-fn guard_job() -> JobFn {
-    Arc::new(|| {
-        let future: JobFuture = Box::pin(run_guard_cycle());
-        future
-    })
-}
-
-async fn run_guard_cycle() -> Result<()> {
-    let (enable, guard, guard_duration, bypass) = {
-        let verge = Config::verge();
-        let verge = verge.latest();
-        (
-            verge.enable_system_proxy.unwrap_or(false),
-            verge.enable_proxy_guard.unwrap_or(false),
-            verge.proxy_guard_duration.unwrap_or(10),
-            verge.system_proxy_bypass.clone(),
-        )
-    };
-
-    log::debug!(
-        target: "app",
-        "system proxy guard tick: enable_system_proxy={enable}, enable_proxy_guard={guard}, duration={guard_duration}s"
-    );
-
-    if !system_proxy_guard_enabled(enable, guard) {
-        log::debug!(
-            target: "app",
-            "system proxy guard task stopped: enable_system_proxy={enable}, enable_proxy_guard={guard}"
-        );
-        return Ok(());
-    }
-
-    let interval_secs = guard_duration.max(1);
-    if guard_duration == 0 {
-        log::warn!(
-            target: "app",
-            "proxy_guard_duration is 0; using 1s to avoid a busy loop"
-        );
-    }
-
-    let port = {
-        Config::verge()
-            .latest()
-            .verge_mixed_port
-            .unwrap_or(Config::clash().data().get_mixed_port())
-    };
-
-    let sysproxy = Sysproxy {
-        enable: true,
-        host: "127.0.0.1".into(),
-        port,
-        bypass: bypass.unwrap_or(DEFAULT_BYPASS.into()),
-    };
-
-    if let Err(err) =
-        wait_for_local_proxy(port).context("wait for local proxy before guarding system proxy")
-    {
-        log::error!(target: "app", "{err}");
-        return reschedule_guard(interval_secs);
-    }
-
-    {
-        let _operation = Sysopt::global().proxy_operation.lock();
-        let still_enabled = {
-            let verge = Config::verge();
-            let verge = verge.latest();
-            verge.enable_system_proxy.unwrap_or(false) && verge.enable_proxy_guard.unwrap_or(false)
-        };
-        if !still_enabled {
-            log::debug!(target: "app", "system proxy guard skipped: disabled while waiting");
-            return Ok(());
-        }
-
-        let guard_result = sysproxy.set_system_proxy().context("guard system proxy");
-
-        #[cfg(target_os = "windows")]
-        if guard_result.is_ok() {
-            let mut owned = Sysopt::global().owned_windows_proxy.lock();
-            if let Some(snapshot) = owned.as_mut() {
-                if let Err(err) = snapshot.refresh_app_owned_values() {
-                    log::warn!(target: "app", "could not refresh Windows proxy ownership snapshot after guard: {err}");
-                } else if let Err(err) = snapshot.record_owned_recovery(&sysproxy) {
-                    log::warn!(target: "app", "could not refresh persistent Windows proxy ownership after guard: {err}");
-                }
-            }
-        }
-        log_err!(guard_result);
-    }
-
-    reschedule_guard(interval_secs)
-}
-
-fn reschedule_guard(interval_secs: u64) -> Result<()> {
-    OneShotScheduler::global().schedule_once(
-        GUARD_TASK_KEY,
-        Duration::from_secs(interval_secs.max(1)),
-        guard_job(),
-    )?;
-    log::debug!(
-        target: "app",
-        "system proxy guard rescheduled in {}s",
-        interval_secs.max(1)
-    );
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_sysproxy_match, system_proxy_guard_enabled};
+    use super::is_sysproxy_match;
     use sysproxy::Sysproxy;
 
     fn proxy(port: u16, bypass: &str) -> Sysproxy {
@@ -867,14 +607,6 @@ mod tests {
             port,
             bypass: bypass.into(),
         }
-    }
-
-    #[test]
-    fn proxy_guard_requires_both_switches() {
-        assert!(!system_proxy_guard_enabled(false, false));
-        assert!(!system_proxy_guard_enabled(false, true));
-        assert!(!system_proxy_guard_enabled(true, false));
-        assert!(system_proxy_guard_enabled(true, true));
     }
 
     #[test]

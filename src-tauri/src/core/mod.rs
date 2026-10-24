@@ -3,6 +3,7 @@ mod core;
 pub mod handle;
 pub mod hotkey;
 pub use crate::logging::buffer as logger;
+mod manager;
 pub mod scheduler;
 pub mod sysopt;
 pub mod timer;

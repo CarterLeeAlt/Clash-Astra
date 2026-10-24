@@ -1,31 +1,15 @@
-//! 后台定时任务调度器。
-//!
-//! [`Scheduler`] 管理固定周期的长期任务，所有周期任务以稳定的 key 注册到
-//! 调度器，由它负责创建、更新和移除底层的 `delay_timer` 任务。应用启动时
-//! 调用 [`init`]，新增周期任务时在 `init` 中追加对应模块的注册调用即可。
-//!
-//! [`OneShotScheduler`] 管理一次性任务和防抖：同一个 key 再次调度会取消尚未
-//! 触发的旧任务并重新计时，任务执行前会自动从注册表移除。
-//!
-//! 两个调度器都只负责任务触发；任务返回的错误会被统一记录，不会影响其他任务。
-
-use anyhow::{bail, Context, Result};
-use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, Task, TaskBuilder};
+use anyhow::{bail, Result};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::Notify;
 
-use crate::core::timer;
+use super::{JobFn, JobFuture};
 
-pub type JobFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
-pub type JobFn = Arc<dyn Fn() -> JobFuture + Send + Sync>;
 pub type CancellableJobFn = Arc<dyn Fn(CancelToken) -> JobFuture + Send + Sync>;
 
 /// 待触发一次性任务的数量上限，防止动态 key 无限增长。
@@ -71,28 +55,6 @@ impl CancelToken {
     }
 }
 
-/// 任务周期。
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Schedule {
-    /// 按秒重复。
-    #[allow(dead_code)]
-    Seconds(u64),
-    /// 按分钟重复。
-    Minutes(u64),
-    /// 按 cron 表达式重复，使用本地时区。
-    #[allow(dead_code)]
-    Cron(String),
-}
-
-/// 周期任务快照。
-#[derive(Clone, Debug, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PeriodicTaskInfo {
-    pub key: String,
-    pub schedule: Schedule,
-}
-
 /// 待触发的一次性任务快照。
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -109,217 +71,6 @@ pub struct RunningTaskInfo {
     pub key: String,
     pub generation: u64,
     pub cancellable: bool,
-}
-
-struct JobEntry {
-    task_id: u64,
-    schedule: Schedule,
-}
-
-/// 全局任务调度器。
-pub struct Scheduler {
-    delay_timer: Mutex<DelayTimer>,
-    jobs: Mutex<HashMap<String, JobEntry>>,
-    next_task_id: AtomicU64,
-}
-
-impl Scheduler {
-    pub fn global() -> &'static Scheduler {
-        static SCHEDULER: OnceCell<Scheduler> = OnceCell::new();
-
-        SCHEDULER.get_or_init(|| Scheduler {
-            delay_timer: Mutex::new(DelayTimerBuilder::default().build()),
-            jobs: Mutex::new(HashMap::new()),
-            next_task_id: AtomicU64::new(1),
-        })
-    }
-
-    /// 注册或更新一个周期任务。
-    ///
-    /// 同一个 key 的周期没有变化时保留原任务，不会重置计时；因此任务的运行
-    /// 逻辑应从最新配置读取状态，不要依赖注册时捕获的可变快照。
-    pub fn upsert(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
-        self.install(key, schedule, run)
-    }
-
-    fn install(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
-        let key = key.into();
-        let schedule = schedule.validate()?;
-
-        let mut jobs = self.jobs.lock();
-        if let Some(entry) = jobs.get(&key) {
-            if entry.schedule == schedule {
-                log::trace!(target: "app", "scheduler task `{key}` unchanged");
-                return Ok(());
-            }
-        }
-
-        let task_id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
-        let task = self.build_task(task_id, &key, &schedule, run)?;
-
-        let delay_timer = self.delay_timer.lock();
-        delay_timer
-            .add_task(task)
-            .with_context(|| format!("failed to add scheduled task `{key}`"))?;
-
-        if let Some(entry) = jobs.insert(key.clone(), JobEntry { task_id, schedule }) {
-            crate::log_err!(delay_timer.remove_task(entry.task_id));
-        }
-
-        log::debug!(target: "app", "scheduler registered task `{key}`");
-        Ok(())
-    }
-
-    /// 任务是否已注册。
-    #[cfg(test)]
-    pub fn is_registered(&self, key: &str) -> bool {
-        self.jobs.lock().contains_key(key)
-    }
-
-    /// 停止并移除所有周期任务。
-    ///
-    /// 正在执行的任务不会被强制中断；此方法只保证之后不会再触发。
-    pub fn shutdown(&self) -> Result<()> {
-        let tasks: Vec<(String, u64)> = self
-            .jobs
-            .lock()
-            .drain()
-            .map(|(key, entry)| (key, entry.task_id))
-            .collect();
-
-        if tasks.is_empty() {
-            log::debug!(target: "app", "scheduler shutdown: no tasks");
-            return Ok(());
-        }
-
-        let keys: Vec<&str> = tasks.iter().map(|(key, _)| key.as_str()).collect();
-        let delay_timer = self.delay_timer.lock();
-        let mut failures = Vec::new();
-        for (key, task_id) in &tasks {
-            if let Err(err) = delay_timer.remove_task(*task_id) {
-                log::error!(
-                    target: "app",
-                    "scheduler shutdown failed to remove task `{key}`: {err}"
-                );
-                failures.push(key.clone());
-            }
-        }
-        drop(delay_timer);
-
-        log::info!(
-            target: "app",
-            "scheduler shutdown removed {} task(s): {keys:?}",
-            tasks.len()
-        );
-        if !failures.is_empty() {
-            bail!(
-                "failed to remove {} scheduled task(s) during shutdown: {failures:?}",
-                failures.len()
-            );
-        }
-        Ok(())
-    }
-
-    /// 移除任务；任务不存在时直接返回。
-    ///
-    /// 不要在周期任务的回调内部调用本方法：`delay_timer` 会先删除任务标记，
-    /// 回调结束时再执行 `finish_task`，从而打印“Without the task_mark_ref_mut”
-    /// 错误。需要自行停止的周期任务应改用一次性调度器并停止续约，或在任务
-    /// 外部调用本方法。
-    pub fn remove(&self, key: &str) -> Result<()> {
-        let mut jobs = self.jobs.lock();
-        let Some(entry) = jobs.remove(key) else {
-            return Ok(());
-        };
-
-        let delay_timer = self.delay_timer.lock();
-        delay_timer
-            .remove_task(entry.task_id)
-            .with_context(|| format!("failed to remove scheduled task `{key}`"))?;
-
-        log::debug!(target: "app", "scheduler removed task `{key}`");
-        Ok(())
-    }
-
-    /// 立即触发一次任务；返回任务是否存在。
-    pub fn trigger(&self, key: &str) -> Result<bool> {
-        let jobs = self.jobs.lock();
-        let Some(entry) = jobs.get(key) else {
-            return Ok(false);
-        };
-
-        let delay_timer = self.delay_timer.lock();
-        delay_timer
-            .advance_task(entry.task_id)
-            .with_context(|| format!("failed to trigger scheduled task `{key}`"))?;
-
-        log::debug!(target: "app", "scheduler triggered task `{key}`");
-        Ok(true)
-    }
-
-    /// 返回所有已注册的周期任务快照，按 key 字典序排列。
-    pub fn tasks(&self) -> Vec<PeriodicTaskInfo> {
-        let jobs = self.jobs.lock();
-        let mut tasks: Vec<PeriodicTaskInfo> = jobs
-            .iter()
-            .map(|(key, entry)| PeriodicTaskInfo {
-                key: key.clone(),
-                schedule: entry.schedule.clone(),
-            })
-            .collect();
-        tasks.sort_by(|left, right| left.key.cmp(&right.key));
-        tasks
-    }
-
-    /// 返回所有已注册的周期任务 key，按字典序排列。
-    pub fn keys(&self) -> Vec<String> {
-        self.keys_with_prefix("")
-    }
-
-    /// 返回指定前缀下已注册的任务 key，按字典序排列。
-    pub fn keys_with_prefix(&self, prefix: &str) -> Vec<String> {
-        let jobs = self.jobs.lock();
-        let mut keys: Vec<String> = jobs
-            .keys()
-            .filter(|key| key.starts_with(prefix))
-            .cloned()
-            .collect();
-        keys.sort();
-        keys
-    }
-
-    fn build_task(&self, task_id: u64, key: &str, schedule: &Schedule, run: JobFn) -> Result<Task> {
-        let mut builder = TaskBuilder::default();
-        builder
-            .set_task_id(task_id)
-            .set_maximum_parallel_runnable_num(1);
-
-        match schedule {
-            Schedule::Seconds(seconds) => {
-                builder.set_frequency_repeated_by_seconds(*seconds);
-            }
-            Schedule::Minutes(minutes) => {
-                builder.set_frequency_repeated_by_minutes(*minutes);
-            }
-            Schedule::Cron(expression) => {
-                builder.set_frequency_repeated_by_cron_str(expression);
-            }
-        }
-
-        let key = key.to_string();
-        builder
-            .spawn_async_routine(move || {
-                let run = run.clone();
-                let key = key.clone();
-                async move {
-                    log::trace!(target: "app", "scheduler task `{key}` started");
-                    if let Err(err) = run().await {
-                        log::error!(target: "app", "scheduler task `{key}` failed: {err:#}");
-                    }
-                }
-            })
-            .context("failed to create scheduled task")
-    }
 }
 
 enum OneShotJob {
@@ -667,55 +418,16 @@ impl Drop for RunningTaskGuard {
     }
 }
 
-impl Schedule {
-    fn validate(self) -> Result<Self> {
-        match &self {
-            Self::Seconds(0) | Self::Minutes(0) => {
-                bail!("scheduled task interval must be greater than zero");
-            }
-            Self::Cron(expression) if expression.trim().is_empty() => {
-                bail!("scheduled task cron expression must not be empty");
-            }
-            _ => {}
-        }
-
-        Ok(self)
-    }
-}
-
-/// 应用启动时调用，集中注册所有后台周期任务。
-pub fn init() -> Result<()> {
-    // 订阅自动更新：每个订阅按自己的更新间隔独立调度。
-    timer::sync()?;
-    timer::catch_up()?;
-
-    // 后续新增周期任务时，在这里追加注册调用。
-
-    let task_keys = Scheduler::global().keys();
-    log::info!(
-        target: "app",
-        "scheduler initialized with {} task(s): {task_keys:?}",
-        task_keys.len()
-    );
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use delay_timer::prelude::DelayTimerBuilder;
+    use super::super::{test_lock, JobFn};
+    use super::{CancellableJobFn, OneShotScheduler, MAX_PENDING_ONE_SHOT_TASKS};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
     type Events = Arc<Mutex<Vec<&'static str>>>;
     type Values = Arc<Mutex<Vec<usize>>>;
-
-    /// 调度器测试共享全局单例，串行执行以避免 cancel_all 互相干扰。
-    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: Mutex<()> = Mutex::new(());
-        LOCK.lock().unwrap_or_else(|err| err.into_inner())
-    }
 
     fn recording_job(events: Events, value: &'static str) -> JobFn {
         Arc::new(move || {
@@ -775,23 +487,6 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         predicate()
-    }
-
-    fn test_scheduler() -> Scheduler {
-        Scheduler {
-            delay_timer: parking_lot::Mutex::new(DelayTimerBuilder::default().build()),
-            jobs: parking_lot::Mutex::new(HashMap::new()),
-            next_task_id: AtomicU64::new(1),
-        }
-    }
-
-    #[test]
-    fn schedule_rejects_zero_intervals_and_empty_cron() {
-        let _guard = test_lock();
-        assert!(Schedule::Seconds(0).validate().is_err());
-        assert!(Schedule::Minutes(0).validate().is_err());
-        assert!(Schedule::Cron("   ".to_string()).validate().is_err());
-        assert!(Schedule::Seconds(1).validate().is_ok());
     }
 
     #[test]
@@ -1072,34 +767,5 @@ mod tests {
         assert!(scheduler.pending_keys().is_empty());
         thread::sleep(Duration::from_millis(250));
         assert!(events.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn scheduler_shutdown_clears_periodic_tasks() {
-        let _guard = test_lock();
-        let scheduler = test_scheduler();
-        let run: JobFn = Arc::new(|| Box::pin(async { Ok(()) }));
-
-        scheduler
-            .upsert(
-                "test.scheduler.shutdown",
-                Schedule::Seconds(3600),
-                run.clone(),
-            )
-            .unwrap();
-        assert!(scheduler.is_registered("test.scheduler.shutdown"));
-        assert_eq!(
-            scheduler.keys(),
-            vec!["test.scheduler.shutdown".to_string()]
-        );
-
-        scheduler.shutdown().unwrap();
-        assert!(scheduler.keys().is_empty());
-        assert!(!scheduler.is_registered("test.scheduler.shutdown"));
-
-        // 再次停止不应报告错误，也不应改变空注册表。
-        scheduler.shutdown().unwrap();
-        assert!(scheduler.keys().is_empty());
-        drop(run);
     }
 }
