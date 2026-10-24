@@ -245,13 +245,13 @@ runs:
     - name: Stage Windows portable artifact
       shell: pwsh
       run: |
-        $stage = "dist/windows-alpha-portable"
+        $stage = "artifacts/staging/alpha"
         if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
         New-Item -ItemType Directory -Path $stage | Out-Null
 
-        $portableZip = Get-ChildItem . -File | Where-Object { $_.Name -match "^clash-verge-buty_.*_portable.*\.zip$" } | Select-Object -First 1
+        $portableZip = Get-ChildItem "artifacts/portable" -File | Where-Object { $_.Name -match "^clash-verge-buty_.*_portable.*\.zip$" } | Select-Object -First 1
         if (-not $portableZip) {
-          throw "portable artifact zip not found in workspace root"
+          throw "portable artifact zip not found in artifacts/portable"
         }
 
         Write-Host "[INFO] portable zip path: $($portableZip.FullName)"
@@ -269,8 +269,8 @@ runs:
         }
 
         "### Final Windows artifacts" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-        "- portable artifact: dist/windows-alpha-portable/** (unzipped portable content)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-        Get-ChildItem "dist/windows-alpha-portable" -Recurse -File | ForEach-Object { "  - $($_.FullName)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append }
+        "- portable artifact: artifacts/staging/alpha/** (unzipped portable content)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+        Get-ChildItem "artifacts/staging/alpha" -Recurse -File | ForEach-Object { "  - $($_.FullName)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append }
 
     - name: Cleanup cert file
       if: always()
@@ -295,4 +295,4 @@ runs:
         name: clash-verge-buty-windows-alpha-portable
         if-no-files-found: error
         include-hidden-files: true
-        path: dist/windows-alpha-portable/
+        path: artifacts/staging/alpha/

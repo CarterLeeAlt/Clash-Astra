@@ -304,7 +304,7 @@ jobs:
       - name: Stage and validate release assets
         shell: pwsh
         run: |
-          $stage = "dist/windows-release-staging"
+          $stage = "artifacts/staging/release"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Path $stage | Out-Null
 
@@ -378,8 +378,8 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           # 用通配符覆盖签名与未签名两种便携包命名
           files: |
-            dist/windows-release-staging/clash-verge-buty_${{ env.VERSION }}_x64_portable*.zip
-            dist/windows-release-staging/clash-verge-buty_${{ env.VERSION }}_source.zip
+            artifacts/staging/release/clash-verge-buty_${{ env.VERSION }}_x64_portable*.zip
+            artifacts/staging/release/clash-verge-buty_${{ env.VERSION }}_source.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

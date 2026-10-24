@@ -9,6 +9,9 @@ scripts/_env.sh
 
 src-tauri/local-binaries/windows-service-bin/*.exe
 
+# packaged deliverables and CI staging
+/artifacts/
+
 # workspace-local toolchain
 /.rustup/
 /.cargo/

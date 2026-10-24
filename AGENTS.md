@@ -25,8 +25,8 @@
 ## 构建产物（全部工作区内）
 
 - Rust 构建输出：`src-tauri\target\`、`src-tauri\watchdog\target\`（`.gitignore` 已排除）。
-- 前端构建输出：`dist\`（Vite 产物）。
-- 打包交付物：统一放 `dist\watchdog-fix\`。注意 `vite build` 会清空整个 `dist\`，重新构建前端前先把交付物移出 `dist`，或在移动交付物前重建目标目录。
+- 前端构建输出：`dist\`（Vite 产物，只放前端构建结果）。
+- 打包交付物：`artifacts\portable\`；CI staging 在 `artifacts\staging\`。`vite build` 只清空 `dist\`，不影响 `artifacts\`。
 - 构建所需的 sidecar 与资源：`src-tauri\sidecar\`、`src-tauri\resources\`（从本地安装目录复制，`.gitignore` 已排除，不提交）。
 - 构建产物默认按临时产物处理；用户要求保留的交付物除外。
 

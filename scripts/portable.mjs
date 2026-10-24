@@ -8,6 +8,7 @@ const target = process.argv.slice(2)[0];
 const alpha = process.argv.slice(2)[1];
 
 const MACHINE_NAME = "clash-verge-buty";
+const OUTPUT_DIR = path.join("artifacts", "portable");
 
 const ARCH_MAP = {
   "x86_64-pc-windows-msvc": "x64",
@@ -129,9 +130,12 @@ async function resolvePortable() {
 
   const unsignedSuffix = process.env.UNSIGNED_BUILD === "1" ? "_unsigned" : "";
   const zipFile = `${MACHINE_NAME}_${version}_${ARCH_MAP[target]}_portable${unsignedSuffix}.zip`;
-  zip.writeZip(zipFile);
+  const zipPath = path.join(OUTPUT_DIR, zipFile);
+  await fs.ensureDir(OUTPUT_DIR);
+  zip.writeZip(zipPath);
+  console.log(`[INFO]: portable zip written to ${zipPath}`);
 
-  const zipCheck = new AdmZip(zipFile)
+  const zipCheck = new AdmZip(zipPath)
     .getEntries()
     .map((entry) => entry.entryName);
   console.log("[INFO]: portable zip entries:", zipCheck);
