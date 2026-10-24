@@ -64,6 +64,14 @@ fn acquire_singleton_mutex() -> Result<bool> {
     Ok(true)
 }
 
+/// 单例检测用的本地 HTTP 客户端：严格限时，避免端口被第三方程序
+/// 黑洞占用时（建连后不响应）阻塞在 main() 的 block_on 上。
+fn singleton_http_client() -> reqwest::Result<reqwest::Client> {
+    reqwest::ClientBuilder::new()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+}
+
 /// 检查是否已有实例在运行。
 ///
 /// 存在既有实例时返回 Err("app exists")，并尽量唤起它的主窗口。
@@ -75,16 +83,23 @@ pub fn check_singleton() -> Result<()> {
     // 命中则说明旧实例在运行，直接唤起并退出。
     let is_our_server = port_taken
         && tauri::async_runtime::block_on(async {
-            let resp = reqwest::get(format!("http://127.0.0.1:{port}/commands/ping")).await?;
+            let resp = singleton_http_client()?
+                .get(format!("http://127.0.0.1:{port}/commands/ping"))
+                .send()
+                .await?;
             let text = resp.text().await?;
             Ok::<bool, anyhow::Error>(text.trim() == "ok")
         })
         .unwrap_or(false);
 
     if is_our_server {
-        let _ = tauri::async_runtime::block_on(reqwest::get(format!(
-            "http://127.0.0.1:{port}/commands/visible"
-        )));
+        let _ = tauri::async_runtime::block_on(async {
+            let _ = singleton_http_client()?
+                .get(format!("http://127.0.0.1:{port}/commands/visible"))
+                .send()
+                .await;
+            Ok::<(), reqwest::Error>(())
+        });
         bail!("app exists");
     }
 
@@ -93,9 +108,13 @@ pub fn check_singleton() -> Result<()> {
     if !acquire_singleton_mutex()? {
         // 另一实例持有互斥体，但它的单例服务未必可用（端口被第三方占用）。
         // 尝试唤起窗口，失败也仍然退出，避免并发写配置。
-        let _ = tauri::async_runtime::block_on(reqwest::get(format!(
-            "http://127.0.0.1:{port}/commands/visible"
-        )));
+        let _ = tauri::async_runtime::block_on(async {
+            let _ = singleton_http_client()?
+                .get(format!("http://127.0.0.1:{port}/commands/visible"))
+                .send()
+                .await;
+            Ok::<(), reqwest::Error>(())
+        });
         bail!("app exists");
     }
 

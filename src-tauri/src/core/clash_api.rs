@@ -23,7 +23,11 @@ pub async fn put_configs(path: &str) -> Result<()> {
     let mut data = HashMap::new();
     data.insert("path", path);
 
-    let client = reqwest::ClientBuilder::new().no_proxy().build()?;
+    let client = reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(8))
+        .build()?;
     let builder = client.put(&url).headers(headers).json(&data);
     let response = builder.send().await?;
 
@@ -40,7 +44,11 @@ pub async fn patch_configs(config: &Mapping) -> Result<()> {
     let (url, headers) = clash_client_info()?;
     let url = format!("{url}/configs");
 
-    let client = reqwest::ClientBuilder::new().no_proxy().build()?;
+    let client = reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(8))
+        .build()?;
     let builder = client.patch(&url).headers(headers.clone()).json(config);
     builder.send().await?;
     Ok(())
@@ -167,7 +175,11 @@ pub async fn get_proxy_delay(
     };
 
     let timeout_param = format!("{timeout}");
-    let client = reqwest::ClientBuilder::new().no_proxy().build()?;
+    let client = reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_millis(timeout as u64 + 5000))
+        .build()?;
     let request = client
         .get(&url)
         .headers(headers)
@@ -221,7 +233,11 @@ pub async fn get_proxies() -> Result<ProxiesRes> {
     let (url, headers) = clash_client_info()?;
     let url = format!("{url}/proxies");
 
-    let client = reqwest::ClientBuilder::new().no_proxy().build()?;
+    let client = reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(8))
+        .build()?;
     let response = client.get(&url).headers(headers).send().await?;
 
     Ok(response.json::<ProxiesRes>().await?)
@@ -232,7 +248,11 @@ pub async fn get_connections() -> Result<ConnectionsRes> {
     let (url, headers) = clash_client_info()?;
     let url = format!("{url}/connections");
 
-    let client = reqwest::ClientBuilder::new().no_proxy().build()?;
+    let client = reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(8))
+        .build()?;
     let response = client.get(&url).headers(headers).send().await?;
 
     Ok(response.json::<ConnectionsRes>().await?)

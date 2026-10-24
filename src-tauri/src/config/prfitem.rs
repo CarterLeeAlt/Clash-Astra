@@ -4,6 +4,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Mapping;
 use std::fs;
+use std::time::Duration;
 use sysproxy::Sysproxy;
 
 use super::Config;
@@ -189,7 +190,11 @@ impl PrfItem {
         let user_agent = opt_ref.and_then(|o| o.user_agent.clone());
         let update_interval = opt_ref.and_then(|o| o.update_interval);
 
-        let mut builder = reqwest::ClientBuilder::new().use_rustls_tls().no_proxy();
+        let mut builder = reqwest::ClientBuilder::new()
+            .use_rustls_tls()
+            .no_proxy()
+            .connect_timeout(Duration::from_secs(8))
+            .timeout(Duration::from_secs(20));
 
         // 使用软件自己的代理
         if self_proxy {
@@ -235,7 +240,12 @@ impl PrfItem {
         builder = builder.danger_accept_invalid_certs(accept_invalid_certs);
         builder = builder.user_agent(user_agent.unwrap_or(version));
 
-        let resp = builder.build()?.get(url).send().await?;
+        let resp = builder
+            .build()?
+            .get(url)
+            .send()
+            .await
+            .context("failed to fetch remote profile within 20s (connect limit 8s); check the network or proxy")?;
 
         let status_code = resp.status();
         if !StatusCode::is_success(&status_code) {
@@ -302,7 +312,10 @@ impl PrfItem {
         let uid = help::get_uid("r");
         let file = format!("{uid}.yaml");
         let name = name.unwrap_or(filename.unwrap_or("Remote File".into()));
-        let data = resp.text_with_charset("utf-8").await?;
+        let data = resp
+            .text_with_charset("utf-8")
+            .await
+            .context("failed to download the profile body within the 20s total limit; check the network or proxy")?;
 
         // process the charset "UTF-8 with BOM"
         let data = data.trim_start_matches('\u{feff}');
