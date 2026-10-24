@@ -1,10 +1,8 @@
 node_modules
 .DS_Store
 dist
-dist-ssr
 *.local
 update.json
-scripts/_env.sh
 .vscode
 
 src-tauri/local-binaries/windows-service-bin/*.exe
