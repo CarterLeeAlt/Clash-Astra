@@ -23,7 +23,7 @@ impl Logger {
 
     pub fn set_log(&self, text: String) {
         let mut logs = self.log_data.lock();
-        if logs.len() > LOGS_QUEUE_LEN {
+        if logs.len() >= LOGS_QUEUE_LEN {
             logs.pop_front();
         }
         logs.push_back(text);

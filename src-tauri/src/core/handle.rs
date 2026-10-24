@@ -1,17 +1,11 @@
 use super::tray::Tray;
 use crate::log_err;
+use crate::logging::app_event::AppLogEvent;
 use anyhow::{bail, Result};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
-use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Window};
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AppLogEvent {
-    pub r#type: String,
-    pub payload: String,
-}
 
 #[derive(Debug, Default, Clone)]
 pub struct Handle {

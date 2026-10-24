@@ -1,4 +1,5 @@
-use crate::utils::{dirs, redact::redact_log_text};
+use crate::logging::redact::redact_log_text;
+use crate::utils::dirs;
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};

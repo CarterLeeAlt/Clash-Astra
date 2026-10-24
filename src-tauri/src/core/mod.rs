@@ -2,7 +2,7 @@ pub mod clash_api;
 mod core;
 pub mod handle;
 pub mod hotkey;
-pub mod logger;
+pub use crate::logging::buffer as logger;
 pub mod scheduler;
 pub mod sysopt;
 pub mod timer;
