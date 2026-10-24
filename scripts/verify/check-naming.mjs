@@ -3,19 +3,20 @@ import path from "node:path";
 
 const root = process.cwd();
 const expected = {
-  packageName: "clash-verge-buty",
-  displayName: "Clash Verge Buty",
-  identifier: "io.github.clash-verge-buty",
-  devIdentifier: "io.github.clash-verge-buty.dev",
-  mainExe: "clash-verge-buty.exe",
-  serviceName: "clash-verge-buty-service",
-  serviceDisplayName: "Clash Verge Buty Service",
-  serviceCrate: "clash-verge-buty-service-src",
-  serviceExe: "clash-verge-buty-service.exe",
-  serviceInstallExe: "clash-verge-buty-service-install.exe",
-  serviceUninstallExe: "clash-verge-buty-service-uninstall.exe",
-  firewallHelperExe: "clash-verge-buty-firewall-helper.exe",
-  registryKey: "SOFTWARE\\\\clash-verge-buty",
+  packageName: "clash-astra",
+  displayName: "Clash Astra",
+  identifier: "io.github.clash-astra",
+  devIdentifier: "io.github.clash-astra.dev",
+  mainExe: "clash-astra.exe",
+  serviceName: "clash-astra-service",
+  serviceDisplayName: "Clash Astra Service",
+  serviceCrate: "clash-astra-service-src",
+  serviceExe: "clash-astra-service.exe",
+  serviceInstallExe: "clash-astra-service-install.exe",
+  serviceUninstallExe: "clash-astra-service-uninstall.exe",
+  firewallHelperExe: "clash-astra-firewall-helper.exe",
+  registryKey: "SOFTWARE\\\\clash-astra",
+  repository: "https://github.com/CarterLeeAlt/Clash-Astra",
 };
 
 const errors = [];
@@ -37,6 +38,12 @@ expectEqual(
   expected.displayName,
   "package.json.description"
 );
+expectEqual(packageJson.homepage, expected.repository, "package.json.homepage");
+expectEqual(
+  packageJson.repository,
+  `${expected.repository}.git`,
+  "package.json.repository"
+);
 expectEqual(
   packageJson.metadata?.productName,
   expected.displayName,
@@ -51,6 +58,11 @@ expectEqual(
   tauriConfig.package?.productName,
   expected.displayName,
   "src-tauri/tauri.conf.json package.productName"
+);
+expectEqual(
+  tauriConfig.package?.version,
+  packageJson.version,
+  "src-tauri/tauri.conf.json package.version"
 );
 expectEqual(
   tauriConfig.tauri?.bundle?.identifier,
@@ -82,6 +94,27 @@ expectEqual(
   expected.displayName,
   "src-tauri/Cargo.toml package.description"
 );
+expectEqual(
+  cargoField("repository"),
+  `${expected.repository}.git`,
+  "src-tauri/Cargo.toml package.repository"
+);
+expectEqual(
+  cargoField("default-run"),
+  expected.packageName,
+  "src-tauri/Cargo.toml package.default-run"
+);
+
+const watchdogCargoText = await read("src-tauri/watchdog/Cargo.toml");
+const watchdogPackage =
+  watchdogCargoText.match(/^\[package\]\r?\n([\s\S]*?)\r?\n(?=\[)/m)?.[1] ?? "";
+const watchdogField = (name) =>
+  watchdogPackage.match(new RegExp(`^${name}\\s*=\\s*"([^"]*)"`, "m"))?.[1];
+expectEqual(
+  watchdogField("name"),
+  "clash-astra-watchdog",
+  "src-tauri/watchdog/Cargo.toml package.name"
+);
 
 const serviceCargoText = await read("src-tauri/windows-service-src/Cargo.toml");
 const serviceCargoPackage =
@@ -98,12 +131,13 @@ const requiredSourceFragments = [
   ["src-tauri/src/utils/dirs.rs", `"${expected.identifier}"`],
   ["src-tauri/src/utils/dirs.rs", `"${expected.devIdentifier}"`],
   ["src-tauri/watchdog/src/main.rs", `"${expected.identifier}"`],
+  ["src-tauri/watchdog/build.rs", `"clash-astra-watchdog.exe"`],
   [
-    "src-tauri/windows-service-src/src/bin/clash-verge-buty-service.rs",
+    "src-tauri/windows-service-src/src/bin/clash-astra-service.rs",
     `"${expected.identifier}"`,
   ],
   [
-    "src-tauri/windows-service-src/src/bin/clash-verge-buty-service.rs",
+    "src-tauri/windows-service-src/src/bin/clash-astra-service.rs",
     `"${expected.devIdentifier}"`,
   ],
   ["src-tauri/windows-service-src/src/lib.rs", `"${expected.serviceName}"`],
@@ -133,14 +167,23 @@ const requiredSourceFragments = [
     "src-tauri/vendor-crates/sysproxy-rs/src/windows.rs",
     `"${expected.registryKey}"`,
   ],
-  ["src-tauri/src/config/clash.rs", '"clash-verge-buty"'],
+  ["src-tauri/src/config/clash.rs", '"clash-astra"'],
   [
     "src/features/settings/components/mods/tun-viewer.tsx",
-    'placeholder="clash-verge-buty"',
+    'placeholder="clash-astra"',
   ],
+  ["src-tauri/src/watchdog_protocol.rs", '"clash-astra-watchdog.exe"'],
+  ["src-tauri/src/watchdog_protocol.rs", '"--clash-astra-watchdog-child"'],
+  ["src-tauri/src/utils/server.rs", '"Local\\\\clash-astra-singleton"'],
   ["scripts/build/normalize-main-exe.mjs", `"${expected.mainExe}"`],
-  ["scripts/release/portable.mjs", 'const MACHINE_NAME = "clash-verge-buty";'],
+  [
+    "scripts/build/build-watchdog.mjs",
+    `"${expected.mainExe.replace(".exe", "-watchdog.exe")}"`,
+  ],
+  ["scripts/release/portable.mjs", 'const MACHINE_NAME = "clash-astra";'],
   ["scripts/sidecars/prepare-runtime.mjs", `"${expected.serviceExe}"`],
+  ["src/services/ipc/service.ts", `"${expected.serviceName}"`],
+  ["src/features/settings/SettingsPage.tsx", expected.repository],
 ];
 
 for (const [relativePath, fragment] of requiredSourceFragments) {
@@ -150,12 +193,16 @@ for (const [relativePath, fragment] of requiredSourceFragments) {
   }
 }
 
+// portable.mjs 与 prepare-runtime.mjs 的清理列表必须保留旧名，故不参与旧名残留检查。
 const buildAndCiFiles = [
   "scripts/build/normalize-main-exe.mjs",
-  "scripts/release/portable.mjs",
+  "scripts/build/build-watchdog.mjs",
+  "scripts/verify/test-watchdog.ps1",
   ".github/workflows/release-windows.yml",
 ];
 const legacyPatterns = [
+  ["clash-verge-buty", /clash-verge-buty/],
+  ["Clash Verge Buty", /Clash Verge Buty/],
   ["Clash_Verge_Buty", /Clash_Verge_Buty/],
   ["Clash-Verge-Buty", /Clash-Verge-Buty/],
   ["io.github.clash-verge-buty.data", /io\.github\.clash-verge-buty\.data/],
@@ -167,6 +214,19 @@ for (const relativePath of buildAndCiFiles) {
     if (pattern.test(text)) {
       errors.push(`${relativePath}: uses legacy name ${label}`);
     }
+  }
+}
+
+const linkFiles = [
+  "package.json",
+  "src-tauri/Cargo.toml",
+  "src/features/settings/SettingsPage.tsx",
+];
+const legacyRepository = /CarterLeeAlt\/Clash-Verge-Buty/;
+for (const relativePath of linkFiles) {
+  const text = await read(relativePath);
+  if (legacyRepository.test(text)) {
+    errors.push(`${relativePath}: uses legacy repository URL`);
   }
 }
 

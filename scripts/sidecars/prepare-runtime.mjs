@@ -355,16 +355,20 @@ async function resolveResource(binInfo) {
  * copy local windows service binaries to resources dir
  */
 const WINDOWS_SERVICE_BINARY_FILES = [
-  "clash-verge-buty-service.exe",
-  "clash-verge-buty-service-install.exe",
-  "clash-verge-buty-service-uninstall.exe",
-  "clash-verge-buty-firewall-helper.exe",
+  "clash-astra-service.exe",
+  "clash-astra-service-install.exe",
+  "clash-astra-service-uninstall.exe",
+  "clash-astra-firewall-helper.exe",
 ];
 const OBSOLETE_WINDOWS_SERVICE_BINARY_FILES = [
   "clash-verge-service.exe",
   "install-service.exe",
   "uninstall-service.exe",
   "firewall-helper.exe",
+  "clash-verge-buty-service.exe",
+  "clash-verge-buty-service-install.exe",
+  "clash-verge-buty-service-uninstall.exe",
+  "clash-verge-buty-firewall-helper.exe",
 ];
 
 let windowsServiceBuildPromise = null;

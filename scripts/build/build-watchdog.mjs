@@ -26,13 +26,13 @@ const source = path.join(
   "watchdog",
   "target",
   ...parts,
-  "clash-verge-buty-watchdog.exe"
+  "clash-astra-watchdog.exe"
 );
 const destination = path.join(
   "src-tauri",
   "target",
   ...parts,
-  "clash-verge-buty-watchdog.exe"
+  "clash-astra-watchdog.exe"
 );
 if (!existsSync(source))
   throw new Error(`Watchdog binary not found: ${source}`);

@@ -6,7 +6,7 @@ import { getOctokit, context } from "@actions/github";
 
 const target = process.argv.slice(2)[0];
 
-const MACHINE_NAME = "clash-verge-buty";
+const MACHINE_NAME = "clash-astra";
 const OUTPUT_DIR = path.join("artifacts", "portable");
 
 const ARCH_MAP = {
@@ -64,7 +64,7 @@ async function resolvePortable() {
 
   console.log("[INFO]: target/release exe files:", releaseExeFiles);
 
-  const portableExeName = "clash-verge-buty.exe";
+  const portableExeName = "clash-astra.exe";
   const mainExeSource = releaseExeFiles.find(
     (name) => name.toLowerCase() === portableExeName
   );
@@ -74,7 +74,7 @@ async function resolvePortable() {
     );
   }
 
-  const watchdogExeName = "clash-verge-buty-watchdog.exe";
+  const watchdogExeName = "clash-astra-watchdog.exe";
   const watchdogPath = path.join(releaseDir, watchdogExeName);
   if (
     !(await fs.pathExists(watchdogPath)) ||
@@ -110,6 +110,10 @@ async function resolvePortable() {
     "install-service.exe",
     "uninstall-service.exe",
     "firewall-helper.exe",
+    "clash-verge-buty-service.exe",
+    "clash-verge-buty-service-install.exe",
+    "clash-verge-buty-service-uninstall.exe",
+    "clash-verge-buty-firewall-helper.exe",
   ];
   for (const name of obsoleteResourceNames) {
     if (await fs.pathExists(path.join(resourcesPath, name))) {

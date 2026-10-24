@@ -4,12 +4,12 @@ $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not $WorkDir) { $WorkDir = Join-Path $root ('.tmp\watchdog-test-' + [guid]::NewGuid().ToString('N')) }
 $WorkDir = [IO.Path]::GetFullPath($WorkDir)
 if (-not $WorkDir.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Test output must be inside the workspace' }
-if (-not $WatchdogPath) { $WatchdogPath = Join-Path $root 'src-tauri\watchdog\target\x86_64-pc-windows-msvc\release\clash-verge-buty-watchdog.exe' }
+if (-not $WatchdogPath) { $WatchdogPath = Join-Path $root 'src-tauri\watchdog\target\x86_64-pc-windows-msvc\release\clash-astra-watchdog.exe' }
 if (Test-Path $WorkDir) { throw "Test directory must be new: $WorkDir" }
 New-Item -ItemType Directory -Path $WorkDir | Out-Null
 & rustc --edition 2021 "$root\src-tauri\watchdog\test-fixtures\gui.rs" -o "$WorkDir\fixture.exe"
 if ($LASTEXITCODE -ne 0) { throw 'fixture compile failed' }
-$helper = Join-Path $WorkDir 'clash-verge-buty-watchdog.exe'
+$helper = Join-Path $WorkDir 'clash-astra-watchdog.exe'
 Copy-Item -LiteralPath $WatchdogPath -Destination $helper
 $fixture = Join-Path $WorkDir 'fixture.exe'
 function Start-Case([string]$mode, [string]$name) {
@@ -35,7 +35,7 @@ foreach ($mode in 'clean','retry-once','restart','fail') {
     $exit = if ($mode -eq 'fail') { 7 } else { 0 }
     if ($count -ne $expected -or $case.Proc.ExitCode -ne $exit) { throw "failed $mode count=$count exit=$($case.Proc.ExitCode)" }
     $args = Get-Content (Join-Path $case.Dir 'args.txt')
-    if ($args[-1] -ne '--clash-verge-watchdog-child' -or $args[-2] -ne 'path with spaces\') { throw "arguments changed: $mode" }
+    if ($args[-1] -ne '--clash-astra-watchdog-child' -or $args[-2] -ne 'path with spaces\') { throw "arguments changed: $mode" }
     Write-Output "PASS $mode"
 }
 $held = Start-Case 'hold' 'singleton'

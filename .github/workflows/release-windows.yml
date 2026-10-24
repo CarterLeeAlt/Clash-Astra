@@ -136,7 +136,7 @@ jobs:
           $inTarget = $false
           for ($i = 0; $i -lt $lines.Count; $i++) {
             if ($lines[$i] -match '^\[\[package\]\]') { $inTarget = $false; continue }
-            if ($lines[$i] -match '^name = "clash-verge-buty"') { $inTarget = $true; continue }
+            if ($lines[$i] -match '^name = "clash-astra"') { $inTarget = $true; continue }
             if ($inTarget -and $lines[$i] -match '^\s*version\s*=') {
               $lines[$i] = 'version = "' + $env:VERSION + '"'
               $inTarget = $false
@@ -182,7 +182,7 @@ jobs:
           cargo build --manifest-path src-tauri/windows-service-src/Cargo.toml --release --target ${{ matrix.target }}
           New-Item -ItemType Directory -Force -Path src-tauri/local-binaries/windows-service-bin | Out-Null
           $svcOut = "src-tauri/windows-service-src/target/${{ matrix.target }}/release"
-          $need = @("clash-verge-buty-service.exe", "clash-verge-buty-service-install.exe", "clash-verge-buty-service-uninstall.exe", "clash-verge-buty-firewall-helper.exe")
+          $need = @("clash-astra-service.exe", "clash-astra-service-install.exe", "clash-astra-service-uninstall.exe", "clash-astra-firewall-helper.exe")
           foreach ($n in $need) {
             $src = Join-Path $svcOut $n
             if (-not (Test-Path $src)) { throw "missing service binary: $src" }
@@ -241,11 +241,11 @@ jobs:
         run: |
           cargo build --manifest-path src-tauri/watchdog/Cargo.toml --release --target ${{ matrix.target }}
           if ($LASTEXITCODE -ne 0) { throw "watchdog build failed" }
-          $watchdogSource = "src-tauri/watchdog/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe"
+          $watchdogSource = "src-tauri/watchdog/target/${{ matrix.target }}/release/clash-astra-watchdog.exe"
           $releaseDir = "src-tauri/target/${{ matrix.target }}/release"
           if (-not (Test-Path -LiteralPath $watchdogSource -PathType Leaf)) { throw "missing watchdog binary: $watchdogSource" }
           New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-          Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "clash-verge-buty-watchdog.exe") -Force
+          Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "clash-astra-watchdog.exe") -Force
 
       - name: Normalize main executable name
         shell: pwsh
@@ -264,8 +264,8 @@ jobs:
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           if (-not $signtool) { throw "signtool.exe not found" }
           $files = @(
-            "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe",
+            "src-tauri/target/${{ matrix.target }}/release/clash-astra.exe",
+            "src-tauri/target/${{ matrix.target }}/release/clash-astra-watchdog.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
@@ -286,7 +286,7 @@ jobs:
           project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-verge-buty.exe
+          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-astra.exe
           output-artifact-directory: src-tauri/target/${{ matrix.target }}/release
 
       - name: Sign Windows watchdog (SignPath)
@@ -298,7 +298,7 @@ jobs:
           project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe
+          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-astra-watchdog.exe
           output-artifact-directory: src-tauri/target/${{ matrix.target }}/release
 
       - name: OSSign signing placeholder
@@ -313,8 +313,8 @@ jobs:
         run: |
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           $files = @(
-            "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-verge-buty-watchdog.exe",
+            "src-tauri/target/${{ matrix.target }}/release/clash-astra.exe",
+            "src-tauri/target/${{ matrix.target }}/release/clash-astra-watchdog.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
@@ -346,8 +346,8 @@ jobs:
           # portable.mjs 在可签名构建（UNSIGNED_BUILD=0）时不加 _unsigned 后缀，
           # 因此这里必须按签名状态推导期望名，否则启用签名后必定找不到产物
           $unsignedSuffix = if ("${{ steps.sign_mode.outputs.can_sign }}" -eq "true") { "" } else { "_unsigned" }
-          $expectedPortable = "clash-verge-buty_${env:VERSION}_x64_portable${unsignedSuffix}.zip"
-          $expectedSource = "clash-verge-buty_${env:VERSION}_source.zip"
+          $expectedPortable = "clash-astra_${env:VERSION}_x64_portable${unsignedSuffix}.zip"
+          $expectedSource = "clash-astra_${env:VERSION}_source.zip"
 
           $portableCandidates = Get-ChildItem . -Recurse -File -Filter "*.zip" | Where-Object { $_.Name -eq $expectedPortable }
           if ($portableCandidates.Count -ne 1) {
@@ -384,9 +384,9 @@ jobs:
         run: |
           # 同时覆盖签名与未签名两种命名，切换签名状态后也能清掉上一版残留
           $assetsToDelete = @(
-            "clash-verge-buty_${env:VERSION}_x64_portable.zip",
-            "clash-verge-buty_${env:VERSION}_x64_portable_unsigned.zip",
-            "clash-verge-buty_${env:VERSION}_source.zip"
+            "clash-astra_${env:VERSION}_x64_portable.zip",
+            "clash-astra_${env:VERSION}_x64_portable_unsigned.zip",
+            "clash-astra_${env:VERSION}_source.zip"
           )
           gh release view "${env:TAG_NAME}" --json id *> $null
           if ($LASTEXITCODE -ne 0) {
@@ -415,8 +415,8 @@ jobs:
           generate_release_notes: true
           # 用通配符覆盖签名与未签名两种便携包命名
           files: |
-            artifacts/staging/release/clash-verge-buty_${{ env.VERSION }}_x64_portable*.zip
-            artifacts/staging/release/clash-verge-buty_${{ env.VERSION }}_source.zip
+            artifacts/staging/release/clash-astra_${{ env.VERSION }}_x64_portable*.zip
+            artifacts/staging/release/clash-astra_${{ env.VERSION }}_source.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

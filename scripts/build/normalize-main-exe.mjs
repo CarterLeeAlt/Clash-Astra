@@ -32,7 +32,7 @@ if (!existsSync(releaseDir)) {
   throw new Error(`Release directory not found: ${releaseDir}`);
 }
 
-const destinationName = "clash-verge-buty.exe";
+const destinationName = "clash-astra.exe";
 const entries = readdirSync(releaseDir);
 const findEntry = (name) =>
   entries.find((entry) => entry.toLowerCase() === name.toLowerCase());
@@ -58,10 +58,7 @@ if (sourceName === destinationName) {
 
 const source = path.join(releaseDir, sourceName);
 const destination = path.join(releaseDir, destinationName);
-const temporary = path.join(
-  releaseDir,
-  `.clash-verge-buty.${process.pid}.rename`
-);
+const temporary = path.join(releaseDir, `.clash-astra.${process.pid}.rename`);
 
 // Windows 文件系统不区分大小写，直接改大小写可能被当成同名文件；
 // 先移到临时名，再落到目标名。目标位置可能还放着上一次的规范化产物。
