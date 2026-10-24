@@ -19,7 +19,12 @@ import {
   TextField,
 } from "@mui/material";
 import { createProfile, patchProfile } from "@/services/cmds";
-import { BaseDialog, formatNoticeMessage, Notice, Switch } from "@/components/base";
+import {
+  BaseDialog,
+  formatNoticeMessage,
+  Notice,
+  Switch,
+} from "@/components/base";
 import { version } from "@root/package.json";
 import { FileInput } from "./file-input";
 

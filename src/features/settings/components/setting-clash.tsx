@@ -10,7 +10,12 @@ import {
   Tooltip,
 } from "@mui/material";
 import { ArrowForward, Settings, Shuffle } from "@mui/icons-material";
-import { DialogRef, formatNoticeMessage, Notice, Switch } from "@/components/base";
+import {
+  DialogRef,
+  formatNoticeMessage,
+  Notice,
+  Switch,
+} from "@/components/base";
 import { useClash } from "@/hooks/use-clash";
 import { GuardState } from "./mods/guard-state";
 import { ClashPortViewer } from "./mods/clash-port-viewer";

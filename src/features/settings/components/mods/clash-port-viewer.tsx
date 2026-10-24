@@ -3,7 +3,12 @@ import { useTranslation } from "react-i18next";
 import { useLockFn } from "ahooks";
 import { List, ListItem, ListItemText, TextField } from "@mui/material";
 import { useClashInfo } from "@/hooks/use-clash";
-import { BaseDialog, DialogRef, formatNoticeMessage, Notice } from "@/components/base";
+import {
+  BaseDialog,
+  DialogRef,
+  formatNoticeMessage,
+  Notice,
+} from "@/components/base";
 import { useVerge } from "@/hooks/use-verge";
 
 export const ClashPortViewer = forwardRef<DialogRef>((props, ref) => {

@@ -11,7 +11,12 @@ import {
 } from "@mui/material";
 import { useVerge } from "@/hooks/use-verge";
 import { defaultTheme, defaultDarkTheme } from "@/pages/_theme";
-import { BaseDialog, DialogRef, formatNoticeMessage, Notice } from "@/components/base";
+import {
+  BaseDialog,
+  DialogRef,
+  formatNoticeMessage,
+  Notice,
+} from "@/components/base";
 
 export const ThemeViewer = forwardRef<DialogRef>((props, ref) => {
   const { t } = useTranslation();

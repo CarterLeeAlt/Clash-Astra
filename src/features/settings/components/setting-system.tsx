@@ -1,9 +1,8 @@
-import useSWR from "swr";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { IconButton, Tooltip } from "@mui/material";
 import { PrivacyTipRounded, Settings, InfoRounded } from "@mui/icons-material";
-import { checkService, isElevated } from "@/services/cmds";
+import { isElevated } from "@/services/cmds";
 import { useVerge } from "@/hooks/use-verge";
 import { DialogRef, Notice, Switch } from "@/components/base";
 import { SettingList, SettingItem } from "./mods/setting-comp";
@@ -11,6 +10,7 @@ import { GuardState } from "./mods/guard-state";
 import { ServiceViewer } from "./mods/service-viewer";
 import { SysproxyViewer } from "./mods/sysproxy-viewer";
 import { TunViewer } from "./mods/tun-viewer";
+import { useServiceStatus } from "../use-service-status";
 import getSystem from "@/utils/get-system";
 
 interface Props {
@@ -31,15 +31,8 @@ const SettingSystem = ({ onError }: Props) => {
   const { verge, mutateVerge, patchVerge } = useVerge();
 
   // service mode
-  const { data: serviceStatus, mutate: mutateServiceStatus } = useSWR(
-    isWIN ? "checkService" : null,
-    checkService,
-    {
-      revalidateIfStale: false,
-      shouldRetryOnError: false,
-      focusThrottleInterval: 5000, // 5s
-    }
-  );
+  const { data: serviceStatus, mutate: mutateServiceStatus } =
+    useServiceStatus(isWIN);
 
   const serviceRef = useRef<DialogRef>(null);
   const sysproxyRef = useRef<DialogRef>(null);

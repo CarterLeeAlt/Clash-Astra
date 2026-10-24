@@ -3,7 +3,12 @@ import { useLockFn } from "ahooks";
 import { useTranslation } from "react-i18next";
 import { List, ListItem, ListItemText, TextField } from "@mui/material";
 import { useClashInfo } from "@/hooks/use-clash";
-import { BaseDialog, DialogRef, formatNoticeMessage, Notice } from "@/components/base";
+import {
+  BaseDialog,
+  DialogRef,
+  formatNoticeMessage,
+  Notice,
+} from "@/components/base";
 
 export const ControllerViewer = forwardRef<DialogRef>((props, ref) => {
   const { t } = useTranslation();

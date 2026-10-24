@@ -15,6 +15,7 @@ import {
 import { DragIndicator, FeaturedPlayListRounded } from "@mui/icons-material";
 import { viewProfile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
+import { parseExpire } from "../format";
 import { EditorViewer } from "./editor-viewer";
 import { PROFILE_CARD_TITLE_FONT_SIZE, ProfileBox } from "./profile-box";
 import { LogViewer } from "./log-viewer";
@@ -373,8 +374,3 @@ export const ProfileMore = (props: Props) => {
     </>
   );
 };
-
-function parseExpire(expire?: number) {
-  if (!expire) return "-";
-  return dayjs(expire * 1000).format("YYYY-MM-DD");
-}

@@ -1,5 +1,4 @@
 import dayjs from "dayjs";
-import { mutate } from "swr";
 import { useEffect, useState } from "react";
 import { useLockFn } from "ahooks";
 import { useRecoilState } from "recoil";
@@ -20,6 +19,8 @@ import { RefreshRounded, DragIndicator } from "@mui/icons-material";
 import { atomLoadingCache } from "@/services/states";
 import { updateProfile, deleteProfile, viewProfile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
+import { invalidateProfiles } from "@/shared/query/invalidate";
+import { parseExpire } from "../format";
 import { EditorViewer } from "./editor-viewer";
 import { PROFILE_CARD_TITLE_FONT_SIZE, ProfileBox } from "./profile-box";
 import parseTraffic from "@/utils/parse-traffic";
@@ -141,7 +142,7 @@ export const ProfileItem = (props: Props) => {
 
     try {
       await updateProfile(itemData.uid, option);
-      mutate("getProfiles");
+      invalidateProfiles();
     } catch (err: any) {
       const errmsg = formatNoticeMessage(err).replace(
         /error sending request for url (\S+?): /,
@@ -157,7 +158,7 @@ export const ProfileItem = (props: Props) => {
     setAnchorEl(null);
     try {
       await deleteProfile(itemData.uid);
-      mutate("getProfiles");
+      invalidateProfiles();
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
     }
@@ -389,9 +390,4 @@ function parseUrl(url?: string) {
   const regex = /https?:\/\/(.+?)\//;
   const result = url.match(regex);
   return result ? result[1] : "";
-}
-
-function parseExpire(expire?: number) {
-  if (!expire) return "-";
-  return dayjs(expire * 1000).format("YYYY-MM-DD");
 }

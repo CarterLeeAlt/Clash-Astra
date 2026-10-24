@@ -1,10 +1,8 @@
-import useSWR from "swr";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useLockFn } from "ahooks";
 import { useTranslation } from "react-i18next";
 import { Button, Stack, Typography } from "@mui/material";
 import {
-  checkService,
   installService,
   uninstallService,
   patchVergeConfig,
@@ -15,6 +13,7 @@ import {
   formatNoticeMessage,
   Notice,
 } from "@/components/base";
+import { useServiceStatus } from "../../use-service-status";
 
 interface Props {
   enable: boolean;
@@ -46,15 +45,7 @@ export const ServiceViewer = forwardRef<DialogRef, Props>((props, ref) => {
     return () => clearTimeout(timer);
   }, [isPending]);
 
-  const { data: status, mutate: mutateCheck } = useSWR(
-    "checkService",
-    checkService,
-    {
-      revalidateIfStale: false,
-      shouldRetryOnError: false,
-      focusThrottleInterval: 5000, // 5s
-    }
-  );
+  const { data: status, mutate: mutateCheck } = useServiceStatus();
 
   useImperativeHandle(ref, () => ({
     open: () => setOpen(true),

@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { Button, ButtonGroup, Tooltip } from "@mui/material";
-import { checkService } from "@/services/cmds";
 import { useVerge } from "@/hooks/use-verge";
 import getSystem from "@/utils/get-system";
-import useSWR from "swr";
+import { useServiceStatus } from "../../use-service-status";
 
 const isWIN = getSystem() === "windows";
 
@@ -17,14 +16,7 @@ export const StackModeSwitch = (props: Props) => {
   const { verge } = useVerge();
   const { enable_service_mode } = verge ?? {};
   // service mode
-  const { data: serviceStatus } = useSWR(
-    isWIN ? "checkService" : null,
-    checkService,
-    {
-      revalidateIfStale: false,
-      shouldRetryOnError: false,
-    }
-  );
+  const { data: serviceStatus } = useServiceStatus(isWIN);
 
   const { t } = useTranslation();
 

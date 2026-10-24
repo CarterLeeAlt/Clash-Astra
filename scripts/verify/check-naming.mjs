@@ -135,7 +135,7 @@ const requiredSourceFragments = [
   ],
   ["src-tauri/src/config/clash.rs", '"clash-verge-buty"'],
   [
-    "src/components/setting/mods/tun-viewer.tsx",
+    "src/features/settings/components/mods/tun-viewer.tsx",
     'placeholder="clash-verge-buty"',
   ],
   ["scripts/build/normalize-main-exe.mjs", `"${expected.mainExe}"`],
