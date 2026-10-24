@@ -38,6 +38,9 @@ pub(crate) fn register_frontend_ready_listener(app_handle: &AppHandle, show_when
 
         let show_when_ready = FRONTEND_SHOW_WHEN_READY.load(Ordering::SeqCst);
         let show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
+
+        #[cfg(target_os = "windows")]
+        crate::core::win_firewall::notify_lan_firewall_if_needed();
         log::trace!(
             "frontend ready received, show_when_ready={}, show_request_id={}",
             show_when_ready,

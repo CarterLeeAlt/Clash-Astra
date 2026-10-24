@@ -67,6 +67,10 @@ const SettingClash = ({ onError }: Props) => {
       await patchClash({ "allow-lan": enabled });
     } catch (err) {
       if (isWIN) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (/administrator approval|was denied|UAC/i.test(message)) {
+          throw new Error(t("LAN Firewall Admin Required"));
+        }
         throw new Error(t("LAN Firewall Error"));
       }
       throw err;

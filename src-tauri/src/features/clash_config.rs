@@ -86,6 +86,7 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
             || port.is_some()
             || patch.get("secret").is_some()
             || patch.get("external-controller").is_some()
+            || allow_lan_target.is_some()
         {
             Config::generate()?;
             core_restart_attempted = true;
@@ -110,11 +111,6 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
             handle::Handle::emit_log("info", "[tun] tun config changed, reload core config");
             core_config_update_attempted = true;
             update_core_config().await?;
-        }
-
-        if allow_lan_target.is_some() {
-            core_config_update_attempted = true;
-            clash_api::patch_configs(&patch).await?;
         }
 
         Config::runtime().draft().patch_config(patch);
