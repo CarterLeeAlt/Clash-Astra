@@ -45,22 +45,44 @@ pub struct TestDelayResult {
     pub proxy: Option<String>,
 }
 
+/// 站点检测快照：结果 + 最近一次结果写入时间（epoch 毫秒）。
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteTestSnapshot {
+    pub results: HashMap<String, TestDelayResult>,
+    pub updated_at: u64,
+}
+
+/// 单个站点完成时推送的事件。
+#[derive(Debug, Clone, Serialize)]
+pub struct SiteTestResultEvent {
+    pub url: String,
+    pub result: TestDelayResult,
+}
+
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 /// 最近一轮自动延迟测试的低值结果（节点名 -> 延迟毫秒）。
 /// 每节点两并发取低值，mihomo history 的写入顺序不保证，展示以此快照为准。
 static LATEST_AUTO_DELAY: Lazy<Mutex<HashMap<String, u32>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-/// 最近一轮站点检测结果（URL -> 结果）。
-static LATEST_SITE_TEST: Lazy<Mutex<HashMap<String, TestDelayResult>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+/// 最近一轮站点检测快照。
+static LATEST_SITE_TEST: Lazy<Mutex<SiteTestSnapshot>> =
+    Lazy::new(|| Mutex::new(SiteTestSnapshot::default()));
 
 /// 读取最近一轮自动延迟测试的低值结果。
 pub fn latest_auto_delay_results() -> HashMap<String, u32> {
     LATEST_AUTO_DELAY.lock().clone()
 }
 
-/// 读取最近一轮站点检测结果。
-pub fn latest_site_test_results() -> HashMap<String, TestDelayResult> {
+/// 读取最近一轮站点检测快照。
+pub fn latest_site_test_snapshot() -> SiteTestSnapshot {
     LATEST_SITE_TEST.lock().clone()
 }
 
@@ -217,6 +239,12 @@ pub async fn run_auto_site_test() -> Result<()> {
         return Ok(());
     }
 
+    {
+        let mut snapshot = LATEST_SITE_TEST.lock();
+        snapshot.results.clear();
+        snapshot.updated_at = now_millis();
+    }
+
     let semaphore = Arc::new(tokio::sync::Semaphore::new(CONCURRENCY));
     let mut set = tokio::task::JoinSet::new();
 
@@ -239,16 +267,31 @@ pub async fn run_auto_site_test() -> Result<()> {
     while let Some(joined) = set.join_next().await {
         match joined {
             Ok((url, result)) => {
+                let event = SiteTestResultEvent {
+                    url: url.clone(),
+                    result: result.clone(),
+                };
                 latest.insert(url, result);
+
+                {
+                    let mut snapshot = LATEST_SITE_TEST.lock();
+                    snapshot.results = latest.clone();
+                    snapshot.updated_at = now_millis();
+                }
+                crate::core::handle::Handle::notify_auto_site_test_result(&event);
             }
             Err(err) => log::warn!(target: "app", "auto site test task failed: {err}"),
         }
     }
 
     let measured = latest.len();
-    let snapshot = latest.clone();
-    *LATEST_SITE_TEST.lock() = latest;
-    crate::core::handle::Handle::notify_auto_site_test_results(&snapshot);
+    let snapshot = {
+        let mut guard = LATEST_SITE_TEST.lock();
+        guard.results = latest;
+        guard.updated_at = now_millis();
+        guard.clone()
+    };
+    crate::core::handle::Handle::notify_auto_site_test_results(&snapshot.results);
     log::info!(
         target: "app",
         "auto site test finished: {measured} url(s) with results"

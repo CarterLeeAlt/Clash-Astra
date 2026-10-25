@@ -8,13 +8,14 @@ import {
   getAutoSiteTestResults,
   getWindowStyleConfig,
   reportFrontendError,
+  type ITestDelayResult,
 } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { queryKeys } from "@/shared/query/keys";
 import { invalidateClashRuntime } from "@/shared/query/invalidate";
 import {
   setSiteTestResults,
-  type SiteTestResults,
+  updateSiteTestResult,
 } from "@/features/test/site-test-results";
 import getSystem from "@/utils/get-system";
 
@@ -76,7 +77,18 @@ export const useAppEvents = () => {
     // 站点检测结果放在全局：切页时页面卸载也不会丢，回来直接读缓存。
     // 先注册监听再拉快照，避免两者之间到达的结果被丢掉。
     unlistenTasks.push(
-      listen<SiteTestResults>(
+      listen<{ url: string; result: ITestDelayResult }>(
+        "verge://auto-site-test-result",
+        ({ payload }) => {
+          if (payload?.url && payload.result) {
+            updateSiteTestResult(payload.url, payload.result);
+          }
+        }
+      )
+    );
+
+    unlistenTasks.push(
+      listen<Record<string, ITestDelayResult>>(
         "verge://auto-site-test-results",
         ({ payload }) => {
           setSiteTestResults(payload ?? {});
@@ -85,8 +97,13 @@ export const useAppEvents = () => {
     );
 
     getAutoSiteTestResults()
-      .then((results) => {
-        if (results) setSiteTestResults(results);
+      .then((snapshot) => {
+        if (snapshot) {
+          setSiteTestResults(
+            snapshot.results ?? {},
+            snapshot.updatedAt || Date.now()
+          );
+        }
       })
       .catch(() => undefined);
 

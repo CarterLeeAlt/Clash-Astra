@@ -27,7 +27,9 @@ import GrokIcon from "@/assets/image/grok.png";
 import { normalizeTestList } from "@/features/test/normalize";
 import { triggerAutoSiteTest } from "@/services/cmds";
 import {
-  getSiteTestResults,
+  clearSiteTestResults,
+  getFreshSiteTestResults,
+  SITE_TEST_RESULT_TTL_MS,
   subscribeSiteTestResults,
   type SiteTestResults,
 } from "@/features/test/site-test-results";
@@ -195,11 +197,63 @@ const TestPage = () => {
 
   const viewerRef = useRef<TestViewerRef>(null);
   const [testing, setTesting] = useState(false);
-  const [autoResults, setAutoResults] =
-    useState<SiteTestResults>(getSiteTestResults);
+  const [pending, setPending] = useState<Set<string>>(() => new Set());
+  const [resetToken, setResetToken] = useState(0);
+  const [autoResults, setAutoResults] = useState<SiteTestResults>(() =>
+    getFreshSiteTestResults()
+  );
+  const [lastResultAt, setLastResultAt] = useState(() =>
+    Object.values(getFreshSiteTestResults()).reduce(
+      (latest, entry) => Math.max(latest, entry.at),
+      0
+    )
+  );
 
   // 站点检测结果由全局事件写入模块缓存，切页回来直接读缓存
-  useEffect(() => subscribeSiteTestResults(setAutoResults), []);
+  useEffect(
+    () =>
+      subscribeSiteTestResults((results) => {
+        setAutoResults({ ...results });
+        const latest = Object.values(results).reduce(
+          (value, entry) => Math.max(value, entry.at),
+          0
+        );
+        if (latest > 0) {
+          setLastResultAt((prev) => Math.max(prev, latest));
+        }
+      }),
+    []
+  );
+
+  // 结果到齐后清掉对应卡片的等待状态
+  useEffect(() => {
+    if (pending.size === 0) return;
+    setPending((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const url of Object.keys(autoResults)) {
+        if (next.delete(url)) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [autoResults]);
+
+  // 最后一次测试结果超过 2 分钟后，整页一起回到初始状态
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (testing) return;
+      if (
+        lastResultAt > 0 &&
+        Date.now() - lastResultAt >= SITE_TEST_RESULT_TTL_MS
+      ) {
+        clearSiteTestResults();
+        setLastResultAt(0);
+        setPending(new Set());
+        setResetToken((token) => token + 1);
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [testing, lastResultAt]);
 
   return (
     <BasePage
@@ -212,6 +266,12 @@ const TestPage = () => {
             disabled={testing}
             onClick={async () => {
               if (testing) return;
+              const urls = Array.from(
+                new Set(testList.map((item) => item.url))
+              );
+              clearSiteTestResults();
+              setLastResultAt(0);
+              setPending(new Set(urls));
               setTesting(true);
               try {
                 await Promise.race([
@@ -227,6 +287,7 @@ const TestPage = () => {
                 Notice.error(formatNoticeMessage(err));
               } finally {
                 setTesting(false);
+                setPending(new Set());
               }
             }}
           >
@@ -262,7 +323,10 @@ const TestPage = () => {
                     <TestItem
                       id={item.uid}
                       itemData={item}
-                      autoResult={autoResults[item.url]}
+                      autoResult={autoResults[item.url]?.result}
+                      pending={pending.has(item.url)}
+                      resetToken={resetToken}
+                      onTested={() => setLastResultAt(Date.now())}
                       editable={editable}
                       onEdit={() => {
                         if (editable) {

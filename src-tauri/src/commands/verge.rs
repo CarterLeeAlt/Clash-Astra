@@ -21,11 +21,10 @@ pub async fn test_delay(url: String) -> CmdResult<feat::TestDelayResult> {
         }))
 }
 
-/// 最近一轮后台站点检测结果（URL -> 延迟/出口代理）
+/// 最近一轮站点检测快照（结果 + 更新时间）
 #[tauri::command]
-pub fn get_auto_site_test_results(
-) -> CmdResult<std::collections::HashMap<String, feat::TestDelayResult>> {
-    Ok(feat::latest_site_test_results())
+pub fn get_auto_site_test_results() -> CmdResult<feat::SiteTestSnapshot> {
+    Ok(feat::latest_site_test_snapshot())
 }
 
 /// 立即触发一轮站点检测（测试页 Test All 调用）

@@ -26,9 +26,12 @@ interface Props {
   id: string;
   itemData: IVergeTestItem;
   autoResult?: ITestDelayResult;
+  pending?: boolean;
+  resetToken?: number;
   editable?: boolean;
   onEdit: () => void;
   onDelete: (uid: string) => void;
+  onTested?: () => void;
 }
 
 // 站点卡片测的是 TCP 连接（含 TLS 首包），阈值按站点连接耗时定，
@@ -45,9 +48,12 @@ export const TestItem = (props: Props) => {
   const {
     itemData,
     autoResult,
+    pending = false,
+    resetToken = 0,
     editable = true,
     onEdit,
     onDelete: onDeleteItem,
+    onTested,
   } = props;
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: props.id });
@@ -67,10 +73,17 @@ export const TestItem = (props: Props) => {
   const onDelay = useCallback(async () => {
     setDelay(-2);
     setProxy(undefined);
-    const result = await cmdTestDelay(url);
-    setDelay(result.delay);
-    setProxy(result.proxy);
-  }, [url]);
+    try {
+      const result = await cmdTestDelay(url);
+      setDelay(result.delay);
+      setProxy(result.proxy);
+    } catch {
+      setDelay(10000);
+      setProxy(undefined);
+    } finally {
+      onTested?.();
+    }
+  }, [url, onTested]);
 
   const onEditTest = () => {
     setAnchorEl(null);
@@ -127,12 +140,31 @@ export const TestItem = (props: Props) => {
     };
   }, [proxy, delay]);
 
-  // 后端定时检测的结果直接覆盖卡片显示，与手动 Check 同一套字段
+  // Test All 运行中：每张卡片显示与代理延迟测试一致的等待动画
   useEffect(() => {
-    if (!autoResult) return;
-    setDelay(autoResult.delay);
-    setProxy(autoResult.proxy);
-  }, [autoResult]);
+    if (!pending) return;
+    setDelay(-2);
+    setProxy(undefined);
+  }, [pending]);
+
+  // 单个站点结果到达后显示；整页结果被清空时回到 Check
+  useEffect(() => {
+    if (pending) return;
+    if (autoResult) {
+      setDelay(autoResult.delay);
+      setProxy(autoResult.proxy);
+      return;
+    }
+    setDelay(-1);
+    setProxy(undefined);
+  }, [autoResult, pending]);
+
+  // 整页 2 分钟过期：清掉自动结果和手动 Check 的本地显示
+  useEffect(() => {
+    if (!resetToken) return;
+    setDelay(-1);
+    setProxy(undefined);
+  }, [resetToken]);
 
   return (
     <Box

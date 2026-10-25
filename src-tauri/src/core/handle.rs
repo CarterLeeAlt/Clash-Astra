@@ -66,6 +66,13 @@ impl Handle {
         }
     }
 
+    /// 单个站点完成时推送，前端逐张卡片更新。
+    pub fn notify_auto_site_test_result(event: &crate::feat::SiteTestResultEvent) {
+        if let Some(window) = Self::global().get_window() {
+            log_err!(window.emit("verge://auto-site-test-result", event));
+        }
+    }
+
     pub fn emit_log<T: Into<String>, M: Into<String>>(level: T, msg: M) {
         if let Some(window) = Self::global().get_window() {
             let event = AppLogEvent {
