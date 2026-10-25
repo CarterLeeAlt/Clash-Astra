@@ -61,7 +61,7 @@ const RuleItem = (props: Props) => {
         color="text.primary"
         sx={{
           flex: "none",
-          width: "260px",
+          width: "182px",
           mr: 2,
           overflow: "hidden",
           textOverflow: "ellipsis",
