@@ -96,7 +96,6 @@ export const ProxyItem = (props: Props) => {
                 }}
               >
                 {proxy.name}
-                {showType && proxy.now && ` - ${proxy.now}`}
               </span>
               {showType && !!proxy.provider && (
                 <TypeBox component="span">{proxy.provider}</TypeBox>

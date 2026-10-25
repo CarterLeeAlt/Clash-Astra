@@ -84,23 +84,6 @@ export const ProxyItemMini = (props: Props) => {
               marginTop: "4px",
             }}
           >
-            {proxy.now && (
-              <Typography
-                variant="body2"
-                component="div"
-                color="text.secondary"
-                sx={{
-                  display: "block",
-                  textOverflow: "ellipsis",
-                  wordBreak: "break-all",
-                  overflow: "hidden",
-                  whiteSpace: "nowrap",
-                  marginRight: "8px",
-                }}
-              >
-                {proxy.now}
-              </Typography>
-            )}
             {!!proxy.provider && (
               <TypeBox component="span">{proxy.provider}</TypeBox>
             )}

@@ -12,16 +12,16 @@ export const useProxyDelay = (proxy: IProxyItem, groupName: string) => {
     Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
 
   useEffect(() => {
-    delayManager.setListener(proxy.name, groupName, setDelay);
+    delayManager.setListener(proxy.name, setDelay);
 
     return () => {
-      delayManager.removeListener(proxy.name, groupName, setDelay);
+      delayManager.removeListener(proxy.name, setDelay);
     };
-  }, [proxy.name, groupName]);
+  }, [proxy.name]);
 
   useEffect(() => {
     if (!proxy) return;
-    setDelay(delayManager.getDelayFix(proxy, groupName));
+    setDelay(delayManager.getDelayFix(proxy));
   }, [proxy, groupName]);
 
   const onDelay = useLockFn(async () => {

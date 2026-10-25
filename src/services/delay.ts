@@ -1,6 +1,8 @@
 import { cmdGetProxyDelay } from "./cmds";
 
-const hashKey = (name: string, group: string) => `${group ?? ""}::${name}`;
+// 延迟是节点自身的属性：同一节点在不同分组里必须显示同一个值。
+// group 只用于组级通知和测试 URL，不参与缓存键。
+const cacheKey = (name: string) => name;
 
 // 所有出口（含 DIRECT/REJECT）统一使用组级 URL，未设置时用默认地址；
 // 只有同一地址下测出的延迟才可比较
@@ -44,19 +46,15 @@ class DelayManager {
     return this.urlMap.get(group);
   }
 
-  setListener(name: string, group: string, listener: (time: number) => void) {
-    const key = hashKey(name, group);
+  setListener(name: string, listener: (time: number) => void) {
+    const key = cacheKey(name);
     const listeners = this.listenerMap.get(key) ?? new Set();
     listeners.add(listener);
     this.listenerMap.set(key, listeners);
   }
 
-  removeListener(
-    name: string,
-    group: string,
-    listener?: (time: number) => void
-  ) {
-    const key = hashKey(name, group);
+  removeListener(name: string, listener?: (time: number) => void) {
+    const key = cacheKey(name);
     if (!listener) {
       this.listenerMap.delete(key);
       return;
@@ -101,7 +99,7 @@ class DelayManager {
   }
 
   setDelay(name: string, group: string, delay: number, silent = false) {
-    const key = hashKey(name, group);
+    const key = cacheKey(name);
     this.cache.set(key, [Date.now(), delay]);
     this.listenerMap.get(key)?.forEach((listener) => listener(delay));
     if (!silent) this.groupListenerMap.get(group)?.();
@@ -112,7 +110,7 @@ class DelayManager {
   }
 
   clearDelay(name: string, group: string, silent = false) {
-    const key = hashKey(name, group);
+    const key = cacheKey(name);
     this.cache.delete(key);
     this.listenerMap.get(key)?.forEach((listener) => listener(-1));
     if (!silent) this.groupListenerMap.get(group)?.();
@@ -146,10 +144,10 @@ class DelayManager {
     return this.isCurrentGroupCheck(group, task);
   }
 
-  getDelay(name: string, group: string) {
+  getDelay(name: string) {
     if (!name) return -1;
 
-    const result = this.cache.get(hashKey(name, group));
+    const result = this.cache.get(cacheKey(name));
     if (result && Date.now() - result[0] <= 18e5) {
       return result[1];
     }
@@ -162,10 +160,10 @@ class DelayManager {
   }
 
   /// 暂时修复provider的节点延迟排序的问题
-  getDelayFix(proxy: IProxyItem, group: string) {
+  getDelayFix(proxy: IProxyItem) {
     if (proxy.name === "REJECT") return DELAY_NOT_APPLICABLE;
 
-    const cachedDelay = this.getDelay(proxy.name, group);
+    const cachedDelay = this.getDelay(proxy.name);
     if (cachedDelay === DELAY_PENDING) return cachedDelay;
     // 本地缓存来自手动两并发低值或后端自动测试快照，优先于乱序的 history
     if (cachedDelay !== DELAY_UNKNOWN) {
