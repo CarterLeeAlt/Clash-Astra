@@ -61,7 +61,7 @@ const RuleItem = (props: Props) => {
         color="text.primary"
         sx={{
           flex: "none",
-          width: "182px",
+          width: "146px",
           mr: 2,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -79,7 +79,7 @@ const RuleItem = (props: Props) => {
         color="text.secondary"
         sx={{
           flex: "none",
-          width: "110px",
+          width: "132px",
           mr: 2,
           lineHeight: ROW_LINE_HEIGHT,
           userSelect: "text",
