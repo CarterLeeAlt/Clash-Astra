@@ -136,13 +136,16 @@ fn main() -> std::io::Result<()> {
         .expect("error while running tauri application");
 
     app.run(|app_handle, e| match e {
+        // 进程只经 shutdown_app 的清理线程调用 AppHandle::exit 退出（它直接 process::exit，
+        // 不经过这里）。事件循环自己请求退出时一律拦下：退出清理期间放行会让进程
+        // 在系统代理还原前就结束。
         tauri::RunEvent::ExitRequested { api, .. } => {
-            if !resolve::is_app_quitting() {
-                log::info!(target: "app", "app exit requested -> prevent_exit because app is not quitting");
-                api.prevent_exit();
-            } else {
-                log::info!(target: "app", "app exit requested -> allow because app is quitting");
-            }
+            log::info!(
+                target: "app",
+                "app exit requested -> prevent_exit, is_quitting={}",
+                resolve::is_app_quitting()
+            );
+            api.prevent_exit();
         }
         tauri::RunEvent::WindowEvent { label, event, .. } => {
             if label == "main" {
@@ -151,6 +154,15 @@ fn main() -> std::io::Result<()> {
                         resolve::on_main_window_destroyed(app_handle);
                     }
                     tauri::WindowEvent::CloseRequested { api, .. } => {
+                        // WebView2 浏览器进程退出后为恢复而重建窗口：放行关闭
+                        #[cfg(target_os = "windows")]
+                        if crate::window::webview_recovery::is_planned_recreate() {
+                            log::info!(
+                                target: "app",
+                                "main window close allowed for planned WebView2 recreate"
+                            );
+                            return;
+                        }
                         let is_quitting = resolve::is_app_quitting();
                         log::info!(
                             target: "app",
@@ -187,9 +199,14 @@ fn main() -> std::io::Result<()> {
                             return;
                         }
 
+                        // 退出清理在后台线程进行，窗口只隐藏不销毁，由清理线程结束进程
+                        api.prevent_close();
+                        if let Some(window) = app_handle.get_window("main") {
+                            let _ = window.hide();
+                        }
                         log::info!(
                             target: "app",
-                            "main window close allowed because app is quitting"
+                            "main window close requested while quitting -> hide, shutdown thread will exit"
                         );
                     }
                     tauri::WindowEvent::Focused(focused) => {

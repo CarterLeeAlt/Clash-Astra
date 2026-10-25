@@ -51,7 +51,7 @@ pub async fn set_window_size_locked(app_handle: tauri::AppHandle, locked: bool) 
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_window_style_config() -> CmdResult<resolve::WindowStyleConfig> {
     Ok(resolve::get_window_style_config())
 }

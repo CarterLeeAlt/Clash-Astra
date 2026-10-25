@@ -135,16 +135,7 @@ pub fn embed_server(app_handle: AppHandle) {
     let port = IVerge::get_singleton_port();
 
     tauri::async_runtime::spawn(async move {
-        // 先显式 bind，端口不可用时只记录日志，不 panic 整个 spawn 任务
         let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-        if let Err(err) = std::net::TcpListener::bind(addr) {
-            log::warn!(
-                target: "app",
-                "singleton listen server cannot bind port {port}: {err}"
-            );
-            return;
-        }
-
         let ping = warp::path!("commands" / "ping").map(move || "ok");
 
         let visible = warp::path!("commands" / "visible").map(move || {
@@ -154,7 +145,14 @@ pub fn embed_server(app_handle: AppHandle) {
         });
 
         let commands = ping.or(visible);
-        warp::serve(commands).run(([127, 0, 0, 1], port)).await;
+        // 用 try_bind：warp 的 run 绑定失败会 panic，release 是 panic=abort，会结束整个进程
+        match warp::serve(commands).try_bind_ephemeral(addr) {
+            Ok((_, server)) => server.await,
+            Err(err) => log::warn!(
+                target: "app",
+                "singleton listen server cannot bind port {port}: {err}"
+            ),
+        }
     });
 }
 

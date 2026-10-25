@@ -84,7 +84,7 @@ pub async fn open_web_url(url: String) -> CmdResult<()> {
         .map_err(|err| err.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_app_dir() -> CmdResult<String> {
     let app_home_dir = wrap_err!(dirs::app_home_dir())?
         .to_string_lossy()
@@ -123,7 +123,7 @@ pub async fn copy_icon_file(path: String, name: String) -> CmdResult<String> {
     .map_err(|err| err.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn frontend_heartbeat() -> CmdResult<()> {
     resolve::record_frontend_heartbeat();
     if let Err(err) = resolve::touch_frontend_heartbeat() {
@@ -132,7 +132,7 @@ pub fn frontend_heartbeat() -> CmdResult<()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn report_frontend_error(message: String, stack: Option<String>) -> CmdResult<()> {
     resolve::record_frontend_error(message, stack);
     Ok(())
@@ -158,14 +158,57 @@ pub fn restart_app(app_handle: tauri::AppHandle) {
     api::process::restart(&app_handle.env());
 }
 
+static SHUTDOWN_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// 有界清理（停内核 10s + 停服务 5s + 代理等待约 6s）之外再留余量。
+const SHUTDOWN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// 退出清理（停内核、停服务、还原系统代理）有十几秒的超时，其中 sc.exe 和
+/// WinINet 调用没有上限，必须放到后台线程：主线程只负责界面，清理期间先把窗口藏起来，
+/// 不能让界面冻结在“未响应”状态。
 fn shutdown_app(app_handle: tauri::AppHandle, exit_code: i32) {
     log::info!(target: "app", "shutdown_app called, exit_code={exit_code}");
-    // 必须先于下面在主线程上执行的清理，否则看门狗可能把清理当成卡死。
+    if SHUTDOWN_STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        log::info!(target: "app", "shutdown already in progress; ignore exit_code={exit_code}");
+        return;
+    }
+    // 先告诉看门狗正在退出，清理再慢也不会被当成卡死重新拉起。
     resolve::mark_quitting_for_watchdog();
     resolve::set_app_quitting(true);
+
+    // 兜底：清理里有无上限的调用，卡住时窗口已隐藏、退出入口全被拦下，会留下
+    // 一个无界面的僵尸进程。超时强制退出；未还原的系统代理由下次启动的
+    // recover_pending_sysproxy 恢复。
+    let _ = std::thread::Builder::new()
+        .name("app-shutdown-deadline".into())
+        .spawn(move || {
+            std::thread::sleep(SHUTDOWN_DEADLINE);
+            log::error!(
+                target: "app",
+                "shutdown cleanup exceeded {}s; forcing exit, exit_code={exit_code}",
+                SHUTDOWN_DEADLINE.as_secs()
+            );
+            std::process::exit(exit_code);
+        });
+
+    let fallback_handle = app_handle.clone();
+    let spawned = std::thread::Builder::new()
+        .name("app-shutdown".into())
+        .spawn(move || run_shutdown(app_handle, exit_code));
+    if let Err(err) = spawned {
+        // 起不了线程也要还原系统代理再退，否则用户会断网
+        log::error!(target: "app", "failed to spawn shutdown thread: {err}; cleanup inline");
+        run_shutdown(fallback_handle, exit_code);
+    }
+}
+
+fn run_shutdown(app_handle: tauri::AppHandle, exit_code: i32) {
     let _ = resolve::save_window_size_position(&app_handle, true);
+    if let Some(window) = app_handle.get_window("main") {
+        let _ = window.hide();
+    }
     resolve::resolve_reset();
     api::process::kill_children();
+    log::info!(target: "app", "shutdown cleanup finished, exit_code={exit_code}");
     app_handle.exit(exit_code);
     std::process::exit(exit_code);
 }

@@ -7,12 +7,12 @@ use crate::{
 use serde_yaml::Mapping;
 use std::collections::{HashMap, VecDeque};
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_clash_info() -> CmdResult<ClashInfo> {
     Ok(Config::clash().latest().get_client_info())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_runtime_config() -> CmdResult<Option<Mapping>> {
     Ok(Config::runtime().latest().config.clone())
 }
@@ -29,12 +29,12 @@ pub async fn get_runtime_yaml() -> CmdResult<String> {
     .map_err(|err| err.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_runtime_exists() -> CmdResult<Vec<String>> {
     Ok(Config::runtime().latest().exists_keys.clone())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_runtime_logs() -> CmdResult<HashMap<String, Vec<(String, String)>>> {
     Ok(Config::runtime().latest().chain_logs.clone())
 }
@@ -44,7 +44,7 @@ pub async fn patch_clash_config(payload: Mapping) -> CmdResult {
     wrap_err!(feat::patch_clash(payload).await)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_clash_logs() -> CmdResult<VecDeque<String>> {
     Ok(logger::Logger::global().get_log())
 }
@@ -64,7 +64,7 @@ pub async fn clash_api_get_proxy_delay(
 }
 
 /// 最近一轮后端自动延迟测试的低值结果（节点名 -> 延迟毫秒）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_auto_delay_results() -> CmdResult<HashMap<String, u32>> {
     Ok(feat::latest_auto_delay_results())
 }

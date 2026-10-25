@@ -175,17 +175,22 @@ export const ProxyGroups = (props: Props) => {
       defaultItemHeight={64}
       increaseViewportBy={256}
       components={virtuosoComponents}
-      itemContent={(index) => (
-        <ProxyRender
-          key={renderList[index].key}
-          item={renderList[index]}
-          indent={mode === "rule" || mode === "script"}
-          onLocation={handleLocation}
-          onCheckAll={handleCheckAll}
-          onHeadState={onHeadState}
-          onChangeProxy={handleChangeProxy}
-        />
-      )}
+      itemContent={(index) => {
+        // 列表缩短（收起分组、过滤、换订阅）时 Virtuoso 可能晚一帧仍按旧 index 渲染
+        const item = renderList[index];
+        if (!item) return null;
+        return (
+          <ProxyRender
+            key={item.key}
+            item={item}
+            indent={mode === "rule" || mode === "script"}
+            onLocation={handleLocation}
+            onCheckAll={handleCheckAll}
+            onHeadState={onHeadState}
+            onChangeProxy={handleChangeProxy}
+          />
+        );
+      }}
     />
   );
 };

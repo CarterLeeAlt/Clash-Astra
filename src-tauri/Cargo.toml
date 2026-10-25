@@ -45,6 +45,9 @@ runas = "=1.0.0" # 高版本会返回错误 Status
 deelevate = "0.2.0"
 winreg = "0.52.0"
 windows-sys = { version = "0.52.0", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading"] }
+# 与 tauri 1.5 / wry 0.24 使用的版本一致，用于注册 WebView2 ProcessFailed 事件
+webview2-com = "0.19.1"
+windows = { version = "0.39.0", features = ["Win32_System_WinRT"] }
 
 
 [features]

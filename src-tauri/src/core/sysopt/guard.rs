@@ -23,7 +23,15 @@ fn guard_job() -> JobFn {
     })
 }
 
+/// 守护的每一步（等本地代理就绪、拿代理操作锁、WinINet 读写）都是阻塞调用，
+/// 放到阻塞线程池执行，不占用 tokio 工作线程。
 async fn run_guard_cycle() -> Result<()> {
+    tokio::task::spawn_blocking(run_guard_cycle_blocking)
+        .await
+        .context("system proxy guard task panicked or was cancelled")?
+}
+
+fn run_guard_cycle_blocking() -> Result<()> {
     let (enable, guard, guard_duration, bypass) = {
         let verge = Config::verge();
         let verge = verge.latest();

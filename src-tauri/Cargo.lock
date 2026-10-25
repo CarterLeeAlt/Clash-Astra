@@ -603,7 +603,9 @@ dependencies = [
  "tauri-build",
  "tokio",
  "warp",
+ "webview2-com",
  "window-shadows",
+ "windows 0.39.0",
  "windows-sys 0.52.0",
  "winreg 0.52.0",
 ]

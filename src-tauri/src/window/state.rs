@@ -156,6 +156,28 @@ pub fn on_main_window_destroyed(app_handle: &AppHandle) {
         return;
     }
 
+    // WebView2 浏览器进程退出后的计划性重建：不计入意外销毁，直接重建。
+    #[cfg(target_os = "windows")]
+    if let Some(show) = super::webview_recovery::take_planned_recreate() {
+        MAIN_WINDOW_STATE.store(MAIN_WINDOW_STATE_MISSING, Ordering::SeqCst);
+        MAIN_WINDOW_CREATING.store(false, Ordering::SeqCst);
+        MAIN_WINDOW_SHOWING.store(false, Ordering::SeqCst);
+        MAIN_WINDOW_SHOW_PENDING_ID.store(0, Ordering::SeqCst);
+        FRONTEND_READY_HANDLED.store(false, Ordering::SeqCst);
+        log::warn!(target: "app", "main window destroyed for planned recreate, show={show}");
+        // 原本隐藏的窗口不立即重建（重建流程会在前端就绪后把窗口显示出来），
+        // 保持 Missing，用户下次打开时由 show_main_window 新建。
+        if show {
+            // 稍后重建：Destroyed 回调里旧窗口可能还没从管理器移除，同名 "main" 会建窗失败
+            let app_handle = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                super::show::show_main_window(&app_handle);
+            });
+        }
+        return;
+    }
+
     let window_start = MAIN_WINDOW_UNEXPECTED_DESTROY_WINDOW_START_MS.load(Ordering::SeqCst);
     if window_start == 0 || now.saturating_sub(window_start) > MAIN_WINDOW_DESTROY_WINDOW_MS {
         MAIN_WINDOW_UNEXPECTED_DESTROY_WINDOW_START_MS.store(now, Ordering::SeqCst);
@@ -203,10 +225,17 @@ pub(crate) fn main_window_recreate_allowed(now: u64) -> bool {
         return false;
     }
 
-    let state = MAIN_WINDOW_STATE.load(Ordering::SeqCst);
+    let mut state = MAIN_WINDOW_STATE.load(Ordering::SeqCst);
+    // 退避只在 60s 计数窗口内有效；窗口期过后必须允许重建，
+    // 否则状态一直停在 RecreateBackoff，托盘、热键、单例唤起永远打不开窗口。
     if state == MAIN_WINDOW_STATE_RECREATE_BACKOFF
-        || unexpected_destroy_count_in_window(now) >= MAIN_WINDOW_MAX_RECREATE_DESTROYS
+        && unexpected_destroy_count_in_window(now) < MAIN_WINDOW_MAX_RECREATE_DESTROYS
     {
+        log::warn!(target: "app", "main window recreate backoff expired; allow rebuild");
+        MAIN_WINDOW_STATE.store(MAIN_WINDOW_STATE_MISSING, Ordering::SeqCst);
+        state = MAIN_WINDOW_STATE_MISSING;
+    }
+    if unexpected_destroy_count_in_window(now) >= MAIN_WINDOW_MAX_RECREATE_DESTROYS {
         log::error!(
             target: "app",
             "main window recreate blocked by backoff: state={}, unexpected_destroyed_count={}, last_show_request_id={}",

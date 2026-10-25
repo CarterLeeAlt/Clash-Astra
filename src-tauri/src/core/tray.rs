@@ -299,8 +299,13 @@ impl Tray {
                     "restart_app" => cmds::restart_app(app_handle.clone()),
                     "reload_ui" => {
                         resolve::show_main_window_after_hide_transition(app_handle.clone());
+                        // 原生重载：JS 卡死或渲染进程已崩溃时 eval 不会执行
                         if let Some(window) = app_handle.get_window("main") {
-                            if let Err(err) = window.eval("window.location.reload()") {
+                            #[cfg(target_os = "windows")]
+                            let result = crate::window::webview_recovery::reload(&window);
+                            #[cfg(not(target_os = "windows"))]
+                            let result = window.eval("window.location.reload()");
+                            if let Err(err) = result {
                                 log::warn!(target: "app", "failed to reload UI from tray: {err}");
                             }
                         }

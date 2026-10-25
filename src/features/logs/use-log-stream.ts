@@ -12,7 +12,11 @@ import {
 } from "@/services/states";
 import { useWebsocket } from "@/hooks/use-websocket";
 import { buildControllerWsUrl } from "@/utils/controller";
-import { mergeLogBatch, normalizeLogItem } from "@/features/logs/model";
+import {
+  MAX_LOG_NUM,
+  mergeLogBatch,
+  normalizeLogItem,
+} from "@/features/logs/model";
 
 const LOG_FLUSH_INTERVAL = 200;
 const FALLBACK_SYNC_INTERVAL = 4000;
@@ -92,11 +96,15 @@ export const useLogStream = () => {
     setLogData([]);
   }, [clearFlushTimer, setLogData]);
 
-  // 高频日志先入缓冲，200ms 批量合并一次，避免逐条触发整表重渲
+  // 高频日志先入缓冲，200ms 批量合并一次，避免逐条触发整表重渲。
+  // 窗口隐藏时定时器会被节流到秒级甚至分钟级，缓冲只保留最新的 MAX_LOG_NUM 条
+  // （合并后也只保留这么多），防止日志洪峰时无界增长。
   const mergeLogs = useCallback(
     (incoming: ILogItem[]) => {
       if (!incoming || incoming.length === 0) return;
-      pendingRef.current.push(...incoming);
+      const pending = pendingRef.current.concat(incoming);
+      pendingRef.current =
+        pending.length > MAX_LOG_NUM ? pending.slice(-MAX_LOG_NUM) : pending;
       if (!flushTimerRef.current) {
         flushTimerRef.current = setTimeout(flushLogs, LOG_FLUSH_INTERVAL);
       }
@@ -179,7 +187,8 @@ export const useLogStream = () => {
           connect(wsUrl);
         }
       }
-      if (unmountedRef.current) return;
+      // WS 在等待期间已重连成功（onOpen 只能清掉已经为空的定时器），停止轮询
+      if (unmountedRef.current || isOpen()) return;
       scheduleFallbackSyncRef.current();
     }, FALLBACK_SYNC_INTERVAL);
   }, [
@@ -196,22 +205,30 @@ export const useLogStream = () => {
   const scheduleFallbackSyncRef = useRef(scheduleFallbackSync);
   scheduleFallbackSyncRef.current = scheduleFallbackSync;
 
+  // listen 是异步注册的：effect 在注册完成前就被清理时，必须在 resolve 后立即取消，
+  // 否则旧监听永远留着，还会带着旧闭包（旧 wsUrl）把共享 WS 重连到旧地址。
   useEffect(() => {
+    let disposed = false;
     let unlisten: null | (() => void) = null;
     listen<ILogItem>("verge://app-log", (event) => {
       mergeLogs([normalizeLogItem(event.payload ?? {})]);
     })
       .then((fn) => {
-        unlisten = fn;
+        if (disposed) fn();
+        else unlisten = fn;
       })
       .catch((err) => {
         console.warn("[log] subscribe app log failed", err);
       });
 
-    return () => unlisten?.();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, [mergeLogs]);
 
   useEffect(() => {
+    let disposed = false;
     let unlisten: null | (() => void) = null;
     listen("verge://refresh-clash-config", () => {
       if (!enableLog) return;
@@ -223,13 +240,17 @@ export const useLogStream = () => {
       }
     })
       .then((fn) => {
-        unlisten = fn;
+        if (disposed) fn();
+        else unlisten = fn;
       })
       .catch((err) => {
         console.warn("[log] subscribe refresh-clash-config failed", err);
       });
 
-    return () => unlisten?.();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, [
     connect,
     disconnect,

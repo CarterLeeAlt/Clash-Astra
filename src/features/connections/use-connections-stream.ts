@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLockFn } from "ahooks";
 import { getConnections } from "@/services/api";
 import { useClashInfo } from "@/hooks/use-clash";
+import { useVisibility } from "@/hooks/use-visibility";
 import { useWebsocket } from "@/hooks/use-websocket";
 import { buildControllerWsUrl } from "@/utils/controller";
 import { initConn, mergeConnectionSnapshot } from "./model";
@@ -14,6 +15,10 @@ const FALLBACK_POLL_INTERVAL = 3000;
  */
 export const useConnectionsStream = () => {
   const { clashInfo } = useClashInfo();
+  // 窗口隐藏时断开：大连接数下每秒全量解析、合并、重建表格，后台持续堆积内存压力。
+  const pageVisible = useVisibility();
+  const pageVisibleRef = useRef(pageVisible);
+  pageVisibleRef.current = pageVisible;
 
   const [connData, setConnData] = useState<IConnections>(initConn);
   const [wsState, setWsState] = useState<"connected" | "reconnecting">(
@@ -55,7 +60,7 @@ export const useConnectionsStream = () => {
     fallbackTimerRef.current = setTimeout(async () => {
       fallbackTimerRef.current = null;
       await syncConnectionsRef.current().catch(() => undefined);
-      if (unmountedRef.current) return;
+      if (unmountedRef.current || !pageVisibleRef.current) return;
       scheduleFallbackPollingRef.current();
     }, FALLBACK_POLL_INTERVAL);
   }, []);
@@ -65,8 +70,13 @@ export const useConnectionsStream = () => {
 
   const { connect, disconnect } = useWebsocket(
     (event) => {
+      let data: IConnections;
+      try {
+        data = JSON.parse(event.data) as IConnections;
+      } catch {
+        return;
+      }
       // meta v1.15.0 出现 data.connections 为 null 的情况。
-      const data = JSON.parse(event.data) as IConnections;
       const incoming = data.connections ?? [];
       setConnData((old) => ({
         ...data,
@@ -78,7 +88,8 @@ export const useConnectionsStream = () => {
       retryInterval: 500,
       maxRetryInterval: 10000,
       backoff: true,
-      heartbeatTimeout: 5000,
+      // 内核每秒推送一次；连接数很大时推送可能变慢，阈值太短会反复重连并全量拉快照。
+      heartbeatTimeout: 15000,
       onOpen: () => {
         setWsState("connected");
         clearFallbackTimer();
@@ -86,11 +97,11 @@ export const useConnectionsStream = () => {
       },
       onClose: () => {
         setWsState("reconnecting");
-        scheduleFallbackPolling();
+        if (pageVisibleRef.current) scheduleFallbackPolling();
       },
       onError: () => {
         setWsState("reconnecting");
-        scheduleFallbackPolling();
+        if (pageVisibleRef.current) scheduleFallbackPolling();
       },
     }
   );
@@ -106,7 +117,7 @@ export const useConnectionsStream = () => {
   );
 
   useEffect(() => {
-    if (!wsUrl) return;
+    if (!wsUrl || !pageVisible) return;
 
     connect(wsUrl);
 
@@ -114,7 +125,7 @@ export const useConnectionsStream = () => {
       clearFallbackTimer();
       disconnect();
     };
-  }, [wsUrl, connect, disconnect, clearFallbackTimer]);
+  }, [wsUrl, pageVisible, connect, disconnect, clearFallbackTimer]);
 
   useEffect(() => {
     const onRefresh = () => {

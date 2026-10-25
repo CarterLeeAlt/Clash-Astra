@@ -398,6 +398,8 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
     match window {
         Ok(win) => {
             MAIN_WINDOW_STATE.store(MAIN_WINDOW_STATE_ALIVE, Ordering::SeqCst);
+            #[cfg(target_os = "windows")]
+            super::webview_recovery::install(&win);
             trace_err!(win.set_resizable(!window_size_locked), "set win resizable");
             trace_err!(
                 win.set_maximizable(!window_size_locked),

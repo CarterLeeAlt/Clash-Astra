@@ -1,7 +1,7 @@
 use super::CmdResult;
 use crate::{config::*, core::scheduler, feat, wrap_err};
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_verge_config() -> CmdResult<IVerge> {
     Ok(Config::verge().data().clone())
 }
@@ -22,7 +22,7 @@ pub async fn test_delay(url: String) -> CmdResult<feat::TestDelayResult> {
 }
 
 /// 最近一轮站点检测快照（结果 + 更新时间）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_auto_site_test_results() -> CmdResult<feat::SiteTestSnapshot> {
     Ok(feat::latest_site_test_snapshot())
 }
@@ -42,7 +42,7 @@ pub struct SchedulerState {
     pub pending_limit: usize,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_scheduler_state() -> CmdResult<SchedulerState> {
     Ok(SchedulerState {
         periodic_tasks: scheduler::Scheduler::global().tasks(),

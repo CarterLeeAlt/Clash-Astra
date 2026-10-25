@@ -203,7 +203,7 @@ fn ensure_main_window_onscreen(window: &tauri::Window, context: &str) {
 #[cfg(target_os = "windows")]
 fn force_activate_window(window: &tauri::Window, context: &str) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        BringWindowToTop, SetForegroundWindow, ShowWindowAsync, SW_RESTORE,
+        BringWindowToTop, IsIconic, SetForegroundWindow, ShowWindowAsync, SW_RESTORE, SW_SHOW,
     };
 
     match window.hwnd() {
@@ -211,7 +211,13 @@ fn force_activate_window(window: &tauri::Window, context: &str) {
             let hwnd = hwnd.0 as isize;
             log::trace!("windows force activate executing, context={}", context);
             unsafe {
-                let show_ok = ShowWindowAsync(hwnd, SW_RESTORE) != 0;
+                // SW_RESTORE 会把最大化窗口还原成普通尺寸，只在最小化时使用
+                let show_cmd = if IsIconic(hwnd) != 0 {
+                    SW_RESTORE
+                } else {
+                    SW_SHOW
+                };
+                let show_ok = ShowWindowAsync(hwnd, show_cmd) != 0;
                 let bring_ok = BringWindowToTop(hwnd) != 0;
                 let foreground_ok = SetForegroundWindow(hwnd) != 0;
                 log::trace!(
@@ -416,6 +422,16 @@ fn schedule_windows_show_retries(
                     break;
                 }
 
+                // 用户刚关掉（隐藏）窗口时不能再按“未显示”去修复，否则会把它弹回来
+                if is_window_hiding_in_progress() {
+                    log::trace!(
+                        "windows delayed retry skipped because window is being hidden, request_id={}, attempt={}",
+                        request_id,
+                        attempt
+                    );
+                    break;
+                }
+
                 let (visible, minimized, focused) = window_state(&window);
                 if !window_needs_repair(&window) {
                     log::trace!(
@@ -525,6 +541,10 @@ pub fn show_main_window_after_hide_transition(app_handle: AppHandle) {
 
 /// show and focus the main window
 pub fn show_main_window(app_handle: &AppHandle) {
+    // 显式显示请求覆盖之前的隐藏：清掉隐藏标记，否则本次显示的修复重试会被当成
+    // “用户正在隐藏”而跳过。延迟显示（show_main_window_after_hide_transition）
+    // 在调用这里之前已经按标记等过隐藏动画。
+    WINDOW_HIDE_IN_PROGRESS_UNTIL_MS.store(0, Ordering::SeqCst);
     check_main_window_health(app_handle, "show_main_window");
     let show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.fetch_add(1, Ordering::SeqCst) + 1;
     FRONTEND_SHOW_WHEN_READY.store(true, Ordering::SeqCst);

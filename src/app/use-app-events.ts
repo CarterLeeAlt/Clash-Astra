@@ -4,7 +4,6 @@ import { appWindow } from "@tauri-apps/api/window";
 import { mutate } from "swr";
 import { getAxios } from "@/services/api";
 import {
-  frontendHeartbeat,
   getAutoSiteTestResults,
   getWindowStyleConfig,
   reportFrontendError,
@@ -22,7 +21,7 @@ import getSystem from "@/utils/get-system";
 const OS = getSystem();
 
 /**
- * 应用级事件与窗口样式：全局快捷键、Tauri 事件、心跳、错误上报。
+ * 应用级事件与窗口样式：全局快捷键、Tauri 事件、错误上报（心跳在 main.tsx）。
  * 这些逻辑与页面渲染无关，集中在这里避免 Layout 持续膨胀。
  */
 export const useAppEvents = () => {
@@ -34,10 +33,27 @@ export const useAppEvents = () => {
   }));
 
   useEffect(() => {
+    // Esc 收起窗口只在没有别的东西要响应 Esc 时生效：输入法候选、输入框、
+    // 对话框、菜单都会用 Esc 取消，不能顺带把整个窗口藏起来。
+    // 收起走关闭请求，由后端 CloseRequested 统一隐藏并保存窗口状态。
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        appWindow.hide().catch(() => undefined);
+      if (e.key !== "Escape" || e.defaultPrevented || e.isComposing) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          "input, textarea, select, [contenteditable='true'], .monaco-editor"
+        )
+      ) {
+        return;
       }
+      if (
+        document.querySelector(
+          "[role='dialog'], [role='menu'], [role='listbox'], [role='presentation']"
+        )
+      ) {
+        return;
+      }
+      appWindow.close().catch(() => undefined);
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -109,11 +125,6 @@ export const useAppEvents = () => {
 
     emit("frontend://ready").catch(() => undefined);
 
-    frontendHeartbeat().catch(() => undefined);
-    const heartbeatTimer = window.setInterval(() => {
-      frontendHeartbeat().catch(() => undefined);
-    }, 5000);
-
     const onError = (event: ErrorEvent) => {
       reportFrontendError(
         event.message || "window.onerror",
@@ -136,7 +147,6 @@ export const useAppEvents = () => {
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      window.clearInterval(heartbeatTimer);
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
       unlistenTasks.forEach((task) => {

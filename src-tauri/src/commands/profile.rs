@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_profiles() -> CmdResult<IProfiles> {
     Ok(Config::profiles().data().clone())
 }

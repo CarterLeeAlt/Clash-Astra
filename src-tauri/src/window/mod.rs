@@ -3,6 +3,8 @@ pub mod persist;
 pub mod show;
 pub mod state;
 pub mod style;
+#[cfg(target_os = "windows")]
+pub mod webview_recovery;
 
 pub use self::create::*;
 pub use self::persist::*;

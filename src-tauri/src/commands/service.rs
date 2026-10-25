@@ -6,7 +6,7 @@ pub async fn check_service() -> CmdResult<win_service::ServiceStatus> {
     wrap_err!(win_service::check_service().await)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn is_elevated() -> CmdResult<bool> {
     wrap_err!(win_service::is_current_process_elevated())
 }

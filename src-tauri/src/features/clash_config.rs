@@ -7,6 +7,16 @@ use serde_yaml::Mapping;
 use super::profile_update::update_core_config;
 
 /// 修改clash的订阅
+/// 防火墙 helper（可能等待 UAC）和系统代理更新（等待本地代理、WinINet）都是阻塞调用，
+/// 不能直接在 tokio 工作线程上执行。
+async fn run_blocking<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(f)
+        .await
+        .context("blocking task panicked or was cancelled")?
+}
+
 pub async fn patch_clash(patch: Mapping) -> Result<()> {
     let has_tun_patch = patch.get("tun").is_some();
     let allow_lan_target = patch.get("allow-lan").and_then(|value| value.as_bool());
@@ -29,13 +39,15 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
             .get("allow-lan")
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
-        crate::core::win_firewall::set_lan_firewall_enabled(enabled).with_context(|| {
-            if enabled {
-                "failed to allow Mihomo through Windows Firewall for LAN access"
-            } else {
-                "failed to remove Mihomo LAN rules from Windows Firewall"
-            }
-        })?;
+        run_blocking(move || crate::core::win_firewall::set_lan_firewall_enabled(enabled))
+            .await
+            .with_context(|| {
+                if enabled {
+                    "failed to allow Mihomo through Windows Firewall for LAN access"
+                } else {
+                    "failed to remove Mihomo LAN rules from Windows Firewall"
+                }
+            })?;
         Some(previous)
     } else {
         None
@@ -98,7 +110,7 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
         // 更新系统代理
         if mixed_port.is_some() {
             sysproxy_update_attempted = true;
-            sysopt::Sysopt::global().update_sysproxy()?;
+            run_blocking(|| sysopt::Sysopt::global().update_sysproxy()).await?;
             sysopt::Sysopt::global().guard_proxy();
         }
 
@@ -159,7 +171,9 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
             }
 
             if sysproxy_update_attempted {
-                if let Err(rollback_err) = sysopt::Sysopt::global().update_sysproxy() {
+                if let Err(rollback_err) =
+                    run_blocking(|| sysopt::Sysopt::global().update_sysproxy()).await
+                {
                     rollback_errors.push(format!(
                         "restoring the previous system proxy failed: {rollback_err}"
                     ));
@@ -170,8 +184,10 @@ pub async fn patch_clash(patch: Mapping) -> Result<()> {
 
             #[cfg(target_os = "windows")]
             if let Some(previous) = firewall_rollback {
-                if let Err(rollback_err) =
+                if let Err(rollback_err) = run_blocking(move || {
                     crate::core::win_firewall::set_lan_firewall_enabled(previous)
+                })
+                .await
                 {
                     rollback_errors.push(format!(
                         "restoring the previous Windows Firewall LAN rules failed: {rollback_err}"

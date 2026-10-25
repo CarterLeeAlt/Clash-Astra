@@ -164,7 +164,8 @@ export const LayoutControl = ({
           svg: { transform: "scale(1.05)" },
           ":hover": { bgcolor: "#ff000090" },
         }}
-        onClick={() => appWindow.hide().catch(() => undefined)}
+        // 走关闭请求：后端 CloseRequested 统一处理成隐藏并保存窗口状态
+        onClick={() => appWindow.close().catch(() => undefined)}
       >
         <CloseRounded fontSize="small" />
       </Button>

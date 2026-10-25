@@ -135,7 +135,9 @@ const Layout = () => {
                   timeout={300}
                   classNames="page"
                 >
-                  <Routes>
+                  {/* 必须传 location：否则退出动画中的旧节点也按新路径渲染，
+                      目标页会同时挂载两份（两条 WS、两份大表格） */}
+                  <Routes location={location}>
                     {routers.map(({ label, link, ele: Ele }) => (
                       <Route
                         key={label}

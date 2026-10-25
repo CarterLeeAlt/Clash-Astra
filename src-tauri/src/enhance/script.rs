@@ -9,6 +9,10 @@ use serde_yaml::{Mapping, Value};
 // https://github.com/clash-verge-rev/clash-verge-rev/blob/658312fe7be95d69b4dad379c6cd00fc93f29d5f/src-tauri/src/enhance/script.rs
 // License: GPL-3.0-only
 
+const SCRIPT_MEMORY_LIMIT: usize = 256 * 1024 * 1024;
+const SCRIPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const SCRIPT_MAX_LOGS: usize = 1000;
+
 pub fn use_script(
     script: String,
     config: Mapping,
@@ -37,6 +41,13 @@ fn run_script_inner(
     use std::sync::{Arc, Mutex};
 
     let runtime = Runtime::new()?;
+    // 用户脚本不可信：死循环会让生成配置永远不返回（启动期就是窗口永远不出现），
+    // 大分配会耗尽内存结束整个进程。限制内存并设执行时限，超限时脚本抛错。
+    runtime.set_memory_limit(SCRIPT_MEMORY_LIMIT);
+    let deadline = std::time::Instant::now() + SCRIPT_TIMEOUT;
+    runtime.set_interrupt_handler(Some(Box::new(move || {
+        std::time::Instant::now() >= deadline
+    })));
     let context = Context::full(&runtime)?;
     let outputs = Arc::new(Mutex::new(vec![]));
 
@@ -45,8 +56,10 @@ fn run_script_inner(
         ctx.globals().set(
             "__verge_log__",
             Func::from(move |level: String, data: String| {
-                let mut out = copy_outputs.lock().unwrap();
-                out.push((level, data));
+                let mut out = copy_outputs.lock().unwrap_or_else(|err| err.into_inner());
+                if out.len() < SCRIPT_MAX_LOGS {
+                    out.push((level, data));
+                }
             }),
         )?;
 
@@ -83,7 +96,7 @@ fn run_script_inner(
         Ok(serde_json::from_str::<Mapping>(result.as_str())?)
     });
 
-    let mut out = outputs.lock().unwrap();
+    let mut out = outputs.lock().unwrap_or_else(|err| err.into_inner());
     match result {
         Ok(config) => Ok((use_lowercase(config), out.to_vec())),
         Err(err) if strict => Err(err),
@@ -167,6 +180,29 @@ function main(config, profileName) {
         assert_eq!(
             config.get(&Value::String("rules".into())),
             Some(&Value::Sequence(vec![]))
+        );
+    }
+
+    /// 失控脚本被中止后：严格校验报错；生成配置时回退原配置并记录异常，不卡住也不崩溃。
+    fn assert_script_aborted(script: &str) {
+        assert!(validate_script_strict(script.into(), base_config(), "Profile").is_err());
+        let (config, logs) = use_script(script.into(), base_config(), "Profile").unwrap();
+        assert_eq!(config, base_config());
+        assert!(logs.iter().any(|(level, _)| level == "exception"));
+    }
+
+    #[test]
+    fn runaway_script_is_interrupted() {
+        let started = std::time::Instant::now();
+        assert_script_aborted("function main(config) { while (true) {} }");
+        // 严格校验和生成各跑一次
+        assert!(started.elapsed() < SCRIPT_TIMEOUT * 2 + std::time::Duration::from_secs(5));
+    }
+
+    #[test]
+    fn oversized_allocation_is_rejected() {
+        assert_script_aborted(
+            "function main(config) { const a = []; while (true) { a.push('x'.repeat(1 << 20)); } }",
         );
     }
 

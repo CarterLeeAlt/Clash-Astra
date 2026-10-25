@@ -306,6 +306,9 @@ fn build_clash_client_info(client: ClashInfo) -> Result<(String, HeaderMap)> {
 }
 
 /// Extract a concise error message from Mihomo's config validation output.
+///
+/// 输出格式不受我们控制（截断、缺引号、字段顺序变化、多字节字符），切片一律用
+/// `get`：release 是 panic=abort，越界会直接结束整个进程。
 pub fn parse_check_output(log: String) -> String {
     let t = log.find("time=");
     let m = log.find("msg=");
@@ -318,15 +321,21 @@ pub fn parse_check_output(log: String) -> String {
         };
 
         if mr > m {
-            return (log[e..mr]).to_owned();
+            if let Some(message) = log.get(e..mr) {
+                return message.to_owned();
+            }
         }
     }
 
-    let l = log.find("error=");
-    let r = log.find("path=").or(Some(log.len()));
-
-    if let (Some(l), Some(r)) = (l, r) {
-        return (log[(l + 6)..(r - 1)]).to_owned();
+    if let Some(l) = log.find("error=") {
+        let start = l + 6;
+        let end = log[start..]
+            .find("path=")
+            .map(|r| (start + r).saturating_sub(1))
+            .unwrap_or(log.len());
+        if let Some(message) = log.get(start..end.max(start)) {
+            return message.trim_end().to_owned();
+        }
     }
 
     log
@@ -351,6 +360,27 @@ fn test_parse_check_output() {
     println!("res3: {res3}");
 
     assert_eq!(res1, res3);
+    assert_eq!(res2, "proxy 0: unsupport proxy type: hysteria");
+}
+
+#[test]
+fn test_parse_check_output_never_panics_on_malformed_output() {
+    let cases = [
+        // 开引号就是最后一个引号（消息被截断）
+        r#"time="x" level=error msg=""#,
+        r#"time="x" msg="#,
+        // path= 在 error= 之前、或紧贴 error=
+        "path=a error=bad",
+        "error=path=",
+        "path=error=",
+        // 多字节字符落在切片边界
+        "time=\"x\" level=error msg=\"配置错误",
+        "error=错误path=",
+        "",
+    ];
+    for case in cases {
+        let _ = parse_check_output(case.to_string());
+    }
 }
 
 #[cfg(test)]

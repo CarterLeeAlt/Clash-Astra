@@ -10,18 +10,21 @@ use super::verge_config::patch_verge;
 // 打开面板
 pub fn open_or_close_dashboard() {
     log::trace!("hotkey/dashboard entry received: open_or_close_dashboard");
-    let handle = handle::Handle::global();
-    let app_handle = handle.app_handle.lock();
-    if let Some(app_handle) = app_handle.as_ref() {
-        if let Some(window) = app_handle.get_window("main") {
-            if let Ok(true) = window.is_focused() {
-                let _ = window.hide();
-                return;
-            }
+    // 先复制出 AppHandle 再放锁：下面的窗口操作可能建窗，持着 Handle 锁时
+    // 任何再取这把锁的调用（get_window/emit/app_resources_dir）都会自死锁。
+    let Some(app_handle) = handle::Handle::global().app_handle.lock().clone() else {
+        return;
+    };
+    if let Some(window) = app_handle.get_window("main") {
+        if let Ok(true) = window.is_focused() {
+            // 与关闭按钮同一路径：标记隐藏中，避免显示重试把窗口又弹回来
+            resolve::mark_window_hiding_for(std::time::Duration::from_millis(1500));
+            let _ = window.hide();
+            return;
         }
-        log::trace!("hotkey/dashboard entry -> resolve::show_main_window");
-        resolve::show_main_window(app_handle);
     }
+    log::trace!("hotkey/dashboard entry -> resolve::show_main_window");
+    resolve::show_main_window(&app_handle);
 }
 
 // 重启clash

@@ -92,8 +92,11 @@ pub fn resolve_setup(app: &mut App) {
 
     log_err!(sysopt::Sysopt::global().recover_pending_sysproxy());
     log_err!(init::init_resources());
+    // 防火墙 helper 是外部进程且没有超时，与建窗无关，不能阻塞 setup（主线程）
     #[cfg(target_os = "windows")]
-    log_err!(crate::core::win_firewall::reconcile_lan_firewall_on_startup());
+    std::thread::spawn(|| {
+        log_err!(crate::core::win_firewall::reconcile_lan_firewall_on_startup());
+    });
     log_err!(init::startup_script());
     // 处理随机端口
     let enable_random_port = Config::verge().latest().enable_random_port.unwrap_or(false);
