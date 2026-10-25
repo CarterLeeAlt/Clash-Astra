@@ -9,7 +9,7 @@ if (Test-Path $WorkDir) { throw "Test directory must be new: $WorkDir" }
 New-Item -ItemType Directory -Path $WorkDir | Out-Null
 & rustc --edition 2021 "$root\src-tauri\watchdog\test-fixtures\gui.rs" -o "$WorkDir\fixture.exe"
 if ($LASTEXITCODE -ne 0) { throw 'fixture compile failed' }
-$helper = Join-Path $WorkDir 'clash-astra-watchdog.exe'
+$helper = Join-Path $WorkDir 'Clash Astra Watchdog.exe'
 Copy-Item -LiteralPath $WatchdogPath -Destination $helper
 $fixture = Join-Path $WorkDir 'fixture.exe'
 function Start-Case([string]$mode, [string]$name) {

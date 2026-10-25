@@ -28,11 +28,12 @@ const source = path.join(
   ...parts,
   "clash-astra-watchdog.exe"
 );
+// Cargo 的二进制目标名不能含空格，发布包里的文件名在这里落成用户可见名称
 const destination = path.join(
   "src-tauri",
   "target",
   ...parts,
-  "clash-astra-watchdog.exe"
+  "Clash Astra Watchdog.exe"
 );
 if (!existsSync(source))
   throw new Error(`Watchdog binary not found: ${source}`);

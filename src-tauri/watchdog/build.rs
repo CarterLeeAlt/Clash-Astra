@@ -18,11 +18,11 @@ fn main() {
     let mut resource = tauri_winres::WindowsResource::new();
     resource
         .set_icon("../icons/watchdog.ico")
-        .set("FileDescription", &format!("{product}-Watchdog"))
+        .set("FileDescription", &format!("{product} Watchdog"))
         .set("ProductName", product)
         .set("FileVersion", version)
         .set("ProductVersion", version)
-        .set("OriginalFilename", "clash-astra-watchdog.exe")
+        .set("OriginalFilename", "Clash Astra Watchdog.exe")
         .set("LegalCopyright", "GPL-3.0-only");
     resource.compile().expect("compile Watchdog resources");
 }

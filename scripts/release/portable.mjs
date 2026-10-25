@@ -64,17 +64,17 @@ async function resolvePortable() {
 
   console.log("[INFO]: target/release exe files:", releaseExeFiles);
 
-  const portableExeName = "clash-astra.exe";
+  const portableExeName = "Clash Astra.exe";
   const mainExeSource = releaseExeFiles.find(
-    (name) => name.toLowerCase() === portableExeName
+    (name) => name.toLowerCase() === portableExeName.toLowerCase()
   );
   if (!mainExeSource) {
     throw new Error(
-      `Portable main exe not found under ${releaseDir}; run scripts/build/normalize-main-exe.mjs first`
+      `Portable main exe not found under ${releaseDir}; expected ${portableExeName} from the Tauri build`
     );
   }
 
-  const watchdogExeName = "clash-astra-watchdog.exe";
+  const watchdogExeName = "Clash Astra Watchdog.exe";
   const watchdogPath = path.join(releaseDir, watchdogExeName);
   if (
     !(await fs.pathExists(watchdogPath)) ||

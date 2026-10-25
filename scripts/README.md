@@ -14,7 +14,7 @@
 
 | 目录        | 内容                                                                                     |
 | ----------- | ---------------------------------------------------------------------------------------- |
-| `build/`    | 构建辅助：`build-watchdog.mjs`、`normalize-main-exe.mjs`、`generate-watchdog-icon.ps1`   |
+| `build/`    | 构建辅助：`build-watchdog.mjs`、`generate-watchdog-icon.ps1`                             |
 | `release/`  | 发布打包：`portable.mjs`；发布说明：`release-notes.mjs`                                  |
 | `verify/`   | 校验：`check-naming.mjs`、`test-watchdog.ps1`                                            |
 | `sidecars/` | 运行时资源准备：`prepare-runtime.mjs`，下载 mihomo/Geo 数据并构建 Windows service 二进制 |

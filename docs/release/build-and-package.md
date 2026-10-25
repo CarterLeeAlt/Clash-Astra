@@ -34,9 +34,8 @@ node scripts/pnpm.mjs run build
 
 该命令依次执行：
 
-1. `tauri build --bundles none`，其中 `beforeBuildCommand` 会运行 `web:build`（`tsc` + `vite build`）。
-2. `scripts/build/build-watchdog.mjs` 构建并放置 Watchdog。
-3. `scripts/build/normalize-main-exe.mjs` 把 Tauri 主程序改名为 `clash-astra.exe`。
+1. `tauri build --bundles none`，其中 `beforeBuildCommand` 会运行 `web:build`（`tsc` + `vite build`）；主程序按 `productName` 产出 `Clash Astra.exe`。
+2. `scripts/build/build-watchdog.mjs` 构建 Watchdog 并放置为 `Clash Astra Watchdog.exe`。
 
 只构建 Watchdog 时：
 
@@ -89,7 +88,7 @@ node scripts/pnpm.mjs run portable x86_64-pc-windows-msvc
 artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 ```
 
-未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 GUI、Watchdog、`mihomo.exe`、`mihomo-alpha.exe` 和 `resources/`。
+未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 `Clash Astra.exe`、`Clash Astra Watchdog.exe`、`mihomo.exe`、`mihomo-alpha.exe` 和 `resources/`。
 
 ## 产物边界
 

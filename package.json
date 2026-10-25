@@ -20,7 +20,7 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:diff": "tauri dev -f verge-dev",
-    "build": "tauri build --bundles none && node scripts/build/build-watchdog.mjs && node scripts/build/normalize-main-exe.mjs",
+    "build": "tauri build --bundles none && node scripts/build/build-watchdog.mjs",
     "build:watchdog": "node scripts/build/build-watchdog.mjs",
     "tauri": "tauri",
     "web:dev": "vite",

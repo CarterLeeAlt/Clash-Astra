@@ -6,8 +6,8 @@
 
 | 组件     | 文件                             | 说明                               |
 | -------- | -------------------------------- | ---------------------------------- |
-| GUI      | `clash-astra.exe`                | 只承载界面与业务，不再内置监督逻辑 |
-| Watchdog | `clash-astra-watchdog.exe`       | 独立监督进程，文件名全小写         |
+| GUI      | `Clash Astra.exe`                | 只承载界面与业务，不再内置监督逻辑 |
+| Watchdog | `Clash Astra Watchdog.exe`       | 独立监督进程                       |
 | 内核     | `mihomo.exe`、`mihomo-alpha.exe` | 上游内核，保持原名                 |
 
 显示名、机器名和注册表/服务名的唯一规范见 [命名规范](../reference/naming.md)。
@@ -27,14 +27,14 @@
 
 - GUI 使用完整蓝猫图标；Watchdog 使用同一形状的黄色版本。黄色取自仓库自带 `tray-icon-sys.png` 的原始色板，`tray-icon-sys.png` 本身不修改。
 - 图标由 `scripts/build/generate-watchdog-icon.ps1` 生成，输出 16、32、48、64、128、256 像素 ICO 与 PNG。
-- GUI 的任务管理器显示名来自 `src-tauri/Cargo.toml` 的 `description`；Watchdog 的显示名在 `src-tauri/watchdog/build.rs` 中固定为 `Clash Astra-Watchdog`。
+- GUI 的任务管理器显示名来自 `src-tauri/Cargo.toml` 的 `description`；Watchdog 的显示名在 `src-tauri/watchdog/build.rs` 中固定为 `Clash Astra Watchdog`。
 
 ## 构建
 
 本机使用工作区工具链，命令从仓库根执行：
 
 ```powershell
-# 完整构建：前端、Tauri release、Watchdog、主程序改名
+# 完整构建：前端、Tauri release、Watchdog
 node scripts/pnpm.mjs run build
 
 # 只构建 Watchdog

@@ -7,7 +7,8 @@ const expected = {
   displayName: "Clash Astra",
   identifier: "io.github.clash-astra",
   devIdentifier: "io.github.clash-astra.dev",
-  mainExe: "clash-astra.exe",
+  mainExe: "Clash Astra.exe",
+  watchdogExe: "Clash Astra Watchdog.exe",
   serviceName: "clash-astra-service",
   serviceDisplayName: "Clash Astra Service",
   serviceCrate: "clash-astra-service-src",
@@ -131,7 +132,7 @@ const requiredSourceFragments = [
   ["src-tauri/src/utils/dirs.rs", `"${expected.identifier}"`],
   ["src-tauri/src/utils/dirs.rs", `"${expected.devIdentifier}"`],
   ["src-tauri/watchdog/src/main.rs", `"${expected.identifier}"`],
-  ["src-tauri/watchdog/build.rs", `"clash-astra-watchdog.exe"`],
+  ["src-tauri/watchdog/build.rs", `"${expected.watchdogExe}"`],
   [
     "src-tauri/windows-service-src/src/bin/clash-astra-service.rs",
     `"${expected.identifier}"`,
@@ -172,15 +173,15 @@ const requiredSourceFragments = [
     "src/features/settings/components/mods/tun-viewer.tsx",
     'placeholder="clash-astra"',
   ],
-  ["src-tauri/src/watchdog_protocol.rs", '"clash-astra-watchdog.exe"'],
+  ["src-tauri/src/watchdog_protocol.rs", `"${expected.watchdogExe}"`],
   ["src-tauri/src/watchdog_protocol.rs", '"--clash-astra-watchdog-child"'],
   ["src-tauri/src/utils/server.rs", '"Local\\\\clash-astra-singleton"'],
-  ["scripts/build/normalize-main-exe.mjs", `"${expected.mainExe}"`],
-  [
-    "scripts/build/build-watchdog.mjs",
-    `"${expected.mainExe.replace(".exe", "-watchdog.exe")}"`,
-  ],
+  ["scripts/build/build-watchdog.mjs", `"${expected.watchdogExe}"`],
   ["scripts/release/portable.mjs", 'const MACHINE_NAME = "clash-astra";'],
+  ["scripts/release/portable.mjs", `"${expected.mainExe}"`],
+  ["scripts/release/portable.mjs", `"${expected.watchdogExe}"`],
+  [".github/workflows/release-windows.yml", `release/${expected.mainExe}`],
+  [".github/workflows/release-windows.yml", `release/${expected.watchdogExe}`],
   ["scripts/sidecars/prepare-runtime.mjs", `"${expected.serviceExe}"`],
   ["src/services/ipc/service.ts", `"${expected.serviceName}"`],
   ["src/features/settings/SettingsPage.tsx", expected.repository],
@@ -195,7 +196,6 @@ for (const [relativePath, fragment] of requiredSourceFragments) {
 
 // portable.mjs 与 prepare-runtime.mjs 的清理列表必须保留旧名，故不参与旧名残留检查。
 const buildAndCiFiles = [
-  "scripts/build/normalize-main-exe.mjs",
   "scripts/build/build-watchdog.mjs",
   "scripts/verify/test-watchdog.ps1",
   ".github/workflows/release-windows.yml",
@@ -214,6 +214,21 @@ for (const relativePath of buildAndCiFiles) {
     if (pattern.test(text)) {
       errors.push(`${relativePath}: uses legacy name ${label}`);
     }
+  }
+}
+
+// 发布链路里不得再出现旧的用户面文件名；Cargo 的产物名（clash-astra-watchdog.exe）
+// 只允许作为构建输入出现，不在检查范围内。
+const forbiddenFragments = [
+  ["scripts/release/portable.mjs", '"clash-astra.exe"'],
+  ["scripts/release/portable.mjs", '"clash-astra-watchdog.exe"'],
+  [".github/workflows/release-windows.yml", "release/clash-astra.exe"],
+];
+
+for (const [relativePath, fragment] of forbiddenFragments) {
+  const text = await read(relativePath);
+  if (text.includes(fragment)) {
+    errors.push(`${relativePath}: uses legacy file name ${fragment}`);
   }
 }
 

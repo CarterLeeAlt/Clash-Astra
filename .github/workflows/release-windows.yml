@@ -263,11 +263,8 @@ jobs:
           $releaseDir = "src-tauri/target/${{ matrix.target }}/release"
           if (-not (Test-Path -LiteralPath $watchdogSource -PathType Leaf)) { throw "missing watchdog binary: $watchdogSource" }
           New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-          Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "clash-astra-watchdog.exe") -Force
-
-      - name: Normalize main executable name
-        shell: pwsh
-        run: node scripts/build/normalize-main-exe.mjs --target ${{ matrix.target }}
+          # Cargo 产物名不能带空格，发布名在这里落成用户可见名称
+          Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "Clash Astra Watchdog.exe") -Force
 
       - name: Restore certificate
         if: steps.sign_mode.outputs.mode == 'pfx' && steps.sign_mode.outputs.can_sign == 'true'
@@ -282,8 +279,8 @@ jobs:
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           if (-not $signtool) { throw "signtool.exe not found" }
           $files = @(
-            "src-tauri/target/${{ matrix.target }}/release/clash-astra.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-astra-watchdog.exe",
+            "src-tauri/target/${{ matrix.target }}/release/Clash Astra.exe",
+            "src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
@@ -304,7 +301,7 @@ jobs:
           project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-astra.exe
+          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/Clash Astra.exe
           output-artifact-directory: src-tauri/target/${{ matrix.target }}/release
 
       - name: Sign Windows watchdog (SignPath)
@@ -316,7 +313,7 @@ jobs:
           project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/clash-astra-watchdog.exe
+          input-artifact-path: src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe
           output-artifact-directory: src-tauri/target/${{ matrix.target }}/release
 
       - name: OSSign signing placeholder
@@ -331,8 +328,8 @@ jobs:
         run: |
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           $files = @(
-            "src-tauri/target/${{ matrix.target }}/release/clash-astra.exe",
-            "src-tauri/target/${{ matrix.target }}/release/clash-astra-watchdog.exe",
+            "src-tauri/target/${{ matrix.target }}/release/Clash Astra.exe",
+            "src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
             "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
           )
