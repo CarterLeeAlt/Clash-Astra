@@ -56,6 +56,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          # 生成发布说明需要完整提交历史与历史 tag（默认浅克隆取不到上一个 tag）
+          fetch-depth: 0
 
       - name: Resolve release version
         shell: pwsh
@@ -107,6 +110,21 @@ jobs:
           version: 11.15.1
           run_install: false
 
+      - name: Generate release notes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $noteArgs = @(
+            "scripts/release/release-notes.mjs",
+            "--version", $env:VERSION,
+            "--out", "artifacts/staging/notes.md"
+          )
+          # 手动重发已存在的 tag 时以该 tag 为终点，避免混入其后的提交
+          if (git tag -l $env:TAG_NAME) { $noteArgs += @("--to", $env:TAG_NAME) }
+          # 自动发版同时写 UPDATELOG.md，随下面的版本提交一起进仓库
+          if ("${{ github.event_name }}" -eq "push") { $noteArgs += "--write-updatelog" }
+          node @noteArgs
+
       - name: Bump version, commit and tag (auto mode)
         if: github.event_name == 'push'
         shell: pwsh
@@ -144,7 +162,7 @@ jobs:
           }
           Set-Content -Path $lockPath -Value $lines
 
-          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock UPDATELOG.md
           $staged = git diff --cached --name-only
           if (-not $staged) {
             throw "version bump produced no staged changes"
@@ -411,8 +429,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          # 根据上一个 tag 到本 tag 的提交自动生成发布说明
-          generate_release_notes: true
+          # 发布说明由 scripts/release/release-notes.mjs 按提交生成；
+          # generate_release_notes 只统计已合并的 PR，本仓库直接提交到 main，用它只会得到 compare 链接
+          body_path: artifacts/staging/notes.md
           # 用通配符覆盖签名与未签名两种便携包命名
           files: |
             artifacts/staging/release/clash-astra_${{ env.VERSION }}_x64_portable*.zip

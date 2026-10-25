@@ -105,7 +105,29 @@ artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 
 ## CI
 
-GitHub Actions 使用 `pnpm/action-setup` 安装的 pnpm，不使用本机 wrapper；构建步骤与本机一致。release 的 staging 在 `artifacts/staging/` 下，上传路径由工作流维护。
+GitHub Actions 使用 `pnpm/action-setup` 安装的 pnpm，不使用本机 wrapper；构建步骤与本机一致。release 的 staging 在 `artifacts/staging/` 下，上传路径由工作流维护。工作流 checkout 使用 `fetch-depth: 0`：生成发布说明要读取上一个 tag 与完整提交历史。
+
+## 发布说明
+
+Release 页面的说明由 `scripts/release/release-notes.mjs` 按「上一个 tag .. 本次 tag」的提交生成，不使用 GitHub 的 `generate_release_notes`（它只统计已合并的 PR，本仓库直接提交到 `main`，结果只有 compare 链接）。
+
+分组规则：
+
+- `feat` → 新功能；`fix` → 修复；`perf`、`refactor`、`style` → 优化；`build`、`ci`、`chore` → 构建与发布；`docs` → 文档；`test` → 测试。
+- 提交标题作为条目，正文中以 `-` 或 `*` 开头的行作为子条。
+- `chore(release):` 版本提交与合并提交不收录。
+
+自动发版（push 到 `main`）时，同一份内容还会以 `Added`、`Changed`、`Fixed` 小节写进 `UPDATELOG.md` 顶部，随版本提交一起推送。手动重发已存在的 tag 时不改 `UPDATELOG.md`。
+
+本地预览：
+
+```powershell
+node scripts/release/release-notes.mjs --version 1.8.1 --from v1.7.2
+```
+
+常用选项：`--from`、`--to` 指定区间（缺省自动取小于目标版本且已并入 `--to` 的最大 tag），`--out` 写入文件，`--write-updatelog` 同步 `UPDATELOG.md`，`--with-hashes` 附提交链接。
+
+人工覆盖：`docs/release/notes/v<版本>.md` 存在时，其内容直接作为 Release 正文（`UPDATELOG.md` 仍按提交生成）。CI 中说明文件写在 `artifacts/staging/notes.md`，`artifacts/staging/release/` 由资产校验步骤整体重建，不要放进该目录。
 
 ## 验收清单
 
