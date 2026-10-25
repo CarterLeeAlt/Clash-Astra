@@ -55,6 +55,11 @@ default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 verge-dev = []
 
+[patch.crates-io]
+# tao 0.16.7 生成 Windows 图标时 AND 掩码格式错误（每像素 1 字节而非 1 位），
+# 任务管理器等按掩码绘制的地方会出现竖条裂缝；修补说明见 vendor-crates/tao/VENDORED.md
+tao = { path = "vendor-crates/tao" }
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

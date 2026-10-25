@@ -24,3 +24,14 @@ This repository vendors selected third-party Rust crates to ensure reproducible 
 - License: MIT
 - Local path: src-tauri/vendor-crates/sysproxy-rs
 - Local modifications to vendored source: None, unless explicitly recorded below.
+
+## tao
+
+- Original project: tao
+- Original author/copyright holder: Tauri Programme within The Commons Conservancy, The winit contributors
+- Original repository: https://github.com/tauri-apps/tao
+- Vendored commit: f9f81f2fd761c60abb5b46a6469864562a811c6d (crates.io release 0.16.7)
+- Version used by this project: 0.16.7
+- License: Apache-2.0
+- Local path: src-tauri/vendor-crates/tao (wired in via `[patch.crates-io]` in src-tauri/Cargo.toml)
+- Local modifications to vendored source: `src/platform_impl/windows/icon.rs` builds the Windows icon AND mask as a 1-bit-per-pixel, WORD-aligned bitmap (upstream passed one byte per pixel); `Cargo.toml` adds `[lints.rust] warnings = "allow"`. Only the files needed to build were copied. Details: src-tauri/vendor-crates/tao/VENDORED.md.
