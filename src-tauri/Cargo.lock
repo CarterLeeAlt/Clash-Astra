@@ -593,6 +593,7 @@ dependencies = [
  "reqwest",
  "rquickjs",
  "runas",
+ "rustls",
  "serde",
  "serde_json",
  "serde_yaml",

@@ -31,6 +31,16 @@ interface Props {
   onDelete: (uid: string) => void;
 }
 
+// 站点卡片测的是 TCP 连接（含 TLS 首包），阈值按站点连接耗时定，
+// 不沿用节点测速的 150/200ms。
+const siteDelayColor = (delay: number) => {
+  if (delay < 0) return "text.secondary";
+  if (delay >= 10000) return "error.main";
+  if (delay <= 800) return "success.main";
+  if (delay <= 2000) return "warning.main";
+  return "warning.dark";
+};
+
 export const TestItem = (props: Props) => {
   const {
     itemData,
@@ -241,7 +251,7 @@ export const TestItem = (props: Props) => {
                 e.stopPropagation();
                 onDelay();
               }}
-              color={delayManager.formatDelayColor(delay, 10000)}
+              color={siteDelayColor(delay)}
               sx={({ palette }) => ({
                 ":hover": {
                   bgcolor: alpha(palette.primary.main, 0.15),

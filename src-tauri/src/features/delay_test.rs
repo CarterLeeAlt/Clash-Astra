@@ -5,9 +5,12 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, ClipboardManager};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpStream;
 use tokio::time::{sleep, Duration, Instant};
 
 /// copy env variable
@@ -256,80 +259,188 @@ struct TestDelayMatchContext {
     before_connection_ids: HashSet<String>,
 }
 
+/// 站点测试：经当前代理路径与目标网站建立 TCP 连接，并等到目标返回首个字节。
+/// 非 TUN 模式通过 mixed-port 的 CONNECT 隧道；TUN 模式直接连接。
+/// 不做完整 TLS/HTTP 请求，只测到目标开始响应的耗时。
 pub async fn test_delay(url: String) -> Result<TestDelayResult> {
-    let test_url = reqwest::Url::parse(&url).ok();
-    let test_host = test_url
-        .as_ref()
-        .and_then(|url| url.host_str())
-        .map(|host| host.to_string());
-    let test_port = test_url
-        .as_ref()
-        .and_then(|url| url.port_or_known_default());
-
-    let match_context = prepare_test_delay_match_context().await;
-
-    let mut builder = reqwest::ClientBuilder::new().use_rustls_tls().no_proxy();
-
-    let port = Config::verge()
+    let mixed_port = Config::verge()
         .latest()
         .verge_mixed_port
         .unwrap_or(Config::clash().data().get_mixed_port());
     let tun_mode = Config::verge().latest().enable_tun_mode.unwrap_or(false);
 
-    let proxy_scheme = format!("http://127.0.0.1:{port}");
+    test_delay_with(url, mixed_port, tun_mode).await
+}
 
-    if !tun_mode {
-        if let Ok(proxy) = reqwest::Proxy::http(&proxy_scheme) {
-            builder = builder.proxy(proxy);
-        }
-        if let Ok(proxy) = reqwest::Proxy::https(&proxy_scheme) {
-            builder = builder.proxy(proxy);
-        }
-        if let Ok(proxy) = reqwest::Proxy::all(&proxy_scheme) {
-            builder = builder.proxy(proxy);
-        }
-    }
-
-    let request = builder
-        .timeout(Duration::from_millis(10000))
-        .build()?
-        .get(url).header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0");
+async fn test_delay_with(url: String, mixed_port: u16, tun_mode: bool) -> Result<TestDelayResult> {
+    let target = TestTarget::parse(&url)?;
+    let match_context = prepare_test_delay_match_context().await;
 
     let start = Instant::now();
-    let mut request = Box::pin(request.send());
-    let mut matched_proxy = None;
+    let probe = async {
+        let mut stream = if tun_mode {
+            connect_direct(&target.host, target.port).await?
+        } else {
+            connect_via_http_proxy(mixed_port, &target.host, target.port).await?
+        };
+        stream.set_nodelay(true).ok();
 
+        if target.scheme == "https" {
+            // 代理的 CONNECT 是乐观返回的，只有收到目标响应才能确认 TCP 已建立。
+            // 只发 ClientHello，不等完整握手，也不发 HTTP 请求。
+            let hello = build_tls_client_hello(&target.host)?;
+            stream.write_all(&hello).await?;
+        } else {
+            let authority = authority(&target.host, target.port);
+            let request =
+                format!("HEAD / HTTP/1.1\r\nHost: {authority}\r\nConnection: keep-alive\r\n\r\n");
+            stream.write_all(request.as_bytes()).await?;
+        }
+
+        let mut first = [0u8; 1];
+        if stream.read(&mut first).await? == 0 {
+            bail!("connection closed before first response byte");
+        }
+
+        Ok::<_, anyhow::Error>(stream)
+    };
+
+    let (delay, stream) = match tokio::time::timeout(Duration::from_millis(10000), probe).await {
+        Ok(Ok(stream)) => (start.elapsed().as_millis() as u32, Some(stream)),
+        Ok(Err(err)) => {
+            log::debug!(
+                target: "app",
+                "site connect test failed for {}:{}: {err:#}",
+                target.host,
+                target.port
+            );
+            (10000u32, None)
+        }
+        Err(_) => {
+            log::debug!(
+                target: "app",
+                "site connect test timed out for {}:{}",
+                target.host,
+                target.port
+            );
+            (10000u32, None)
+        }
+    };
+
+    // 隧道保持到出口节点匹配完成；连接关闭后 /connections 里就查不到了
+    let proxy = if stream.is_some() {
+        match_test_delay_proxy_until(
+            &match_context,
+            Some(&target.host),
+            Some(target.port),
+            Duration::from_millis(600),
+        )
+        .await
+    } else {
+        None
+    };
+    drop(stream);
+
+    Ok(TestDelayResult { delay, proxy })
+}
+
+struct TestTarget {
+    scheme: String,
+    host: String,
+    port: u16,
+}
+
+impl TestTarget {
+    fn parse(url: &str) -> Result<Self> {
+        let parsed = reqwest::Url::parse(url)
+            .map_err(|err| anyhow::anyhow!("invalid test url '{url}': {err}"))?;
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| anyhow::anyhow!("test url '{url}' has no host"))?
+            .to_string();
+        let port = parsed
+            .port_or_known_default()
+            .ok_or_else(|| anyhow::anyhow!("test url '{url}' has no known port"))?;
+
+        Ok(Self {
+            scheme: parsed.scheme().to_string(),
+            host,
+            port,
+        })
+    }
+}
+
+async fn connect_direct(host: &str, port: u16) -> Result<TcpStream> {
+    let stream = TcpStream::connect((host, port)).await?;
+    stream.set_nodelay(true).ok();
+    Ok(stream)
+}
+
+/// 通过 mixed-port 发 HTTP CONNECT 建立隧道。
+/// mihomo 会先回 200、再在后台连接目标，因此这个函数的返回不代表目标已连通，
+/// 真正的连通性由后续写入 ClientHello 后的首个响应字节确认。
+async fn connect_via_http_proxy(proxy_port: u16, host: &str, port: u16) -> Result<TcpStream> {
+    let mut stream = TcpStream::connect(("127.0.0.1", proxy_port)).await?;
+    stream.set_nodelay(true).ok();
+
+    let authority = authority(host, port);
+    let request = format!(
+        "CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\nProxy-Connection: keep-alive\r\n\r\n"
+    );
+    stream.write_all(request.as_bytes()).await?;
+
+    let mut reader = BufReader::new(stream);
+    let mut status = String::new();
+    reader.read_line(&mut status).await?;
+    if !status.starts_with("HTTP/1.") || !status.contains(" 200") {
+        bail!("proxy CONNECT to {authority} rejected: {}", status.trim());
+    }
     loop {
-        tokio::select! {
-            response = &mut request => {
-                let delay = match response {
-                    Ok(response) if response.status().is_success() => start.elapsed().as_millis() as u32,
-                    Ok(_) | Err(_) => 10000u32,
-                };
-
-                if matched_proxy.is_none() {
-                    matched_proxy = match_test_delay_proxy_until(
-                        &match_context,
-                        test_host.as_deref(),
-                        test_port,
-                        Duration::from_millis(600),
-                    ).await;
-                }
-
-                return Ok(TestDelayResult {
-                    delay,
-                    proxy: matched_proxy,
-                });
-            }
-            _ = sleep(Duration::from_millis(100)), if matched_proxy.is_none() => {
-                matched_proxy = match_test_delay_proxy(
-                    &match_context,
-                    test_host.as_deref(),
-                    test_port,
-                ).await;
-            }
+        let mut line = String::new();
+        if reader.read_line(&mut line).await? == 0 || line == "\r\n" {
+            break;
         }
     }
+
+    Ok(reader.into_inner())
+}
+
+fn authority(host: &str, port: u16) -> String {
+    if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
+/// 生成带 SNI 的 TLS ClientHello；只用于触发目标的真实 TCP 建连与首个响应，
+/// 不校验证书、不完成握手，因此空根证书库即可。
+fn build_tls_client_hello(host: &str) -> Result<Vec<u8>> {
+    let config = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(rustls::RootCertStore::empty())
+        .with_no_client_auth();
+    let server_name = match host.parse::<IpAddr>() {
+        Ok(ip) => rustls::ServerName::IpAddress(ip),
+        Err(_) => rustls::ServerName::try_from(host)
+            .map_err(|_| anyhow::anyhow!("invalid SNI host '{host}'"))?,
+    };
+    let mut conn = rustls::ClientConnection::new(Arc::new(config), server_name)?;
+
+    let mut hello = Vec::new();
+    loop {
+        let written = conn.write_tls(&mut hello)?;
+        if written == 0 {
+            break;
+        }
+        if hello.len() > 64 * 1024 {
+            bail!("TLS ClientHello exceeds 64 KiB");
+        }
+    }
+    if hello.is_empty() {
+        bail!("failed to build TLS ClientHello");
+    }
+    Ok(hello)
 }
 
 async fn prepare_test_delay_match_context() -> TestDelayMatchContext {
@@ -511,4 +622,53 @@ fn connection_matches_test_url(
     };
 
     host_matches && port_matches
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_https_target() {
+        let target = TestTarget::parse("https://www.youtube.com/generate_204").unwrap();
+        assert_eq!(target.scheme, "https");
+        assert_eq!(target.host, "www.youtube.com");
+        assert_eq!(target.port, 443);
+    }
+
+    #[test]
+    fn parses_explicit_port() {
+        let target = TestTarget::parse("http://example.com:8080/path").unwrap();
+        assert_eq!(target.scheme, "http");
+        assert_eq!(target.port, 8080);
+    }
+
+    #[test]
+    fn formats_authority_with_ipv6() {
+        assert_eq!(authority("example.com", 443), "example.com:443");
+        assert_eq!(authority("::1", 443), "[::1]:443");
+        assert_eq!(authority("[::1]", 443), "[::1]:443");
+    }
+
+    #[test]
+    fn builds_tls_client_hello() {
+        let hello = build_tls_client_hello("example.com").unwrap();
+        assert_eq!(hello.first().copied(), Some(0x16));
+        assert!(hello.len() > 5);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running mihomo mixed port on 7897"]
+    async fn manual_connect_probe() {
+        for url in [
+            "https://www.google.com",
+            "https://www.youtube.com",
+            "https://chatgpt.com",
+            "https://github.com",
+        ] {
+            let result = test_delay_with(url.to_string(), 7897, false).await.unwrap();
+            println!("{url} -> {result:?}");
+            assert!(result.delay < 10000);
+        }
+    }
 }

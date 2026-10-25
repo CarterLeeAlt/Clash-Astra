@@ -35,6 +35,7 @@ window-shadows = { version = "0.2" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+rustls = "0.21"
 sysproxy = { path = "vendor-crates/sysproxy-rs" }
 auto-launch = { path = "vendor-crates/auto-launch" }
 tauri = { version = "1.5", features = [ "path-all", "protocol-asset", "dialog-open", "icon-png", "clipboard-all", "global-shortcut-all", "process-all", "shell-all", "system-tray" , "window-all"] }
