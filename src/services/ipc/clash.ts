@@ -79,6 +79,11 @@ export async function getAutoDelayResults() {
   return invoke<Record<string, number>>("get_auto_delay_results");
 }
 
+/// 立即触发一轮自动延迟测试（切换、新建或更新订阅后调用）
+export async function triggerAutoDelayTest() {
+  return invoke<void>("trigger_auto_delay_test");
+}
+
 export interface ITestDelayResult {
   delay: number;
   proxy?: string;

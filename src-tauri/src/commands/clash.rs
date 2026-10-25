@@ -69,3 +69,12 @@ pub async fn clash_api_get_proxy_delay(
 pub fn get_auto_delay_results() -> CmdResult<HashMap<String, u32>> {
     Ok(feat::latest_auto_delay_results())
 }
+
+/// 立即触发一轮自动延迟测试（切换、新建或更新订阅后调用）
+#[tauri::command]
+pub async fn trigger_auto_delay_test() -> CmdResult {
+    match feat::run_auto_delay_test().await {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
+}

@@ -3,6 +3,7 @@ import {
   getProfiles,
   patchProfile,
   patchProfilesConfig,
+  triggerAutoDelayTest,
 } from "@/services/cmds";
 import { getProxies, updateProxy } from "@/services/api";
 import { queryKeys } from "@/shared/query/keys";
@@ -62,6 +63,9 @@ export const useProfiles = () => {
       patchProfile(profileData.current!, { selected: newSelected });
       mutate(queryKeys.proxies, getProxies());
     }
+
+    // 切换到/新建订阅后补一轮延迟测试，让新节点立即有结果
+    triggerAutoDelayTest().catch(() => undefined);
   };
 
   return {

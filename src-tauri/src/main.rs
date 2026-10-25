@@ -84,6 +84,7 @@ fn main() -> std::io::Result<()> {
             cmds::get_clash_info,
             cmds::get_clash_logs,
             cmds::get_auto_delay_results,
+            cmds::trigger_auto_delay_test,
             cmds::patch_clash_config,
             cmds::change_clash_core,
             cmds::get_runtime_config,

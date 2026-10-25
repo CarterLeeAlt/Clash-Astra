@@ -17,7 +17,12 @@ import {
 } from "@mui/material";
 import { RefreshRounded, DragIndicator } from "@mui/icons-material";
 import { atomLoadingCache } from "@/services/states";
-import { updateProfile, deleteProfile, viewProfile } from "@/services/cmds";
+import {
+  updateProfile,
+  deleteProfile,
+  viewProfile,
+  triggerAutoDelayTest,
+} from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { invalidateProfiles } from "@/shared/query/invalidate";
 import { parseExpire } from "../format";
@@ -142,6 +147,8 @@ export const ProfileItem = (props: Props) => {
 
     try {
       await updateProfile(itemData.uid, option);
+      // 更新订阅后补一轮延迟测试
+      triggerAutoDelayTest().catch(() => undefined);
       invalidateProfiles();
     } catch (err: any) {
       const errmsg = formatNoticeMessage(err).replace(

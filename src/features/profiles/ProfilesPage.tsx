@@ -41,6 +41,7 @@ import {
   deleteProfile,
   updateProfile,
   reorderProfile,
+  triggerAutoDelayTest,
 } from "@/services/cmds";
 import { atomLoadingCache } from "@/services/states";
 import { closeAllConnections } from "@/services/api";
@@ -223,7 +224,11 @@ const ProfilePage = () => {
         );
         const change = Object.fromEntries(items.map((e) => [e.uid, true]));
 
-        Promise.allSettled(items.map((e) => updateOne(e.uid))).then(resolve);
+        Promise.allSettled(items.map((e) => updateOne(e.uid))).then(() => {
+          // 全部更新完后补一轮延迟测试
+          triggerAutoDelayTest().catch(() => undefined);
+          resolve(undefined);
+        });
         return { ...cache, ...change };
       });
     });
