@@ -4,6 +4,7 @@ import {
   patchProfile,
   patchProfilesConfig,
   triggerAutoDelayTest,
+  triggerAutoSiteTest,
 } from "@/services/cmds";
 import { getProxies, updateProxy } from "@/services/api";
 import { queryKeys } from "@/shared/query/keys";
@@ -64,8 +65,9 @@ export const useProfiles = () => {
       mutate(queryKeys.proxies, getProxies());
     }
 
-    // 切换到/新建订阅后补一轮延迟测试，让新节点立即有结果
+    // 切换到/新建订阅后补一轮延迟测试和站点检测，让新节点立即有结果
     triggerAutoDelayTest().catch(() => undefined);
+    triggerAutoSiteTest().catch(() => undefined);
   };
 
   return {

@@ -261,10 +261,13 @@ impl CoreManager {
             match crate::core::sysopt::Sysopt::global().init_sysproxy() {
                 Ok(()) => {
                     self.proxy_initialized.store(true, Ordering::SeqCst);
-                    // 核心就绪后立即补一轮自动延迟测试，不必等首个 2 分钟周期
+                    // 核心就绪后立即补一轮自动延迟与站点检测，不必等首个 2 分钟周期
                     tauri::async_runtime::spawn(async {
                         if let Err(err) = crate::feat::run_auto_delay_test().await {
                             log::warn!(target: "app", "initial auto delay test failed: {err:#}");
+                        }
+                        if let Err(err) = crate::feat::run_auto_site_test().await {
+                            log::warn!(target: "app", "initial auto site test failed: {err:#}");
                         }
                     });
                     return;

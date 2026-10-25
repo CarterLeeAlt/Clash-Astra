@@ -19,12 +19,14 @@ import { formatNoticeMessage, Notice } from "@/components/base";
 import { TestBox } from "./test-box";
 import delayManager from "@/services/delay";
 import { cmdTestDelay } from "@/services/cmds";
+import type { ITestDelayResult } from "@/services/cmds";
 import { utf8ToBase64 } from "@/utils/base64";
 
 interface Props {
   id: string;
   itemData: IVergeTestItem;
   testAllTick: number;
+  autoResult?: ITestDelayResult;
   editable?: boolean;
   onEdit: () => void;
   onDelete: (uid: string) => void;
@@ -34,6 +36,7 @@ export const TestItem = (props: Props) => {
   const {
     itemData,
     testAllTick,
+    autoResult,
     editable = true,
     onEdit,
     onDelete: onDeleteItem,
@@ -124,6 +127,13 @@ export const TestItem = (props: Props) => {
     lastTestAllTickRef.current = testAllTick;
     void onDelay();
   }, [testAllTick, onDelay]);
+
+  // 后端定时检测的结果直接覆盖卡片显示，与手动 Check 同一套字段
+  useEffect(() => {
+    if (!autoResult) return;
+    setDelay(autoResult.delay);
+    setProxy(autoResult.proxy);
+  }, [autoResult]);
 
   return (
     <Box

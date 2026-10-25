@@ -46,9 +46,18 @@ pub struct TestDelayResult {
 static LATEST_AUTO_DELAY: Lazy<Mutex<HashMap<String, u32>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+/// 最近一轮站点检测结果（URL -> 结果）。
+static LATEST_SITE_TEST: Lazy<Mutex<HashMap<String, TestDelayResult>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 /// 读取最近一轮自动延迟测试的低值结果。
 pub fn latest_auto_delay_results() -> HashMap<String, u32> {
     LATEST_AUTO_DELAY.lock().clone()
+}
+
+/// 读取最近一轮站点检测结果。
+pub fn latest_site_test_results() -> HashMap<String, TestDelayResult> {
+    LATEST_SITE_TEST.lock().clone()
 }
 
 /// 后台自动延迟测试：逐节点两并发取低值，结果同时写入内核 history
@@ -138,6 +147,71 @@ pub async fn run_auto_delay_test() -> Result<()> {
     log::info!(
         target: "app",
         "auto delay test finished: {measured} node(s) with results"
+    );
+    Ok(())
+}
+
+/// 后台站点检测：读取测试页列表，逐 URL 走与手动 Check 相同的测试逻辑，
+/// 结果写入快照并推送前端。每轮最多 4 个站点并发。
+pub async fn run_auto_site_test() -> Result<()> {
+    const CONCURRENCY: usize = 4;
+
+    let urls: Vec<String> = {
+        let verge = Config::verge();
+        let verge = verge.latest();
+        let mut seen = HashSet::new();
+        verge
+            .test_list
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| item.url)
+            .map(|url| url.trim().to_string())
+            .filter(|url| !url.is_empty())
+            .filter(|url| seen.insert(url.clone()))
+            .collect()
+    };
+
+    if urls.is_empty() {
+        log::debug!(target: "app", "auto site test skipped; no test urls");
+        return Ok(());
+    }
+
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(CONCURRENCY));
+    let mut set = tokio::task::JoinSet::new();
+
+    for url in urls {
+        let semaphore = semaphore.clone();
+        set.spawn(async move {
+            let _permit = semaphore
+                .acquire_owned()
+                .await
+                .expect("site test semaphore closed");
+            let result = test_delay(url.clone()).await.unwrap_or(TestDelayResult {
+                delay: 10000,
+                proxy: None,
+            });
+            (url, result)
+        });
+    }
+
+    let mut latest = HashMap::new();
+    while let Some(joined) = set.join_next().await {
+        match joined {
+            Ok((url, result)) => {
+                latest.insert(url, result);
+            }
+            Err(err) => log::warn!(target: "app", "auto site test task failed: {err}"),
+        }
+    }
+
+    let measured = latest.len();
+    let snapshot = latest.clone();
+    *LATEST_SITE_TEST.lock() = latest;
+    crate::core::handle::Handle::notify_auto_site_test_results(&snapshot);
+    log::info!(
+        target: "app",
+        "auto site test finished: {measured} url(s) with results"
     );
     Ok(())
 }

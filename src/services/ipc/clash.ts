@@ -84,6 +84,16 @@ export async function triggerAutoDelayTest() {
   return invoke<void>("trigger_auto_delay_test");
 }
 
+/// 最近一轮后台站点检测结果（URL -> 延迟/出口代理）
+export async function getAutoSiteTestResults() {
+  return invoke<Record<string, ITestDelayResult>>("get_auto_site_test_results");
+}
+
+/// 立即触发一轮站点检测（启动、切换或更新订阅后调用）
+export async function triggerAutoSiteTest() {
+  return invoke<void>("trigger_auto_site_test");
+}
+
 export interface ITestDelayResult {
   delay: number;
   proxy?: string;

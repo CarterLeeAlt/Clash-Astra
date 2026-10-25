@@ -96,6 +96,8 @@ fn main() -> std::io::Result<()> {
             cmds::get_verge_config,
             cmds::patch_verge_config,
             cmds::test_delay,
+            cmds::get_auto_site_test_results,
+            cmds::trigger_auto_site_test,
             cmds::get_app_dir,
             cmds::copy_icon_file,
             cmds::exit_app,

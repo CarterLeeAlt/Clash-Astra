@@ -26,6 +26,8 @@ import ChatGptIcon from "@/assets/image/chatgpt.svg";
 import AnthropicIcon from "@/assets/image/anthropic.svg";
 import GrokIcon from "@/assets/image/grok.png";
 import { normalizeTestList } from "@/features/test/normalize";
+import { getAutoSiteTestResults } from "@/services/cmds";
+import type { ITestDelayResult } from "@/services/cmds";
 
 const DEFAULT_TEST_ITEMS: Record<string, IVergeTestItem> = {
   "builtin-apple": {
@@ -190,6 +192,32 @@ const TestPage = () => {
 
   const viewerRef = useRef<TestViewerRef>(null);
   const [testAllTick, setTestAllTick] = useState(0);
+  const [autoResults, setAutoResults] = useState<
+    Record<string, ITestDelayResult>
+  >({});
+
+  // 站点检测由后端每 2 分钟跑一轮，页面打开时先取快照，再订阅推送
+  useEffect(() => {
+    let disposed = false;
+
+    getAutoSiteTestResults()
+      .then((results) => {
+        if (!disposed && results) setAutoResults(results);
+      })
+      .catch(() => undefined);
+
+    const task = listen<Record<string, ITestDelayResult>>(
+      "verge://auto-site-test-results",
+      (event) => {
+        if (!disposed) setAutoResults(event.payload ?? {});
+      }
+    );
+
+    return () => {
+      disposed = true;
+      task.then((unlisten) => unlisten()).catch(() => undefined);
+    };
+  }, []);
 
   // 统一监听 Test All，避免每个 TestItem 各注册一个 Tauri 事件监听器。
   useEffect(() => {
@@ -255,6 +283,7 @@ const TestPage = () => {
                       id={item.uid}
                       itemData={item}
                       testAllTick={testAllTick}
+                      autoResult={autoResults[item.url]}
                       editable={editable}
                       onEdit={() => {
                         if (editable) {

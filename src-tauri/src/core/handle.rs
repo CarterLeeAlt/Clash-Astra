@@ -57,6 +57,15 @@ impl Handle {
         }
     }
 
+    /// 一轮站点检测完成后推送结果（URL -> 延迟/出口代理）。
+    pub fn notify_auto_site_test_results(
+        results: &std::collections::HashMap<String, crate::feat::TestDelayResult>,
+    ) {
+        if let Some(window) = Self::global().get_window() {
+            log_err!(window.emit("verge://auto-site-test-results", results));
+        }
+    }
+
     pub fn emit_log<T: Into<String>, M: Into<String>>(level: T, msg: M) {
         if let Some(window) = Self::global().get_window() {
             let event = AppLogEvent {

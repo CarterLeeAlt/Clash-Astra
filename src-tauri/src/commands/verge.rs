@@ -21,6 +21,19 @@ pub async fn test_delay(url: String) -> CmdResult<feat::TestDelayResult> {
         }))
 }
 
+/// 最近一轮后台站点检测结果（URL -> 延迟/出口代理）
+#[tauri::command]
+pub fn get_auto_site_test_results(
+) -> CmdResult<std::collections::HashMap<String, feat::TestDelayResult>> {
+    Ok(feat::latest_site_test_results())
+}
+
+/// 立即触发一轮站点检测（启动、切换或更新订阅后调用）
+#[tauri::command]
+pub async fn trigger_auto_site_test() -> CmdResult {
+    wrap_err!(feat::run_auto_site_test().await)
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SchedulerState {
