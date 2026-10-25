@@ -1,6 +1,6 @@
 [package]
 name = "clash-astra"
-version = "1.8.1"
+version = "1.8.2"
 description = "Clash Astra"
 authors = ["Clash Astra"]
 license = "GPL-3.0-only"
