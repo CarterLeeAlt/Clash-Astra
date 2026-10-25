@@ -11,17 +11,16 @@ $webImages = Join-Path $root 'src\assets\image'
 $appIconSizes = 16, 24, 32, 48, 64, 72, 96, 128, 256
 $watchdogIconSizes = 16, 32, 48, 64, 128, 256
 $faviconSizes = 16, 32, 48
-$traySize = 32
 $brandIconSize = 56
 
-# 标准母版：应用与 Watchdog 1024x1024（覆盖到 256px 输出仍有 4 倍余量），托盘 32x32；
+# 标准母版：应用与 Watchdog 1024x1024（覆盖到 256px 输出仍有 4 倍余量），托盘按母版原尺寸发布。
 # 更大的正方形母版同样接受，小于 1024 直接报错。
 $masters = @(
     @{ Name = 'app-icon.png'; MinSize = 1024; ExactSize = 0 },
     @{ Name = 'watchdog-icon.png'; MinSize = 1024; ExactSize = 0 },
-    @{ Name = 'tray-normal.png'; MinSize = 0; ExactSize = 32 },
-    @{ Name = 'tray-system-proxy.png'; MinSize = 0; ExactSize = 32 },
-    @{ Name = 'tray-tun.png'; MinSize = 0; ExactSize = 32 }
+    @{ Name = 'tray-normal.png'; MinSize = 16; ExactSize = 0 },
+    @{ Name = 'tray-system-proxy.png'; MinSize = 16; ExactSize = 0 },
+    @{ Name = 'tray-tun.png'; MinSize = 16; ExactSize = 0 }
 )
 
 $tauriOutputs = @(
@@ -257,12 +256,8 @@ function Build-Icons {
         @{ Master = 'tray-tun.png'; Output = 'tray-icon-tun.png' }
     )
     foreach ($tray in $trayMasters) {
-        $bitmap = [Drawing.Bitmap]::new((Resolve-Path -LiteralPath (Join-Path $masterDir $tray.Master)).Path)
-        try {
-            Write-PngFile -Path (Join-Path $TauriOut $tray.Output) -Source $bitmap -Size $traySize
-        } finally {
-            $bitmap.Dispose()
-        }
+        # 托盘图按母版原尺寸发布，不做缩放；换新图时直接给最终尺寸（建议 32x32）
+        Copy-Item -LiteralPath (Join-Path $masterDir $tray.Master) -Destination (Join-Path $TauriOut $tray.Output) -Force
     }
 }
 
