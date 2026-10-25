@@ -1,15 +1,16 @@
 import { useEffect } from "react";
 import { mutate } from "swr";
+import { listen } from "@tauri-apps/api/event";
 import { getProxies } from "@/services/api";
 import { getAutoDelayResults } from "@/services/cmds";
 import delayManager from "@/services/delay";
 import { queryKeys } from "@/shared/query/keys";
 
 /**
- * 窗口重新可见时刷新延迟显示：
- * 1. 清空本地延迟缓存；
- * 2. 拉取后端自动测试快照（每节点两并发取低值）写入本地缓存，优先于乱序的 history；
- * 3. 重新拉取代理数据，让内核 history 与选择状态同步。
+ * 手动与自动测速共用同一套延迟状态：
+ * 1. 手动测速直接写延迟缓存，所有分组通过同名监听同步；
+ * 2. 后端自动测速完成后推送 verge://auto-delay-finished，前端立即拉取快照写入缓存；
+ * 3. 窗口重新可见时也做一次同样的刷新。
  */
 export const useDelayRefresh = () => {
   useEffect(() => {
@@ -52,10 +53,19 @@ export const useDelayRefresh = () => {
       void refresh();
     };
 
+    const unlistenTasks = [
+      listen("verge://auto-delay-finished", () => {
+        void refresh();
+      }),
+    ];
+
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       disposed = true;
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      unlistenTasks.forEach((task) => {
+        task.then((unlisten) => unlisten()).catch(() => undefined);
+      });
     };
   }, []);
 };

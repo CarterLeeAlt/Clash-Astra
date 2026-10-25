@@ -50,6 +50,13 @@ impl Handle {
         }
     }
 
+    /// 一轮后台自动延迟测试完成后通知前端刷新；manual 与自动走同一套延迟缓存。
+    pub fn notify_auto_delay_finished() {
+        if let Some(window) = Self::global().get_window() {
+            log_err!(window.emit("verge://auto-delay-finished", "yes"));
+        }
+    }
+
     pub fn emit_log<T: Into<String>, M: Into<String>>(level: T, msg: M) {
         if let Some(window) = Self::global().get_window() {
             let event = AppLogEvent {

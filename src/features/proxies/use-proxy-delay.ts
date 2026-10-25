@@ -10,14 +10,16 @@ export const useProxyDelay = (proxy: IProxyItem, groupName: string) => {
   const rawTimeout = Number(verge?.default_latency_timeout);
   const timeout =
     Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
+  // 分组卡片跟随其当前选中节点的延迟
+  const source = delayManager.getDelaySource(proxy);
 
   useEffect(() => {
-    delayManager.setListener(proxy.name, setDelay);
+    delayManager.setListener(source, setDelay);
 
     return () => {
-      delayManager.removeListener(proxy.name, setDelay);
+      delayManager.removeListener(source, setDelay);
     };
-  }, [proxy.name]);
+  }, [source]);
 
   useEffect(() => {
     if (!proxy) return;
@@ -26,7 +28,7 @@ export const useProxyDelay = (proxy: IProxyItem, groupName: string) => {
 
   const onDelay = useLockFn(async () => {
     setDelay(DELAY_PENDING);
-    setDelay(await delayManager.checkDelay(proxy.name, groupName, timeout));
+    setDelay(await delayManager.checkDelay(source, groupName, timeout));
   });
 
   return { delay, onDelay, timeout };

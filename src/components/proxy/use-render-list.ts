@@ -2,6 +2,7 @@ import useSWR from "swr";
 import { useEffect, useMemo } from "react";
 import { getProxies } from "@/services/api";
 import { useVerge } from "@/hooks/use-verge";
+import delayManager, { type DelayProxyRef } from "@/services/delay";
 import { filterSort } from "./use-filter-sort";
 import { useWindowWidth } from "./use-window-width";
 import {
@@ -43,6 +44,20 @@ export const useRenderList = (mode: string) => {
   }
 
   const [headStates, setHeadState] = useHeadStateNew();
+
+  // 分组条目的延迟要跟随其当前选中节点，先注册代理表供 delayManager 解析
+  const proxyIndex = useMemo(() => {
+    const index = new Map<string, DelayProxyRef>();
+    if (!proxiesData) return index;
+    for (const group of [proxiesData.global, ...proxiesData.groups]) {
+      if (!group) continue;
+      index.set(group.name, group);
+      for (const proxy of group.all ?? []) index.set(proxy.name, proxy);
+    }
+    return index;
+  }, [proxiesData]);
+
+  useMemo(() => delayManager.setProxyRecords(proxyIndex), [proxyIndex]);
 
   // make sure that fetch the proxies successfully
   useEffect(() => {

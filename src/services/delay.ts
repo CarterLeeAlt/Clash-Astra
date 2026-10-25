@@ -16,6 +16,13 @@ export const DELAY_NOT_APPLICABLE = -3; // REJECT 没有网络路径，不测
 export const DELAY_UNREACHABLE = -4; // DIRECT 直连不到目标，属预期结果
 const DELAY_FAILED = 1e6;
 
+/** 延迟解析只需要名称、当前选中项与 history，分组与节点都满足 */
+export type DelayProxyRef = {
+  name: string;
+  now?: string;
+  history: IProxyItem["history"];
+};
+
 /** 是否已有可用于显示的测速结果（未测和测速中不算） */
 export const hasDelayResult = (delay: number) =>
   delay !== DELAY_UNKNOWN && delay !== DELAY_PENDING;
@@ -30,6 +37,7 @@ class DelayManager {
   private cache = new Map<string, [number, number]>();
   private urlMap = new Map<string, string>();
   private groupTaskMap = new Map<string, DelayTaskState>();
+  private proxies = new Map<string, DelayProxyRef>();
   private taskSeq = 0;
 
   // 每个item的监听
@@ -44,6 +52,23 @@ class DelayManager {
 
   getUrl(group: string) {
     return this.urlMap.get(group);
+  }
+
+  /** 注册当前代理表，用于把分组解析到它当前选中的节点 */
+  setProxyRecords(proxies: Map<string, DelayProxyRef>) {
+    this.proxies = proxies;
+  }
+
+  /** 分组自身没有延迟：沿当前选中项取到最终节点；叶子节点返回自身 */
+  getDelaySource(proxy: DelayProxyRef): string {
+    let current = proxy;
+    for (let depth = 0; depth < 8; depth++) {
+      const next = current.now ? this.proxies.get(current.now) : undefined;
+      if (!next) return current.now || current.name;
+      if (next.name === current.name) return current.name;
+      current = next;
+    }
+    return current.name;
   }
 
   setListener(name: string, listener: (time: number) => void) {
@@ -159,22 +184,26 @@ class DelayManager {
     this.cache.clear();
   }
 
-  /// 暂时修复provider的节点延迟排序的问题
+  /// 分组显示其当前选中节点的延迟；叶子节点用自身缓存与 history
   getDelayFix(proxy: IProxyItem) {
-    if (proxy.name === "REJECT") return DELAY_NOT_APPLICABLE;
+    const sourceName = this.getDelaySource(proxy);
+    if (sourceName === "REJECT") return DELAY_NOT_APPLICABLE;
 
-    const cachedDelay = this.getDelay(proxy.name);
+    const cachedDelay = this.getDelay(sourceName);
     if (cachedDelay === DELAY_PENDING) return cachedDelay;
     // 本地缓存来自手动两并发低值或后端自动测试快照，优先于乱序的 history
     if (cachedDelay !== DELAY_UNKNOWN) {
       return cachedDelay;
     }
 
-    if (proxy.history.length > 0) {
+    const source =
+      this.proxies.get(sourceName) ??
+      (sourceName === proxy.name ? proxy : undefined);
+    if (source && source.history.length > 0) {
       // 内核历史里 0ms 表示失败；DIRECT 失败按预期不可达处理
-      const delay = proxy.history[proxy.history.length - 1].delay;
+      const delay = source.history[source.history.length - 1].delay;
       if (delay) return delay;
-      return proxy.name === "DIRECT" ? DELAY_UNREACHABLE : DELAY_FAILED;
+      return source.name === "DIRECT" ? DELAY_UNREACHABLE : DELAY_FAILED;
     }
     return DELAY_UNKNOWN;
   }

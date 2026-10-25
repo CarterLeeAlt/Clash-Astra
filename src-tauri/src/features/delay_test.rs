@@ -134,6 +134,7 @@ pub async fn run_auto_delay_test() -> Result<()> {
 
     let measured = latest.len();
     *LATEST_AUTO_DELAY.lock() = latest;
+    crate::core::handle::Handle::notify_auto_delay_finished();
     log::info!(
         target: "app",
         "auto delay test finished: {measured} node(s) with results"
