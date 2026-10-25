@@ -25,7 +25,6 @@ import { utf8ToBase64 } from "@/utils/base64";
 interface Props {
   id: string;
   itemData: IVergeTestItem;
-  testAllTick: number;
   autoResult?: ITestDelayResult;
   editable?: boolean;
   onEdit: () => void;
@@ -35,7 +34,6 @@ interface Props {
 export const TestItem = (props: Props) => {
   const {
     itemData,
-    testAllTick,
     autoResult,
     editable = true,
     onEdit,
@@ -53,7 +51,6 @@ export const TestItem = (props: Props) => {
   const [proxyScrollDistance, setProxyScrollDistance] = useState(0);
   const proxyContainerRef = useRef<HTMLSpanElement>(null);
   const proxyTextRef = useRef<HTMLSpanElement>(null);
-  const lastTestAllTickRef = useRef(testAllTick);
   const [iconLoadFailed, setIconLoadFailed] = useState(false);
   const { uid, name, icon, url } = itemData;
 
@@ -121,12 +118,6 @@ export const TestItem = (props: Props) => {
       window.removeEventListener("resize", updateOverflow);
     };
   }, [proxy, delay]);
-
-  useEffect(() => {
-    if (testAllTick === lastTestAllTickRef.current) return;
-    lastTestAllTickRef.current = testAllTick;
-    void onDelay();
-  }, [testAllTick, onDelay]);
 
   // 后端定时检测的结果直接覆盖卡片显示，与手动 Check 同一套字段
   useEffect(() => {

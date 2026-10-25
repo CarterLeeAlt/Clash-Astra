@@ -28,7 +28,7 @@ pub fn get_auto_site_test_results(
     Ok(feat::latest_site_test_results())
 }
 
-/// 立即触发一轮站点检测（启动、切换或更新订阅后调用）
+/// 立即触发一轮站点检测（测试页 Test All 调用）
 #[tauri::command]
 pub async fn trigger_auto_site_test() -> CmdResult {
     wrap_err!(feat::run_auto_site_test().await)

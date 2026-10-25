@@ -105,19 +105,21 @@ pub fn schedule_save_window_size_position(app_handle: AppHandle) {
 
 /// save window size and position
 pub fn save_window_size_position(app_handle: &AppHandle, save_to_file: bool) -> Result<()> {
-    let verge = Config::verge();
-    let mut verge = verge.latest();
-
     let win = app_handle
         .get_window("main")
         .ok_or(anyhow::anyhow!("failed to get window"))?;
 
+    // 窗口 getter 会同步派发到主线程并等待结果；必须在拿配置锁之前取完，
+    // 否则主线程上的同步命令（如 get_verge_config）等锁时会与这里互锁。
     let scale = win.scale_factor()?;
     let size = win.inner_size()?;
     let size = size.to_logical::<f64>(scale);
     let pos = win.outer_position()?;
     let pos = pos.to_logical::<f64>(scale);
     let is_maximized = win.is_maximized()?;
+
+    let verge = Config::verge();
+    let mut verge = verge.latest();
     verge.window_is_maximized = Some(is_maximized);
     if !is_maximized && size.width >= 1060.0 && size.height >= 680.0 {
         verge.window_size_position = Some(vec![size.width, size.height, pos.x, pos.y]);

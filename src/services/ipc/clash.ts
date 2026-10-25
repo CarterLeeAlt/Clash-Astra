@@ -89,7 +89,7 @@ export async function getAutoSiteTestResults() {
   return invoke<Record<string, ITestDelayResult>>("get_auto_site_test_results");
 }
 
-/// 立即触发一轮站点检测（启动、切换或更新订阅后调用）
+/// 立即触发一轮站点检测（测试页 Test All 调用）
 export async function triggerAutoSiteTest() {
   return invoke<void>("trigger_auto_site_test");
 }

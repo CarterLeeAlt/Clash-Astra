@@ -3,62 +3,79 @@ export interface NormalizedTestList {
   changed: boolean;
 }
 
+// builtIn 只在前端运行时生效，后端结构体不保存该字段，
+// 因此不能把它计入「是否需要回写」，否则每次读取都会判定变化并反复写配置。
+const sameItem = (a: IVergeTestItem, b: IVergeTestItem) =>
+  a.uid === b.uid && a.name === b.name && a.url === b.url && a.icon === b.icon;
+
 /**
- * 把持久化的测试项与内置项对齐：补齐 builtIn 标记、恢复内置 uid，
- * 并避免重复 uid。调用方负责提供内置项映射（name::url -> item）。
+ * 把持久化的测试项与内置项对齐：
+ * - 按 uid 优先匹配内置项（允许内置地址升级，不产生重复卡片）
+ * - 补齐 builtIn 标记与内置 icon
+ * - 缺少内置项时按默认顺序重建，自定义项保持原顺序追加
  */
 export const normalizeTestList = (
   list: IVergeTestItem[],
   defaultMap: Map<string, IVergeTestItem>
 ): NormalizedTestList => {
-  let changed = false;
-  const usedBuiltinUids = new Set<string>();
-
-  const normalized = list.map((item, index) => {
-    const defaultItem = defaultMap.get(`${item.name}::${item.url}`);
-
-    if (!defaultItem) {
-      return item;
-    }
-
-    const uid = usedBuiltinUids.has(defaultItem.uid)
-      ? item.uid === defaultItem.uid
-        ? `${defaultItem.uid}-${index}`
-        : item.uid
-      : defaultItem.uid;
-    usedBuiltinUids.add(defaultItem.uid);
-
-    if (item.builtIn === true && item.uid === uid) {
-      return item;
-    }
-
-    changed = true;
-    return { ...item, uid, builtIn: true };
-  });
-
   const defaults = Array.from(defaultMap.values());
-  const present = new Map<string, IVergeTestItem>();
-  for (const item of normalized) {
-    const key = `${item.name}::${item.url}`;
-    if (defaultMap.has(key) && !present.has(key)) {
-      present.set(key, item);
+  const byUid = new Map(
+    defaults
+      .filter((item) => item.uid)
+      .map((item) => [item.uid as string, item])
+  );
+
+  let changed = false;
+  const usedUids = new Set<string>();
+
+  const normalized: IVergeTestItem[] = [];
+  for (const item of list) {
+    const builtin =
+      (item.uid && byUid.get(item.uid)) ||
+      defaultMap.get(`${item.name}::${item.url}`);
+
+    if (!builtin || !builtin.uid) {
+      normalized.push(item);
+      continue;
     }
+
+    if (usedUids.has(builtin.uid)) {
+      changed = true;
+      continue;
+    }
+    usedUids.add(builtin.uid);
+
+    const next: IVergeTestItem = {
+      ...item,
+      uid: builtin.uid,
+      name: builtin.name,
+      url: builtin.url,
+      icon: builtin.icon,
+      builtIn: true,
+    };
+    if (!sameItem(item, next)) changed = true;
+    normalized.push(next);
   }
 
   const missing = defaults.filter(
-    (item) => !present.has(`${item.name}::${item.url}`)
+    (item) => item.uid && !usedUids.has(item.uid)
   );
   if (missing.length === 0) {
     return { normalized, changed };
   }
 
-  // 新增内置项时：内置项按默认顺序重排，自定义项保持原顺序追加
-  const rebuilt = defaults.map(
-    (item) => present.get(`${item.name}::${item.url}`) ?? item
+  const present = new Map(
+    normalized
+      .filter((item) => item.uid && byUid.has(item.uid))
+      .map((item) => [item.uid as string, item])
   );
-  const custom = normalized.filter(
-    (item) => !defaultMap.has(`${item.name}::${item.url}`)
-  );
+  const custom = normalized.filter((item) => !item.uid || !byUid.has(item.uid));
 
-  return { normalized: [...rebuilt, ...custom], changed: true };
+  return {
+    normalized: [
+      ...defaults.map((item) => present.get(item.uid as string) ?? item),
+      ...custom,
+    ],
+    changed: true,
+  };
 };

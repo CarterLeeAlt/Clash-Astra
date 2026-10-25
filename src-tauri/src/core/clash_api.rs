@@ -1,5 +1,6 @@
 use crate::config::{ClashInfo, Config, DEFAULT_LATENCY_TEST_URL};
 use anyhow::{bail, Result};
+use once_cell::sync::Lazy;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,16 @@ use serde_yaml::Mapping;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::time::Duration;
+
+/// Clash 控制器的共享 HTTP 客户端：连接轮询很频繁，不能每次新建客户端。
+static API_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::ClientBuilder::new()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(8))
+        .build()
+        .expect("failed to build Clash API client")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreUpgradeStatus {
@@ -175,15 +186,11 @@ pub async fn get_proxy_delay(
     };
 
     let timeout_param = format!("{timeout}");
-    let client = reqwest::ClientBuilder::new()
-        .no_proxy()
-        .connect_timeout(Duration::from_secs(2))
-        .timeout(Duration::from_millis(timeout as u64 + 5000))
-        .build()?;
-    let request = client
+    let request = API_CLIENT
         .get(&url)
         .headers(headers)
         .query(&[("timeout", &timeout_param), ("url", &test_url)])
+        .timeout(Duration::from_millis(timeout as u64 + 5000))
         .build()
         .map_err(|err| {
             anyhow::anyhow!(
@@ -198,7 +205,7 @@ pub async fn get_proxy_delay(
 
     log::debug!("requesting Clash proxy delay: proxy={name}, request={request_path_and_query}");
 
-    let response = client.execute(request).await.map_err(|err| {
+    let response = API_CLIENT.execute(request).await.map_err(|err| {
         anyhow::anyhow!(
             "failed to request Clash proxy delay for '{name}' via {request_path_and_query}: {err}"
         )
@@ -233,12 +240,7 @@ pub async fn get_proxies() -> Result<ProxiesRes> {
     let (url, headers) = clash_client_info()?;
     let url = format!("{url}/proxies");
 
-    let client = reqwest::ClientBuilder::new()
-        .no_proxy()
-        .connect_timeout(Duration::from_secs(2))
-        .timeout(Duration::from_secs(8))
-        .build()?;
-    let response = client.get(&url).headers(headers).send().await?;
+    let response = API_CLIENT.get(&url).headers(headers).send().await?;
 
     Ok(response.json::<ProxiesRes>().await?)
 }
@@ -248,12 +250,7 @@ pub async fn get_connections() -> Result<ConnectionsRes> {
     let (url, headers) = clash_client_info()?;
     let url = format!("{url}/connections");
 
-    let client = reqwest::ClientBuilder::new()
-        .no_proxy()
-        .connect_timeout(Duration::from_secs(2))
-        .timeout(Duration::from_secs(8))
-        .build()?;
-    let response = client.get(&url).headers(headers).send().await?;
+    let response = API_CLIENT.get(&url).headers(headers).send().await?;
 
     Ok(response.json::<ConnectionsRes>().await?)
 }

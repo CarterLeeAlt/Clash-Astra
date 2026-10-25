@@ -69,13 +69,6 @@ pub fn init() -> Result<()> {
         Arc::new(|| Box::pin(async { crate::feat::run_auto_delay_test().await })),
     )?;
 
-    // 测试页站点检测：每 2 分钟在后端跑一轮，结果推送前端卡片。
-    Scheduler::global().upsert(
-        "site.auto_test",
-        Schedule::Minutes(2),
-        Arc::new(|| Box::pin(async { crate::feat::run_auto_site_test().await })),
-    )?;
-
     // 系统代理自愈：开关开启时每 10 秒核对实际状态，漂移即重新应用。
     Scheduler::global().upsert(
         "proxy.sysproxy.heal",

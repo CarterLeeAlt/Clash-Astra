@@ -5,6 +5,7 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, ClipboardManager};
 use tokio::time::{sleep, Duration, Instant};
@@ -60,10 +61,37 @@ pub fn latest_site_test_results() -> HashMap<String, TestDelayResult> {
     LATEST_SITE_TEST.lock().clone()
 }
 
+/// 同一时刻只允许一轮自动延迟测试，避免启动、定时与订阅切换同时触发。
+static AUTO_DELAY_RUNNING: AtomicBool = AtomicBool::new(false);
+/// 同一时刻只允许一轮站点检测。
+static SITE_TEST_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// 运行标志的 RAII 守卫，函数退出（含提前返回）时自动复位。
+struct RunFlag(&'static AtomicBool);
+
+impl Drop for RunFlag {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+fn try_acquire(flag: &'static AtomicBool) -> Option<RunFlag> {
+    if flag.swap(true, Ordering::SeqCst) {
+        None
+    } else {
+        Some(RunFlag(flag))
+    }
+}
+
 /// 后台自动延迟测试：逐节点两并发取低值，结果同时写入内核 history
 /// 与内存快照（前端窗口重新可见时经 `get_auto_delay_results` 优先展示）。
 /// 不依赖前端 WebView，窗口隐藏或被节流时照常执行。
 pub async fn run_auto_delay_test() -> Result<()> {
+    let Some(_running) = try_acquire(&AUTO_DELAY_RUNNING) else {
+        log::debug!(target: "app", "auto delay test skipped; previous round still running");
+        return Ok(());
+    };
+
     /// 同一节点的并发测试轮数；取两轮中的较低值以抑制单次抖动
     const CONCURRENT_ROUNDS: usize = 2;
     /// 全局同时在测的节点数上限，避免控制器请求风暴
@@ -151,10 +179,15 @@ pub async fn run_auto_delay_test() -> Result<()> {
     Ok(())
 }
 
-/// 后台站点检测：读取测试页列表，逐 URL 走与手动 Check 相同的测试逻辑，
-/// 结果写入快照并推送前端。每轮最多 4 个站点并发。
+/// 站点检测：读取测试页列表，逐 URL 走与手动 Check 相同的测试逻辑，
+/// 结果写入快照并推送前端。由测试页的 Test All 触发。
 pub async fn run_auto_site_test() -> Result<()> {
-    const CONCURRENCY: usize = 4;
+    let Some(_running) = try_acquire(&SITE_TEST_RUNNING) else {
+        log::debug!(target: "app", "site test skipped; previous round still running");
+        return Ok(());
+    };
+
+    const CONCURRENCY: usize = 2;
 
     let urls: Vec<String> = {
         let verge = Config::verge();

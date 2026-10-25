@@ -5,12 +5,17 @@ import { mutate } from "swr";
 import { getAxios } from "@/services/api";
 import {
   frontendHeartbeat,
+  getAutoSiteTestResults,
   getWindowStyleConfig,
   reportFrontendError,
 } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { queryKeys } from "@/shared/query/keys";
 import { invalidateClashRuntime } from "@/shared/query/invalidate";
+import {
+  setSiteTestResults,
+  type SiteTestResults,
+} from "@/features/test/site-test-results";
 import getSystem from "@/utils/get-system";
 
 const OS = getSystem();
@@ -67,6 +72,23 @@ export const useAppEvents = () => {
         }
       })
     );
+
+    // 站点检测结果放在全局：切页时页面卸载也不会丢，回来直接读缓存。
+    // 先注册监听再拉快照，避免两者之间到达的结果被丢掉。
+    unlistenTasks.push(
+      listen<SiteTestResults>(
+        "verge://auto-site-test-results",
+        ({ payload }) => {
+          setSiteTestResults(payload ?? {});
+        }
+      )
+    );
+
+    getAutoSiteTestResults()
+      .then((results) => {
+        if (results) setSiteTestResults(results);
+      })
+      .catch(() => undefined);
 
     emit("frontend://ready").catch(() => undefined);
 

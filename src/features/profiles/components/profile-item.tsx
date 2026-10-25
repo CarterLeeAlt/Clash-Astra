@@ -22,7 +22,6 @@ import {
   deleteProfile,
   viewProfile,
   triggerAutoDelayTest,
-  triggerAutoSiteTest,
 } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { invalidateProfiles } from "@/shared/query/invalidate";
@@ -148,9 +147,8 @@ export const ProfileItem = (props: Props) => {
 
     try {
       await updateProfile(itemData.uid, option);
-      // 更新订阅后补一轮延迟测试和站点检测
+      // 更新订阅后补一轮延迟测试
       triggerAutoDelayTest().catch(() => undefined);
-      triggerAutoSiteTest().catch(() => undefined);
       invalidateProfiles();
     } catch (err: any) {
       const errmsg = formatNoticeMessage(err).replace(
