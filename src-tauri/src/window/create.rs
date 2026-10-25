@@ -264,13 +264,24 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         log::info!(target: "app", "create_window no saved window_size_position");
     }
 
+    let elevated = crate::core::win_service::is_current_process_elevated().unwrap_or_else(|err| {
+        log::warn!(target: "app", "create_window failed to detect elevation: {err}");
+        false
+    });
+    let window_title = if elevated {
+        "Clash Astra [Admin Mode]"
+    } else {
+        "Clash Astra [Normal Mode]"
+    };
+    log::info!(target: "app", "create_window title: {window_title}");
+
     let build_window = |fallback_mode: bool, use_saved_size_pos: bool| {
         let mut builder = tauri::window::WindowBuilder::new(
             app_handle,
             "main".to_string(),
             tauri::WindowUrl::App("index.html".into()),
         )
-        .title("Clash Astra")
+        .title(window_title)
         .data_directory(webview_data_dir.clone())
         .visible(false)
         .fullscreen(false)
