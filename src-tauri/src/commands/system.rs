@@ -160,6 +160,8 @@ pub fn restart_app(app_handle: tauri::AppHandle) {
 
 fn shutdown_app(app_handle: tauri::AppHandle, exit_code: i32) {
     log::info!(target: "app", "shutdown_app called, exit_code={exit_code}");
+    // 必须先于下面在主线程上执行的清理，否则看门狗可能把清理当成卡死。
+    resolve::mark_quitting_for_watchdog();
     resolve::set_app_quitting(true);
     let _ = resolve::save_window_size_position(&app_handle, true);
     resolve::resolve_reset();

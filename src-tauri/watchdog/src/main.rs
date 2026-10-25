@@ -4,6 +4,7 @@ mod job;
 mod process;
 #[path = "../../src/watchdog_protocol.rs"]
 mod protocol;
+mod runtime_files;
 mod window;
 
 use job::Job;
@@ -11,6 +12,7 @@ use process::Outcome;
 use protocol::{
     CHILD_ARG, RECOVERED_HIDDEN_ARG, RECOVERED_VISIBLE_ARG, RESTART_EXIT_CODE, WATCHDOG_EXE,
 };
+use runtime_files::RuntimeFiles;
 use std::{
     ffi::OsString,
     fs::{self, File, OpenOptions},
@@ -26,7 +28,8 @@ const RESTART_DELAY_SECS: u64 = 2;
 /// 单位时间窗内允许的「应用请求重启」次数上限。
 const RESTART_WINDOW_SECS: u64 = 60;
 const RESTART_LIMIT_PER_WINDOW: usize = 5;
-/// 连续卡死重启的窗口和上限，避免启动即卡死时无限重启。
+/// 卡死重启的窗口和上限：达到上限后本次运行不再做卡死检测（只等它退出），
+/// 避免启动即卡死或误判时界面反复消失。
 const HANG_WINDOW_SECS: u64 = 600;
 const MAX_HANG_RESTARTS: usize = 3;
 /// 运行超过这个时间视为稳定，清零崩溃重试计数。
@@ -77,7 +80,7 @@ fn run() -> io::Result<i32> {
             None
         }
     };
-    let heartbeat = heartbeat_path(exe_dir);
+    let files = RuntimeFiles::new(exe_dir);
 
     let mut retries = 0usize;
     let mut restart_times: Vec<Instant> = Vec::new();
@@ -94,10 +97,24 @@ fn run() -> io::Result<i32> {
         }
         gui_args.push(OsString::from(CHILD_ARG));
 
-        let outcome =
-            process::supervise_child(&exe, &gui_args, job.as_ref(), &heartbeat, &mut |message| {
-                logger.write(message)
-            });
+        let now = Instant::now();
+        hang_times.retain(|time| now.duration_since(*time).as_secs() < HANG_WINDOW_SECS);
+        let hang_detection = hang_times.len() < MAX_HANG_RESTARTS;
+        if !hang_detection {
+            logger.write(&format!(
+                "GUI hung {MAX_HANG_RESTARTS} times within {HANG_WINDOW_SECS}s; \
+                 hang detection disabled for this run"
+            ));
+        }
+
+        let outcome = process::supervise_child(
+            &exe,
+            &gui_args,
+            job.as_ref(),
+            &files,
+            hang_detection,
+            &mut |message| logger.write(message),
+        );
         let uptime = outcome.uptime();
 
         if let Some(job) = &job {
@@ -161,18 +178,7 @@ fn run() -> io::Result<i32> {
                 std::thread::sleep(Duration::from_secs(RETRY_DELAY_SECS));
             }
             Outcome::Hung { visible, .. } => {
-                let now = Instant::now();
-                hang_times.retain(|time| now.duration_since(*time).as_secs() < HANG_WINDOW_SECS);
-
-                if hang_times.len() >= MAX_HANG_RESTARTS {
-                    logger.write(&format!(
-                        "GUI hung {MAX_HANG_RESTARTS} times within {HANG_WINDOW_SECS}s; \
-                         hang restart limit reached, supervisor stopping"
-                    ));
-                    return Ok(1);
-                }
-
-                hang_times.push(now);
+                hang_times.push(Instant::now());
                 logger.write(&format!(
                     "GUI hang detected; restarting ({}/{MAX_HANG_RESTARTS} in {}s window), \
                      restore_visible={visible}",
@@ -186,14 +192,6 @@ fn run() -> io::Result<i32> {
             }
         }
     }
-}
-
-fn heartbeat_path(exe_dir: &Path) -> PathBuf {
-    exe_dir
-        .join(".config")
-        .join("io.github.clash-astra")
-        .join("runtime")
-        .join("gui-heartbeat")
 }
 
 struct Logger {

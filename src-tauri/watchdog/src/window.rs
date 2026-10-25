@@ -1,10 +1,8 @@
-use std::{
-    ffi::OsStr,
-    path::Path,
-    time::{Duration, SystemTime},
-};
+use std::time::Duration;
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, TRUE},
+    System::SystemInformation::GetTickCount,
+    UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
     UI::WindowsAndMessaging::{
         EnumWindows, GetAncestor, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
         GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, SendMessageTimeoutW,
@@ -110,8 +108,21 @@ pub fn probe(hwnd: HWND) -> WindowState {
     }
 }
 
-/// 前端心跳文件的年龄；文件不存在或读取失败时返回 None。
-pub fn heartbeat_age(path: &Path) -> Option<Duration> {
-    let modified = std::fs::metadata(OsStr::new(path)).ok()?.modified().ok()?;
-    SystemTime::now().duration_since(modified).ok()
+/// 距离用户最后一次键盘/鼠标输入的时长；取不到时返回 None。
+///
+/// 用户长时间无输入时显示器可能已关闭或锁屏，WebView2 会把页面视为被遮挡并
+/// 节流定时器，此时前端心跳变慢不代表卡死。
+pub fn user_idle() -> Option<Duration> {
+    unsafe {
+        let mut info = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
+        if GetLastInputInfo(&mut info) == 0 {
+            return None;
+        }
+        Some(Duration::from_millis(u64::from(
+            GetTickCount().wrapping_sub(info.dwTime),
+        )))
+    }
 }

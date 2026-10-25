@@ -33,29 +33,54 @@ pub fn find_unused_port() -> Result<u16> {
     }
 }
 
-/// 前端心跳文件：由主线程上的 frontend_heartbeat 命令刷新，
-/// 看门狗通过它判断 WebView 是否还在运行（主线程死锁时也会停止刷新）。
-pub fn frontend_heartbeat_path() -> Result<PathBuf> {
+fn watchdog_runtime_file(name: &str) -> Result<PathBuf> {
     Ok(crate::utils::dirs::app_home_dir()?
         .join("runtime")
-        .join("gui-heartbeat"))
+        .join(name))
 }
 
-pub fn touch_frontend_heartbeat() -> Result<()> {
-    let path = frontend_heartbeat_path()?;
+/// 写入当前 Unix 毫秒时间戳。看门狗读内容判断，不看 mtime：
+/// 反复把空文件截断为空时 NTFS 不更新 LastWriteTime。
+fn write_watchdog_timestamp(name: &str) -> Result<()> {
+    let path = watchdog_runtime_file(name)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, b"")?;
+    fs::write(path, current_time_millis().to_string())?;
     Ok(())
 }
 
-pub fn reset_frontend_heartbeat() -> Result<()> {
-    let path = frontend_heartbeat_path()?;
-    match fs::remove_file(path) {
+fn remove_watchdog_file(name: &str) -> Result<()> {
+    match fs::remove_file(watchdog_runtime_file(name)?) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(err) => Err(err.into()),
+    }
+}
+
+/// 前端心跳：由主线程上的 frontend_heartbeat 命令刷新，
+/// 看门狗通过它判断 WebView 是否还在运行（主线程死锁时也会停止刷新）。
+pub fn touch_frontend_heartbeat() -> Result<()> {
+    write_watchdog_timestamp(crate::watchdog_protocol::HEARTBEAT_FILE)
+}
+
+/// 告诉看门狗应用开始退出：退出清理在主线程上可能阻塞几十秒，
+/// 不能被当成卡死而结束进程再重新拉起。
+pub fn mark_quitting_for_watchdog() {
+    if let Err(err) = write_watchdog_timestamp(crate::watchdog_protocol::QUITTING_FILE) {
+        log::warn!(target: "app", "failed to write watchdog quitting marker: {err}");
+    }
+}
+
+/// 启动时清掉上次运行留下的心跳和退出标记。
+pub fn reset_watchdog_files() {
+    for name in [
+        crate::watchdog_protocol::HEARTBEAT_FILE,
+        crate::watchdog_protocol::QUITTING_FILE,
+    ] {
+        if let Err(err) = remove_watchdog_file(name) {
+            log::warn!(target: "app", "failed to reset watchdog file {name}: {err}");
+        }
     }
 }
 
@@ -117,7 +142,7 @@ pub fn resolve_setup(app: &mut App) {
         || recovered_hidden)
         && !recovered_visible;
     let show_when_ready = !silent_start;
-    let _ = reset_frontend_heartbeat();
+    reset_watchdog_files();
     log::trace!(
         "resolve_setup pre-create main window, silent_start={}, recovered_visible={}, recovered_hidden={}, show_when_ready={}",
         silent_start,
@@ -139,7 +164,6 @@ pub fn resolve_setup(app: &mut App) {
 
 /// reset system proxy
 pub fn resolve_reset() {
-    let _ = reset_frontend_heartbeat();
     OneShotScheduler::global().cancel_all();
     log_err!(Scheduler::global().shutdown());
     log_err!(sysopt::Sysopt::global().reset_sysproxy());
