@@ -9,12 +9,13 @@
 | `pnpm.mjs`                    | 工作区工具链入口：使用本地 Node/pnpm，固定 pnpm store/cache/state、`TEMP` 与 `XDG_*` 到工作区 |
 | `check-workspace-hygiene.mjs` | 校验工具链、lockfile、store/cache/state 与 `.gitignore` 约定                                  |
 | `release/release-notes.mjs`   | 按 tag 区间生成发布说明，可同步写入 `UPDATELOG.md`                                            |
+| `build/build-icons.ps1`       | 由 `assets/brand/` 母版生成全部图标；`-Check` 校验生成物是否漂移                              |
 
 ## 目录
 
 | 目录        | 内容                                                                                     |
 | ----------- | ---------------------------------------------------------------------------------------- |
-| `build/`    | 构建辅助：`build-watchdog.mjs`、`generate-watchdog-icon.ps1`                             |
+| `build/`    | 构建辅助：`build-watchdog.mjs`、`build-icons.ps1`                                        |
 | `release/`  | 发布打包：`portable.mjs`；发布说明：`release-notes.mjs`                                  |
 | `verify/`   | 校验：`check-naming.mjs`、`test-watchdog.ps1`                                            |
 | `sidecars/` | 运行时资源准备：`prepare-runtime.mjs`，下载 mihomo/Geo 数据并构建 Windows service 二进制 |

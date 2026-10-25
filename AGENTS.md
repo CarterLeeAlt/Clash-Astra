@@ -45,6 +45,7 @@
 
 - 前端改动：`node scripts/pnpm.mjs exec tsc --noEmit`
 - Rust 改动：`cargo fmt` 和 `cargo check`（按上节设置工作区环境，或经 `node scripts/pnpm.mjs exec cargo ...` 执行）
+- 图标或 `assets/brand/` 改动：`node scripts/pnpm.mjs run icons:check`
 - 工具链与缓存位置：`node scripts/check-workspace-hygiene.mjs`
 
 `node scripts/pnpm.mjs run prepare:runtime` 不是代码检查：它下载 mihomo、geo 数据等 sidecar 资源并构建 Windows service 二进制，前端类型检查与 Rust 编译检查都不包含在内。

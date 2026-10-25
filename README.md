@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="./src/assets/image/logo.png" alt="Clash Astra" width="128" />
+  <img src="./src-tauri/icons/128x128@2x.png" alt="Clash Astra" width="128" />
   <br>
   Clash Astra
   <br>

@@ -110,6 +110,10 @@ jobs:
           version: 11.15.1
           run_install: false
 
+      - name: Check generated icons
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/build/build-icons.ps1 -Check
+
       - name: Generate release notes
         shell: pwsh
         run: |

@@ -25,9 +25,9 @@
 
 ## 图标与显示名
 
-- GUI 使用完整蓝猫图标；Watchdog 使用同一形状的黄色版本。黄色取自仓库自带 `tray-icon-sys.png` 的原始色板，`tray-icon-sys.png` 本身不修改。
-- 图标由 `scripts/build/generate-watchdog-icon.ps1` 生成，输出 16、32、48、64、128、256 像素 ICO 与 PNG。
-- GUI 的任务管理器显示名来自 `src-tauri/Cargo.toml` 的 `description`；Watchdog 的显示名在 `src-tauri/watchdog/build.rs` 中固定为 `Clash Astra Watchdog`。
+- GUI 与 Watchdog 的图标都来自 `assets/brand/` 母版，由 `scripts/build/build-icons.ps1` 生成，不再从主图标调色派生。
+- Watchdog 使用独立母版 `assets/brand/watchdog-icon.png`；任务管理器显示名在 `src-tauri/watchdog/build.rs` 中固定为 `Clash Astra Watchdog`。
+- 母版规格、产物清单与校验命令见 [图标规范](../reference/icons.md)。
 
 ## 构建
 

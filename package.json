@@ -22,6 +22,8 @@
     "dev:diff": "tauri dev -f verge-dev",
     "build": "tauri build --bundles none && node scripts/build/build-watchdog.mjs",
     "build:watchdog": "node scripts/build/build-watchdog.mjs",
+    "icons": "pwsh -NoProfile -File scripts/build/build-icons.ps1",
+    "icons:check": "pwsh -NoProfile -File scripts/build/build-icons.ps1 -Check",
     "tauri": "tauri",
     "web:dev": "vite",
     "web:build": "tsc && vite build",

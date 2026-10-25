@@ -10,10 +10,8 @@ import { alpha, List, Paper, ThemeProvider } from "@mui/material";
 import { appWindow } from "@tauri-apps/api/window";
 import { routers } from "./_routers";
 import { useVerge } from "@/hooks/use-verge";
-import LogoSvg from "@/assets/image/logo.svg?react";
-import LogoSvg_dark from "@/assets/image/logo_dark.svg?react";
-import { atomThemeMode } from "@/services/states";
-import { useRecoilState } from "recoil";
+import brandIcon from "@/assets/image/brand-icon.png";
+import { metadata } from "@root/package.json";
 import { BaseErrorBoundary, NoticeManager } from "@/components/base";
 import { LayoutItem } from "@/components/layout/layout-item";
 import { LayoutControl } from "@/components/layout/layout-control";
@@ -32,8 +30,6 @@ dayjs.extend(relativeTime);
 const OS = getSystem();
 
 const Layout = () => {
-  const [mode] = useRecoilState(atomThemeMode);
-  const isDark = mode === "light" ? false : true;
   const { t } = useTranslation();
   const { theme } = useCustomTheme();
 
@@ -105,7 +101,8 @@ const Layout = () => {
           >
             <div className="layout__left" data-windrag>
               <div className="the-logo" data-windrag>
-                {!isDark ? <LogoSvg /> : <LogoSvg_dark />}
+                <img src={brandIcon} alt="" />
+                <span className="the-logo-title">{metadata.productName}</span>
               </div>
 
               <List className="the-menu">
