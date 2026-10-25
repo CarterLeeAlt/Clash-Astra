@@ -36,5 +36,29 @@ export const normalizeTestList = (
     return { ...item, uid, builtIn: true };
   });
 
-  return { normalized, changed };
+  const defaults = Array.from(defaultMap.values());
+  const present = new Map<string, IVergeTestItem>();
+  for (const item of normalized) {
+    const key = `${item.name}::${item.url}`;
+    if (defaultMap.has(key) && !present.has(key)) {
+      present.set(key, item);
+    }
+  }
+
+  const missing = defaults.filter(
+    (item) => !present.has(`${item.name}::${item.url}`)
+  );
+  if (missing.length === 0) {
+    return { normalized, changed };
+  }
+
+  // 新增内置项时：内置项按默认顺序重排，自定义项保持原顺序追加
+  const rebuilt = defaults.map(
+    (item) => present.get(`${item.name}::${item.url}`) ?? item
+  );
+  const custom = normalized.filter(
+    (item) => !defaultMap.has(`${item.name}::${item.url}`)
+  );
+
+  return { normalized: [...rebuilt, ...custom], changed: true };
 };
