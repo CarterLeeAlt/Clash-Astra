@@ -6,8 +6,9 @@ use std::{
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, TRUE},
     UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
-        IsWindow, IsWindowVisible, SendMessageTimeoutW, SMTO_ABORTIFHUNG, SMTO_BLOCK,
+        EnumWindows, GetAncestor, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+        GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, SendMessageTimeoutW,
+        GA_ROOTOWNER, SMTO_ABORTIFHUNG, SMTO_BLOCK,
     },
 };
 
@@ -70,6 +71,20 @@ pub fn find_main_window(pid: u32) -> Option<HWND> {
 
 pub fn is_window(hwnd: HWND) -> bool {
     unsafe { IsWindow(hwnd) != 0 }
+}
+
+/// 应用主窗口是否是当前前台窗口（含其拥有的对话框）。
+///
+/// WebView2 在窗口被遮挡/切到后台时会冻结页面定时器，前端心跳会停止，
+/// 这不代表进程卡死；只有前台窗口才用心跳判断 WebView 是否真的卡住。
+pub fn is_foreground(hwnd: HWND) -> bool {
+    unsafe {
+        let foreground = GetForegroundWindow();
+        if foreground == 0 {
+            return false;
+        }
+        foreground == hwnd || GetAncestor(foreground, GA_ROOTOWNER) == hwnd
+    }
 }
 
 pub fn probe(hwnd: HWND) -> WindowState {

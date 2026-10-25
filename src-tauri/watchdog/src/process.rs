@@ -19,7 +19,9 @@ const HUNG_CHECK_INTERVAL_SECS: u64 = 5;
 const HUNG_CHECKS: u32 = 6;
 const HEARTBEAT_CHECK_INTERVAL_SECS: u64 = 10;
 const HEARTBEAT_GRACE_SECS: u64 = 60;
-const HEARTBEAT_STALE_SECS: u64 = 120;
+const HEARTBEAT_STALE_SECS: u64 = 180;
+/// 窗口切到前台后给 WebView 恢复定时器的时间，避免刚获得焦点就误判。
+const FOREGROUND_GRACE_SECS: u64 = 30;
 const KILL_WAIT_SECS: u64 = 10;
 
 pub struct Instance {
@@ -117,6 +119,7 @@ pub fn supervise_child(
     let mut last_hung_check = Instant::now();
     let mut last_heartbeat_check = Instant::now();
     let mut last_wall = SystemTime::now();
+    let mut foreground_since: Option<Instant> = None;
     let mut hung_checks = 0u32;
 
     loop {
@@ -149,6 +152,16 @@ pub fn supervise_child(
 
         let now = Instant::now();
 
+        if let Some(hwnd) = window_hwnd {
+            if window::is_foreground(hwnd) {
+                foreground_since.get_or_insert(now);
+            } else {
+                foreground_since = None;
+            }
+        } else {
+            foreground_since = None;
+        }
+
         // 系统休眠/唤醒或时钟跳变后，心跳文件会暂时变旧；跳过一轮检查，
         // 给前端恢复心跳的时间，避免唤醒后误判为卡死。
         let wall = SystemTime::now();
@@ -160,6 +173,7 @@ pub fn supervise_child(
                 wall_gap.as_secs()
             ));
             hung_checks = 0;
+            foreground_since = None;
             last_hung_check = now;
             last_heartbeat_check = now;
             thread::sleep(Duration::from_millis(500));
@@ -208,7 +222,13 @@ pub fn supervise_child(
         }
 
         // WebView 崩溃或 JS 卡死时主线程仍可能响应，用前端心跳兜底。
+        // 仅在窗口处于前台且已持续一小段时间后判断：窗口被遮挡/切到后台时，
+        // WebView2 会冻结页面定时器，心跳停止是正常现象，不能据此重启。
+        let foreground_long_enough = foreground_since
+            .map(|since| now.duration_since(since) >= Duration::from_secs(FOREGROUND_GRACE_SECS))
+            .unwrap_or(false);
         if window_hwnd.is_some()
+            && foreground_long_enough
             && now.duration_since(started) > Duration::from_secs(HEARTBEAT_GRACE_SECS)
             && now.duration_since(last_heartbeat_check)
                 >= Duration::from_secs(HEARTBEAT_CHECK_INTERVAL_SECS)
