@@ -61,7 +61,10 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    init::init_config().map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    if let Err(err) = init::init_config() {
+        write_startup_error(&format!("failed to initialize config: {err}"));
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, err));
+    }
 
     let builder = tauri::Builder::default()
         .system_tray(SystemTray::new())

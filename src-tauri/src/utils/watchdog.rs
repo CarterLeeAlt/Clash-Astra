@@ -1,5 +1,17 @@
-use crate::watchdog_protocol::{CHILD_ARG, WATCHDOG_EXE};
+use crate::watchdog_protocol::{
+    CHILD_ARG, RECOVERED_HIDDEN_ARG, RECOVERED_VISIBLE_ARG, WATCHDOG_EXE,
+};
 use std::{ffi::OsStr, io, process::Command};
+
+/// 上次看门狗因卡死重启，且重启前窗口是可见的。
+pub fn show_after_recovery() -> bool {
+    std::env::args_os().any(|arg| arg == OsStr::new(RECOVERED_VISIBLE_ARG))
+}
+
+/// 上次看门狗因卡死重启，且重启前窗口是不可见的。
+pub fn hide_after_recovery() -> bool {
+    std::env::args_os().any(|arg| arg == OsStr::new(RECOVERED_HIDDEN_ARG))
+}
 
 pub fn is_supervised() -> bool {
     if !std::env::args_os().any(|arg| arg == OsStr::new(CHILD_ARG)) {

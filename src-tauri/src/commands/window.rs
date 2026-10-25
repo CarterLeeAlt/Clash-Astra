@@ -35,7 +35,7 @@ pub async fn set_window_size_locked(app_handle: tauri::AppHandle, locked: bool) 
             ..IVerge::default()
         });
         Config::verge().apply();
-        wrap_err!(Config::verge().data().save_file())?;
+        wrap_err!(Config::save_verge_snapshot())?;
     } else {
         wrap_err!(window.set_resizable(true))?;
         wrap_err!(window.set_maximizable(true))?;
@@ -45,7 +45,7 @@ pub async fn set_window_size_locked(app_handle: tauri::AppHandle, locked: bool) 
             ..IVerge::default()
         });
         Config::verge().apply();
-        wrap_err!(Config::verge().data().save_file())?;
+        wrap_err!(Config::save_verge_snapshot())?;
     }
 
     Ok(())

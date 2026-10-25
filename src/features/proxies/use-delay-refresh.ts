@@ -41,7 +41,7 @@ export const useDelayRefresh = () => {
         }
 
         if (!disposed) {
-          mutate(queryKeys.proxies, getProxies());
+          mutate(queryKeys.proxies, snapshot, false);
         }
       } catch {
         // 代理数据拉取失败时保留现有显示

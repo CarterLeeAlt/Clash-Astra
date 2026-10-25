@@ -211,14 +211,25 @@ impl Scheduler {
         }
 
         let key = key.to_string();
+        let max_duration = schedule.max_duration();
         builder
             .spawn_async_routine(move || {
                 let run = run.clone();
                 let key = key.clone();
                 async move {
                     log::trace!(target: "app", "scheduler task `{key}` started");
-                    if let Err(err) = run().await {
-                        log::error!(target: "app", "scheduler task `{key}` failed: {err:#}");
+                    match tokio::time::timeout(max_duration, run()).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(err)) => {
+                            log::error!(target: "app", "scheduler task `{key}` failed: {err:#}");
+                        }
+                        Err(_) => {
+                            log::error!(
+                                target: "app",
+                                "scheduler task `{key}` timed out after {}s",
+                                max_duration.as_secs()
+                            );
+                        }
                     }
                 }
             })

@@ -38,7 +38,7 @@ pub async fn uninstall_service() -> CmdResult {
                 ..IVerge::default()
             });
             Config::verge().apply();
-            wrap_err!(Config::verge().data().save_file())
+            wrap_err!(Config::save_verge_snapshot())
         }
         Err(err) => Err(err.to_string()),
     }

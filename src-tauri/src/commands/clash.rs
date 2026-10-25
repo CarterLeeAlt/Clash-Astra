@@ -4,7 +4,6 @@ use crate::{
     core::{clash_api, logger},
     feat, wrap_err,
 };
-use anyhow::Context;
 use serde_yaml::Mapping;
 use std::collections::{HashMap, VecDeque};
 
@@ -19,15 +18,15 @@ pub fn get_runtime_config() -> CmdResult<Option<Mapping>> {
 }
 
 #[tauri::command]
-pub fn get_runtime_yaml() -> CmdResult<String> {
-    let runtime = Config::runtime();
-    let runtime = runtime.latest();
-    let config = runtime.config.as_ref();
-    wrap_err!(config
-        .ok_or(anyhow::anyhow!("failed to parse config to yaml file"))
-        .and_then(
-            |config| serde_yaml::to_string(config).context("failed to convert config to yaml")
-        ))
+pub async fn get_runtime_yaml() -> CmdResult<String> {
+    let config = { Config::runtime().latest().config.clone() };
+    tokio::task::spawn_blocking(move || -> CmdResult<String> {
+        let config = config.ok_or_else(|| "failed to parse config to yaml file".to_string())?;
+        serde_yaml::to_string(&config)
+            .map_err(|err| format!("failed to convert config to yaml: {err}"))
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]

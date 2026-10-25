@@ -61,7 +61,7 @@ const Layout = () => {
   }, [start_page]);
 
   return (
-    <SWRConfig value={{ errorRetryCount: 3 }}>
+    <SWRConfig value={{ errorRetryCount: 3, focusThrottleInterval: 30000 }}>
       <LogStreamProvider>
         <ThemeProvider theme={theme}>
           <NoticeManager />

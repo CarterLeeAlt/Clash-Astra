@@ -190,6 +190,10 @@ pub async fn run_auto_site_test() -> Result<()> {
         return Ok(());
     };
 
+    if !crate::core::CoreManager::global().is_core_ready() {
+        bail!("Mihomo core is not ready; wait for the core to start and retry");
+    }
+
     const CONCURRENCY: usize = 2;
 
     let urls: Vec<String> = {
@@ -263,6 +267,10 @@ struct TestDelayMatchContext {
 /// 非 TUN 模式通过 mixed-port 的 CONNECT 隧道；TUN 模式直接连接。
 /// 不做完整 TLS/HTTP 请求，只测到目标开始响应的耗时。
 pub async fn test_delay(url: String) -> Result<TestDelayResult> {
+    if !crate::core::CoreManager::global().is_core_ready() {
+        bail!("Mihomo core is not ready; wait for the core to start and retry");
+    }
+
     let mixed_port = Config::verge()
         .latest()
         .verge_mixed_port
@@ -444,8 +452,16 @@ fn build_tls_client_hello(host: &str) -> Result<Vec<u8>> {
 }
 
 async fn prepare_test_delay_match_context() -> TestDelayMatchContext {
-    let proxies = clash_api::get_proxies()
-        .await
+    // 本地控制器正常时这两个请求是毫秒级；核心异常时最多等 2 秒，
+    // 不让“查不到出口节点”拖慢整轮站点测试。
+    let (proxies, connections) = tokio::join!(
+        tokio::time::timeout(Duration::from_secs(2), clash_api::get_proxies()),
+        tokio::time::timeout(Duration::from_secs(2), clash_api::get_connections()),
+    );
+
+    let proxies = proxies
+        .ok()
+        .and_then(|result| result.ok())
         .map(|res| res.proxies)
         .unwrap_or_default();
 
@@ -462,8 +478,9 @@ async fn prepare_test_delay_match_context() -> TestDelayMatchContext {
         },
     );
 
-    let before_connection_ids = clash_api::get_connections()
-        .await
+    let before_connection_ids = connections
+        .ok()
+        .and_then(|result| result.ok())
         .map(|res| {
             res.connections
                 .into_iter()

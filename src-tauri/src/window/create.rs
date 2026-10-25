@@ -243,7 +243,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
                 window_size_position: None,
                 ..IVerge::default()
             });
-            match Config::verge().data().save_file() {
+            match Config::save_verge_snapshot() {
                 Ok(_) => log::info!(
                     target: "app",
                     "create_window cleared abnormal saved window_size_position"
@@ -366,7 +366,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
                 window_size_position: None,
                 ..IVerge::default()
             });
-            match Config::verge().data().save_file() {
+            match Config::save_verge_snapshot() {
                 Ok(_) => log::info!(
                     target: "app",
                     "create_window cleared saved window_size_position before fallback retry"

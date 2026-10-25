@@ -4,7 +4,12 @@ use anyhow::Result;
 use chrono::{Duration, Local};
 use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
-use log4rs::append::file::FileAppender;
+use log4rs::append::rolling_file::{
+    policy::compound::{
+        roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy,
+    },
+    RollingFileAppender,
+};
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::encode::{self, writer::simple::SimpleWriter};
@@ -68,9 +73,17 @@ pub(crate) fn init_log() -> Result<()> {
     let file_encode = Box::new(RedactingEncoder::new(log_pattern));
 
     let stdout = ConsoleAppender::builder().encoder(stdout_encode).build();
-    let tofile = FileAppender::builder()
+    let log_file_pattern = format!("{}.{{}}", log_file.to_string_lossy());
+    let roller = FixedWindowRoller::builder()
+        .build(&log_file_pattern, 5)
+        .map_err(|err| anyhow::anyhow!("failed to create log roller: {err}"))?;
+    let policy = CompoundPolicy::new(
+        Box::new(SizeTrigger::new(20 * 1024 * 1024)),
+        Box::new(roller),
+    );
+    let tofile = RollingFileAppender::builder()
         .encoder(file_encode)
-        .build(log_file)?;
+        .build(&log_file, Box::new(policy))?;
 
     let mut logger_builder = Logger::builder();
     let mut root_builder = Root::builder();
@@ -136,7 +149,7 @@ pub fn delete_log() -> Result<()> {
             let file_name = file.file_name();
             let file_name = file_name.to_str().unwrap_or_default();
 
-            if file_name.ends_with(".log") {
+            if file_name.ends_with(".log") || file_name.contains(".log.") {
                 let metadata = fs::metadata(file.path())?;
                 let file_time = metadata.modified().or_else(|_| metadata.created());
                 let file_time = match file_time {

@@ -8,7 +8,7 @@ use anyhow::Result;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
-    AppHandle, CustomMenuItem, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
+    AppHandle, CustomMenuItem, Manager, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
     SystemTraySubmenu,
 };
 
@@ -87,6 +87,10 @@ impl Tray {
                     .add_item(CustomMenuItem::new(
                         "restart_app",
                         t!("Restart App", "重启应用"),
+                    ))
+                    .add_item(CustomMenuItem::new(
+                        "reload_ui",
+                        t!("Reload UI", "重新加载界面"),
                     ))
                     .add_item(
                         CustomMenuItem::new("app_version", format!("Version {version}")).disabled(),
@@ -276,11 +280,31 @@ impl Tray {
                     "system_proxy" => feat::toggle_system_proxy(),
                     "tun_mode" => feat::toggle_tun_mode(),
                     "copy_env" => feat::copy_clash_env(app_handle),
-                    "open_app_dir" => crate::log_err!(cmds::open_app_dir()),
-                    "open_core_dir" => crate::log_err!(cmds::open_core_dir()),
-                    "open_logs_dir" => crate::log_err!(cmds::open_logs_dir()),
+                    "open_app_dir" => {
+                        tauri::async_runtime::spawn(async {
+                            let _ = cmds::open_app_dir().await;
+                        });
+                    }
+                    "open_core_dir" => {
+                        tauri::async_runtime::spawn(async {
+                            let _ = cmds::open_core_dir().await;
+                        });
+                    }
+                    "open_logs_dir" => {
+                        tauri::async_runtime::spawn(async {
+                            let _ = cmds::open_logs_dir().await;
+                        });
+                    }
                     "restart_clash" => feat::restart_clash_core(),
                     "restart_app" => cmds::restart_app(app_handle.clone()),
+                    "reload_ui" => {
+                        resolve::show_main_window_after_hide_transition(app_handle.clone());
+                        if let Some(window) = app_handle.get_window("main") {
+                            if let Err(err) = window.eval("window.location.reload()") {
+                                log::warn!(target: "app", "failed to reload UI from tray: {err}");
+                            }
+                        }
+                    }
                     "quit" => cmds::exit_app(app_handle.clone()),
 
                     _ => {}

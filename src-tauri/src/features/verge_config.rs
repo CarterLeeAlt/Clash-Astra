@@ -97,8 +97,9 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
         }
         if system_proxy.is_some() || proxy_bypass.is_some() || port.is_some() {
             sysproxy_update_attempted = true;
-            sysopt::Sysopt::global()
-                .update_sysproxy()
+            tokio::task::spawn_blocking(|| sysopt::Sysopt::global().update_sysproxy())
+                .await
+                .map_err(|err| anyhow::anyhow!("system proxy task failed: {err}"))?
                 .map_err(|err| anyhow::anyhow!("failed to update system proxy: {err}"))?;
             sysopt::Sysopt::global().guard_proxy();
         }
@@ -125,7 +126,7 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
             handle::Handle::update_systray_part()?;
         }
 
-        Config::verge().latest().save_file()?;
+        Config::save_verge_snapshot()?;
         <Result<()>>::Ok(())
     }
     .await;

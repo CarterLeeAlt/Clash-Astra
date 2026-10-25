@@ -53,6 +53,15 @@ impl Schedule {
 
         Ok(self)
     }
+
+    /// 单次执行的时间预算：短周期任务 60 秒，长周期/定时任务 10 分钟。
+    /// 超时后丢弃 future，避免一个卡住的任务永久占住该 key。
+    pub(crate) fn max_duration(&self) -> std::time::Duration {
+        match self {
+            Self::Seconds(_) => std::time::Duration::from_secs(60),
+            Self::Minutes(_) | Self::Cron(_) => std::time::Duration::from_secs(600),
+        }
+    }
 }
 
 /// 应用启动时调用，集中注册所有后台周期任务。
@@ -75,7 +84,13 @@ pub fn init() -> Result<()> {
         Schedule::Seconds(10),
         Arc::new(|| {
             Box::pin(async {
-                crate::core::sysopt::Sysopt::global().heal_sysproxy();
+                if let Err(err) = tokio::task::spawn_blocking(|| {
+                    crate::core::sysopt::Sysopt::global().heal_sysproxy();
+                })
+                .await
+                {
+                    log::warn!(target: "app", "system proxy heal task failed: {err}");
+                }
                 Ok(())
             })
         }),

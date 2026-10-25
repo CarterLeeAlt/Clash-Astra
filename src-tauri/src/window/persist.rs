@@ -118,14 +118,17 @@ pub fn save_window_size_position(app_handle: &AppHandle, save_to_file: bool) -> 
     let pos = pos.to_logical::<f64>(scale);
     let is_maximized = win.is_maximized()?;
 
-    let verge = Config::verge();
-    let mut verge = verge.latest();
-    verge.window_is_maximized = Some(is_maximized);
-    if !is_maximized && size.width >= 1060.0 && size.height >= 680.0 {
-        verge.window_size_position = Some(vec![size.width, size.height, pos.x, pos.y]);
-    }
+    let snapshot = {
+        let verge = Config::verge();
+        let mut verge = verge.latest();
+        verge.window_is_maximized = Some(is_maximized);
+        if !is_maximized && size.width >= 1060.0 && size.height >= 680.0 {
+            verge.window_size_position = Some(vec![size.width, size.height, pos.x, pos.y]);
+        }
+        verge.clone()
+    };
     if save_to_file {
-        verge.save_file()?;
+        snapshot.save_file()?;
     }
     Ok(())
 }

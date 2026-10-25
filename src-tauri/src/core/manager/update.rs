@@ -319,7 +319,7 @@ impl CoreManager {
             Logger::global().clear_log();
             restart_attempted = true;
             self.run_core().await?;
-            Config::verge().latest().save_file()?;
+            Config::save_verge_snapshot()?;
             <Result<()>>::Ok(())
         }
         .await;

@@ -121,11 +121,9 @@ export const TestItem = (props: Props) => {
     const resizeObserver = new ResizeObserver(updateOverflow);
     resizeObserver.observe(proxyContainer);
     resizeObserver.observe(proxyText);
-    window.addEventListener("resize", updateOverflow);
 
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener("resize", updateOverflow);
     };
   }, [proxy, delay]);
 

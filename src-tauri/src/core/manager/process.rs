@@ -258,8 +258,13 @@ impl CoreManager {
 
         let mut retry_delay = Duration::from_secs(1);
         while self.desired_running.load(Ordering::SeqCst) && self.is_core_ready() {
-            match crate::core::sysopt::Sysopt::global().init_sysproxy() {
-                Ok(()) => {
+            let init_result = tokio::task::spawn_blocking(|| {
+                crate::core::sysopt::Sysopt::global().init_sysproxy()
+            })
+            .await;
+
+            match init_result {
+                Ok(Ok(())) => {
                     self.proxy_initialized.store(true, Ordering::SeqCst);
                     // 核心就绪后立即补一轮自动延迟测试，不必等首个 2 分钟周期
                     tauri::async_runtime::spawn(async {
@@ -269,8 +274,11 @@ impl CoreManager {
                     });
                     return;
                 }
-                Err(err) => {
+                Ok(Err(err)) => {
                     log::error!(target: "app", "system proxy initialization failed; retrying: {err}");
+                }
+                Err(err) => {
+                    log::error!(target: "app", "system proxy initialization task failed; retrying: {err}");
                 }
             }
             // Keep the guard chain registered even while initialization keeps
@@ -426,6 +434,17 @@ impl CoreManager {
 
     /// 停止核心运行
     pub fn stop_core(&self) -> Result<()> {
-        tauri::async_runtime::block_on(self.stop_core_async())
+        tauri::async_runtime::block_on(async {
+            match tokio::time::timeout(Duration::from_secs(10), self.stop_core_async()).await {
+                Ok(result) => result,
+                Err(_) => {
+                    log::error!(
+                        target: "app",
+                        "stop_core timed out after 10s; continue shutdown and let the supervisor clean up"
+                    );
+                    Ok(())
+                }
+            }
+        })
     }
 }

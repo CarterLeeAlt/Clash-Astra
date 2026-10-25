@@ -62,7 +62,7 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult {
         Ok(_) => {
             // 先落盘再 apply：apply 之后再存盘失败会让内存与文件不一致，
             // 前端收到错误却已经生效，重启后又回跳
-            if let Err(err) = Config::profiles().draft().save_file() {
+            if let Err(err) = Config::save_profiles_draft_snapshot() {
                 Config::profiles().discard();
                 log::error!(target: "app", "{err}");
                 return Err(format!("{err}"));
@@ -81,13 +81,17 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult {
 
 /// 修改某个profile item的
 #[tauri::command]
-pub fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
-    wrap_err!(Config::profiles().data().patch_item(index, profile))?;
-    wrap_err!(timer::sync())
+pub async fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
+    tokio::task::spawn_blocking(move || -> CmdResult {
+        wrap_err!(Config::profiles().data().patch_item(index, profile))?;
+        wrap_err!(timer::sync())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn view_profile(app_handle: tauri::AppHandle, index: String) -> CmdResult {
+pub async fn view_profile(app_handle: tauri::AppHandle, index: String) -> CmdResult {
     let file = {
         wrap_err!(Config::profiles().latest().get_item(&index))?
             .file
@@ -102,16 +106,22 @@ pub fn view_profile(app_handle: tauri::AppHandle, index: String) -> CmdResult {
         ret_err!("the file not found");
     }
 
-    wrap_err!(help::open_file(app_handle, canonical_path))
+    tokio::task::spawn_blocking(move || wrap_err!(help::open_file(app_handle, canonical_path)))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn read_profile_file(index: String) -> CmdResult<String> {
-    let profiles = Config::profiles();
-    let profiles = profiles.latest();
-    let item = wrap_err!(profiles.get_item(&index))?;
-    let data = wrap_err!(item.read_file())?;
-    Ok(data)
+pub async fn read_profile_file(index: String) -> CmdResult<String> {
+    let item = {
+        let profiles = Config::profiles();
+        let profiles = profiles.latest();
+        wrap_err!(profiles.get_item(&index))?.clone()
+    };
+
+    tokio::task::spawn_blocking(move || wrap_err!(item.read_file()))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]

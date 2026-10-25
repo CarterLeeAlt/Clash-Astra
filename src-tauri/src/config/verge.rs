@@ -167,7 +167,15 @@ pub struct IVergeTheme {
 
 impl IVerge {
     pub fn new() -> Self {
-        match dirs::verge_path().and_then(|path| help::read_yaml::<IVerge>(&path)) {
+        let path = match dirs::verge_path() {
+            Ok(path) => path,
+            Err(err) => {
+                log::error!(target: "app", "{err}");
+                return Self::template();
+            }
+        };
+
+        match help::read_yaml::<IVerge>(&path) {
             Ok(mut config) => {
                 let mut changed = config.normalize_auto_log_clean();
                 changed |= config.normalize_default_latency_test();
@@ -179,6 +187,9 @@ impl IVerge {
             }
             Err(err) => {
                 log::error!(target: "app", "{err}");
+                if path.exists() {
+                    help::quarantine_corrupt_file(&path);
+                }
                 Self::template()
             }
         }

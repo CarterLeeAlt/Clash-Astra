@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 
 import { useTranslation } from "react-i18next";
-import { BasePage } from "@/components/base";
+import { BasePage, formatNoticeMessage, Notice } from "@/components/base";
 import { TestViewer, TestViewerRef } from "./components/test-viewer";
 import { TestItem } from "./components/test-item";
 import AppleIcon from "@/assets/image/apple.svg";
@@ -194,6 +194,7 @@ const TestPage = () => {
   }, [verge]);
 
   const viewerRef = useRef<TestViewerRef>(null);
+  const [testing, setTesting] = useState(false);
   const [autoResults, setAutoResults] =
     useState<SiteTestResults>(getSiteTestResults);
 
@@ -208,9 +209,28 @@ const TestPage = () => {
           <Button
             variant="contained"
             size="small"
-            onClick={() => triggerAutoSiteTest().catch(() => undefined)}
+            disabled={testing}
+            onClick={async () => {
+              if (testing) return;
+              setTesting(true);
+              try {
+                await Promise.race([
+                  triggerAutoSiteTest(),
+                  new Promise<never>((_, reject) => {
+                    window.setTimeout(
+                      () => reject(new Error("site test timed out")),
+                      60000
+                    );
+                  }),
+                ]);
+              } catch (err: any) {
+                Notice.error(formatNoticeMessage(err));
+              } finally {
+                setTesting(false);
+              }
+            }}
           >
-            {t("Test All")}
+            {testing ? t("Testing") : t("Test All")}
           </Button>
           <Button
             variant="contained"

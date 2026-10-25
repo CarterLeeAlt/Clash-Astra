@@ -466,6 +466,8 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
     let token = service_api_token()?;
     let res = reqwest::ClientBuilder::new()
         .no_proxy()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(10))
         .build()?
         .post(format!("{SERVICE_URL}/start_clash"))
         .bearer_auth(token)

@@ -47,6 +47,31 @@ pub fn read_merge_mapping(path: &PathBuf) -> Result<Mapping> {
         .to_owned())
 }
 
+/// 保留损坏的配置文件，避免下一次保存直接覆盖，便于事后排查。
+pub fn quarantine_corrupt_file(path: &PathBuf) {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("config");
+    let backup = path.with_file_name(format!("{file_name}.corrupt-{timestamp}"));
+    match fs::rename(path, &backup) {
+        Ok(()) => log::warn!(
+            target: "app",
+            "corrupt config preserved at {}",
+            backup.display()
+        ),
+        Err(err) => log::warn!(
+            target: "app",
+            "failed to preserve corrupt config {}: {err}",
+            path.display()
+        ),
+    }
+}
+
 /// save the data to the file
 /// can set `prefix` string to add some comments
 pub fn save_yaml<T: Serialize>(path: &PathBuf, data: &T, prefix: Option<&str>) -> Result<()> {

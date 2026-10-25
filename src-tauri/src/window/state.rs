@@ -31,6 +31,10 @@ pub(crate) const WINDOW_SHOW_CREATE_FALLBACK_DELAY_MS: u64 = 1500;
 pub(crate) const WINDOW_SHOW_RETRIES_TASK: &str = "window.show.retries";
 pub(crate) const WINDOW_SHOW_RETRIES_DELAY_MS: u64 = 200;
 pub(crate) const HEARTBEAT_WARN_AFTER_MS: u64 = 15_000;
+/// 心跳停止超过这个时间且窗口可见时，尝试重载 WebView 恢复页面。
+pub(crate) const HEARTBEAT_RELOAD_AFTER_MS: u64 = 30_000;
+/// 两次自动重载之间的最小间隔，避免循环重载。
+pub(crate) const UI_RELOAD_COOLDOWN_MS: u64 = 60_000;
 
 pub(crate) static MAIN_WINDOW_STATE: AtomicU64 = AtomicU64::new(MAIN_WINDOW_STATE_MISSING);
 pub(crate) static MAIN_WINDOW_UNEXPECTED_DESTROY_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -39,6 +43,7 @@ pub(crate) static MAIN_WINDOW_LAST_UNEXPECTED_DESTROY_MS: AtomicU64 = AtomicU64:
 pub(crate) static MAIN_WINDOW_LAST_CREATE_ATTEMPT_MS: AtomicU64 = AtomicU64::new(0);
 pub(crate) static WINDOW_HIDE_IN_PROGRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
 pub(crate) static LAST_FRONTEND_HEARTBEAT_MS: AtomicU64 = AtomicU64::new(0);
+pub(crate) static LAST_UI_RELOAD_MS: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) fn current_time_millis() -> u64 {
     SystemTime::now()
@@ -129,13 +134,29 @@ pub fn check_main_window_health(app_handle: &AppHandle, context: &str) {
     }
     let last = LAST_FRONTEND_HEARTBEAT_MS.load(Ordering::SeqCst);
     let now = current_time_millis();
-    if last > 0 && now.saturating_sub(last) > HEARTBEAT_WARN_AFTER_MS {
-        log::warn!(
-            target: "app",
-            "webview may be hung: no frontend heartbeat for {}ms, context={}",
-            now.saturating_sub(last),
-            context
-        );
+    if last == 0 || now.saturating_sub(last) <= HEARTBEAT_WARN_AFTER_MS {
+        return;
+    }
+
+    log::warn!(
+        target: "app",
+        "webview may be hung: no frontend heartbeat for {}ms, context={}",
+        now.saturating_sub(last),
+        context
+    );
+
+    if now.saturating_sub(last) <= HEARTBEAT_RELOAD_AFTER_MS {
+        return;
+    }
+
+    let last_reload = LAST_UI_RELOAD_MS.load(Ordering::SeqCst);
+    if now.saturating_sub(last_reload) < UI_RELOAD_COOLDOWN_MS {
+        return;
+    }
+    LAST_UI_RELOAD_MS.store(now, Ordering::SeqCst);
+    log::warn!(target: "app", "reloading webview to recover stale frontend heartbeat, context={context}");
+    if let Err(err) = window.eval("window.location.reload()") {
+        log::warn!(target: "app", "failed to reload webview: {err}");
     }
 }
 

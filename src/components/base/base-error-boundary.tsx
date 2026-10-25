@@ -9,6 +9,14 @@ function ErrorFallback({ error }: FallbackProps) {
 
       <pre>{error.message}</pre>
 
+      <button
+        type="button"
+        style={{ marginTop: 8, padding: "4px 12px", cursor: "pointer" }}
+        onClick={() => window.location.reload()}
+      >
+        重新加载界面
+      </button>
+
       <details title="Error Stack">
         <summary>Error Stack</summary>
         <pre>{error.stack}</pre>
