@@ -140,7 +140,7 @@ const ConnectionsPage = () => {
         ) : (
           <Virtuoso
             data={filterConn}
-            itemContent={(index, item) => (
+            itemContent={(_index, item) => (
               <ConnectionItem
                 value={item}
                 onShowDetail={() => detailRef.current?.open(item)}

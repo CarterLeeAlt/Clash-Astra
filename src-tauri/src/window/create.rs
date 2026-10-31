@@ -261,7 +261,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
 
         if use_saved_size_pos {
             if let Some(size_pos) = configured_size_pos.as_ref() {
-                // 历史数据已经通过共享约束校验，直接恢复有效的普通窗口尺寸。
+                // 窗口状态已经通过共享约束校验，直接恢复有效的普通窗口尺寸。
                 builder = builder
                     .inner_size(size_pos[0], size_pos[1])
                     .position(size_pos[2], size_pos[3]);

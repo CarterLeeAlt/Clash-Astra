@@ -13,7 +13,8 @@ pub struct IProfiles {
 impl IProfiles {
     pub fn template() -> Self {
         Self {
-            items: Some(vec![]),
+            items: Some(vec![PrfItem::global_script()]),
+            chain: Some(vec![]),
             ..Default::default()
         }
     }

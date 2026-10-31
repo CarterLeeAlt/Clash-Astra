@@ -20,7 +20,7 @@ import {
 } from "@/components/base";
 import { StackModeSwitch } from "./stack-mode-switch";
 
-export const TunViewer = forwardRef<DialogRef>((props, ref) => {
+export const TunViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const { clash, mutateClash, patchClash } = useClash();

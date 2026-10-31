@@ -38,10 +38,6 @@ export async function getRuntimeYaml() {
   return invoke<string | null>("get_runtime_yaml");
 }
 
-export async function getRuntimeExists() {
-  return invoke<string[]>("get_runtime_exists");
-}
-
 export async function getRuntimeLogs() {
   return invoke<Record<string, [string, string][]>>("get_runtime_logs");
 }
@@ -89,11 +85,6 @@ export async function getAutoDelayResults() {
     runtimeRevision: number;
     generation: number;
   }>("get_auto_delay_results");
-}
-
-/// 立即触发一轮自动延迟测试（切换、新建或更新订阅后调用）
-export async function triggerAutoDelayTest() {
-  return invoke<void>("trigger_auto_delay_test");
 }
 
 /// 最近一轮站点检测快照（结果 + 更新时间）

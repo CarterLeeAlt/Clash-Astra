@@ -12,5 +12,3 @@ export const queryKeys = {
   runtimeLogs: "getRuntimeLogs",
   checkService: "checkService",
 } as const;
-
-export type QueryKey = (typeof queryKeys)[keyof typeof queryKeys];

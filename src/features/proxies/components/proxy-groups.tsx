@@ -154,7 +154,7 @@ export const ProxyGroups = (props: Props) => {
           <ProxyRender
             key={item.key}
             item={item}
-            indent={mode === "rule" || mode === "script"}
+            indent={mode === "rule"}
             onLocation={handleLocation}
             onCheckAll={handleCheckAll}
             onHeadState={onHeadState}

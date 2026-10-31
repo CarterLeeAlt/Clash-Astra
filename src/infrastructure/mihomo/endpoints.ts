@@ -1,12 +1,9 @@
-import { getVergeConfig } from "@/services/cmds";
 import { getAxios } from "./client";
 
 /// 读取内核版本。
 export const getVersion = async () => {
   const instance = await getAxios();
   return instance.get("/version") as Promise<{
-    premium: boolean;
-    meta?: boolean;
     version: string;
   }>;
 };
@@ -30,34 +27,8 @@ export const getRules = async () => {
   return response?.rules as IRuleItem[];
 };
 
-type GetProxyDelayOptions = {
-  url?: string;
-  timeout?: number;
-  signal?: AbortSignal;
-};
-
-/// 按指定地址测量节点延迟。
-export const getProxyDelay = async (
-  name: string,
-  options: GetProxyDelayOptions = {}
-) => {
-  const { url, timeout = 10000, signal } = options;
-  const configuredUrl =
-    url?.trim() || (await getVergeConfig()).default_latency_test?.trim();
-  const params = {
-    timeout,
-    url: configuredUrl,
-  };
-  const instance = await getAxios();
-  const result = await instance.get(
-    `/proxies/${encodeURIComponent(name)}/delay`,
-    { params, signal, timeout: Math.max(timeout + 1000, 15000) }
-  );
-  return result as any as { delay: number };
-};
-
 // 读取内核原始代理表。
-export const getProxiesInner = async () => {
+const getProxiesInner = async () => {
   const instance = await getAxios();
   const response = await instance.get<any, any>("/proxies");
   return (response?.proxies || {}) as Record<string, IProxyItem>;
@@ -140,7 +111,7 @@ export const getProxyProviders = async () => {
   >;
 
   return Object.fromEntries(
-    Object.entries(providers).filter(([key, item]) => {
+    Object.entries(providers).filter(([, item]) => {
       const type = item.vehicleType.toLowerCase();
       return type === "http" || type === "file";
     })
@@ -157,7 +128,7 @@ export const getRuleProviders = async () => {
   >;
 
   return Object.fromEntries(
-    Object.entries(providers).filter(([key, item]) => {
+    Object.entries(providers).filter(([, item]) => {
       const type = item.vehicleType.toLowerCase();
       return type === "http" || type === "file";
     })

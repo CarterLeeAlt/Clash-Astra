@@ -1,13 +1,13 @@
-//! 窗口内容区使用逻辑像素；创建、历史恢复和保存共用同一组尺寸约束。
+//! 窗口内容区使用逻辑像素；创建、状态恢复和保存共用同一组尺寸约束。
 
-pub const MIN_WINDOW_WIDTH: f64 = 1150.0;
-pub const MIN_WINDOW_HEIGHT: f64 = 720.0;
+pub const MIN_WINDOW_WIDTH: f64 = 1100.0;
+pub const MIN_WINDOW_HEIGHT: f64 = 700.0;
 pub const DEFAULT_WINDOW_WIDTH: f64 = MIN_WINDOW_WIDTH;
 pub const DEFAULT_WINDOW_HEIGHT: f64 = MIN_WINDOW_HEIGHT;
 const MAX_WINDOW_DIMENSION: f64 = 20_000.0;
 const MAX_WINDOW_POSITION: f64 = 100_000.0;
 
-/// 历史数据依次保存宽、高、横坐标和纵坐标；尺寸低于当前下限时回退默认值。
+/// 保存的窗口状态依次为宽、高、横坐标和纵坐标，统一按当前尺寸约束校验。
 pub fn valid_saved_geometry(geometry: &[f64]) -> bool {
     geometry.len() == 4
         && geometry.iter().all(|value| value.is_finite())
@@ -34,26 +34,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_and_minimum_are_1150_by_720_logical_pixels() {
+    fn default_and_minimum_are_1100_by_700_logical_pixels() {
         assert_eq!(
             (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
-            (1150.0, 720.0)
+            (1100.0, 700.0)
         );
-        assert_eq!((MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT), (1150.0, 720.0));
-        assert!(valid_saved_geometry(&[1150.0, 720.0, 0.0, 0.0]));
+        assert_eq!((MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT), (1100.0, 700.0));
+        assert!(valid_saved_geometry(&[1100.0, 700.0, 0.0, 0.0]));
         assert_eq!(
-            geometry_to_persist(1150.0, 720.0, 0.0, 0.0, false),
-            Some(vec![1150.0, 720.0, 0.0, 0.0])
+            geometry_to_persist(1100.0, 700.0, 0.0, 0.0, false),
+            Some(vec![1100.0, 700.0, 0.0, 0.0])
         );
     }
 
     #[test]
-    fn old_and_under_minimum_sizes_are_neither_restored_nor_saved() {
+    fn under_minimum_sizes_are_neither_restored_nor_saved() {
         for (width, height) in [
-            (1060.0, 680.0),
-            (1149.0, 720.0),
-            (1150.0, 719.0),
-            (1149.99, 720.0),
+            (1099.0, 700.0),
+            (1100.0, 699.0),
+            (1099.99, 700.0),
+            (1100.0, 699.99),
         ] {
             assert!(!valid_saved_geometry(&[width, height, 0.0, 0.0]));
             assert!(geometry_to_persist(width, height, 0.0, 0.0, false).is_none());
@@ -75,11 +75,11 @@ mod tests {
     fn malformed_and_unbounded_geometry_is_rejected() {
         for geometry in [
             vec![],
-            vec![1150.0, 720.0],
-            vec![1150.0, 720.0, f64::NAN, 0.0],
-            vec![f64::INFINITY, 720.0, 0.0, 0.0],
-            vec![20_001.0, 720.0, 0.0, 0.0],
-            vec![1150.0, 720.0, 100_001.0, 0.0],
+            vec![1100.0, 700.0],
+            vec![1100.0, 700.0, f64::NAN, 0.0],
+            vec![f64::INFINITY, 700.0, 0.0, 0.0],
+            vec![20_001.0, 700.0, 0.0, 0.0],
+            vec![1100.0, 700.0, 100_001.0, 0.0],
         ] {
             assert!(!valid_saved_geometry(&geometry));
         }

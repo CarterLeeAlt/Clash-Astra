@@ -27,7 +27,7 @@ export interface TrafficRef {
 /**
  * draw the traffic graph
  */
-export const TrafficGraph = forwardRef<TrafficRef>((props, ref) => {
+export const TrafficGraph = forwardRef<TrafficRef>((_props, ref) => {
   const countRef = useRef(0);
   const styleRef = useRef(true);
   const listRef = useRef<TrafficData[]>(defaultList);

@@ -45,11 +45,6 @@ pub async fn get_runtime_yaml() -> CmdResult<String> {
 }
 
 #[tauri::command(async)]
-pub fn get_runtime_exists() -> CmdResult<Vec<String>> {
-    Ok(Config::runtime().exists_keys)
-}
-
-#[tauri::command(async)]
 pub fn get_runtime_logs() -> CmdResult<HashMap<String, Vec<(String, String)>>> {
     Ok(Config::runtime().chain_logs)
 }
@@ -87,13 +82,4 @@ pub async fn clash_api_get_proxy_delay(
 #[tauri::command(async)]
 pub fn get_auto_delay_results() -> CmdResult<diagnostics::DelaySnapshot> {
     Ok(diagnostics::latest_auto_delay_results())
-}
-
-/// 立即触发一轮自动延迟测试（切换、新建或更新订阅后调用）
-#[tauri::command]
-pub async fn trigger_auto_delay_test() -> CmdResult {
-    match diagnostics::run_auto_delay_test().await {
-        Ok(_) => Ok(()),
-        Err(err) => Err(err.into()),
-    }
 }

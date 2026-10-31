@@ -1,6 +1,6 @@
 export const GLOBAL_SCRIPT_UID = "__global_script__";
 
-export interface ClassifiedProfiles {
+interface ClassifiedProfiles {
   regularItems: IProfileItem[];
   globalScriptItem?: IProfileItem;
   enhanceItems: IProfileItem[];

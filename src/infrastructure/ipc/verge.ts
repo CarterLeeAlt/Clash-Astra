@@ -8,19 +8,19 @@ export async function patchVergeConfig(payload: IVergeConfig) {
   return invoke<void>("patch_verge_config", { payload });
 }
 
-export interface SchedulerOneShotTaskInfo {
+interface SchedulerOneShotTaskInfo {
   key: string;
   remainingMs: number;
   generation: number;
 }
 
-export interface SchedulerRunningTaskInfo {
+interface SchedulerRunningTaskInfo {
   key: string;
   generation: number;
   cancellable: boolean;
 }
 
-export interface SchedulerState {
+interface SchedulerState {
   periodicTasks: unknown[];
   oneShotTasks: SchedulerOneShotTaskInfo[];
   runningTasks: SchedulerRunningTaskInfo[];

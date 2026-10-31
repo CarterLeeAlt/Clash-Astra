@@ -18,7 +18,7 @@ import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js";
 import "monaco-editor/esm/vs/editor/contrib/folding/browser/folding.js";
 import "monaco-editor/esm/vs/editor/contrib/find/browser/findController.js";
 
-export const ConfigViewer = forwardRef<DialogRef>((props, ref) => {
+export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 

@@ -106,13 +106,16 @@ async fn subscription_compile_reload_and_http_rejection() {
         runtime: IRuntime::default(),
         profiles: IProfiles {
             current: Some("fixture".into()),
-            chain: None,
-            items: Some(vec![PrfItem {
-                uid: Some("fixture".into()),
-                itype: Some("local".into()),
-                file: Some("fixture.yaml".into()),
-                ..Default::default()
-            }]),
+            chain: Some(vec![]),
+            items: Some(vec![
+                PrfItem::global_script(),
+                PrfItem {
+                    uid: Some("fixture".into()),
+                    itype: Some("local".into()),
+                    file: Some("fixture.yaml".into()),
+                    ..Default::default()
+                },
+            ]),
         },
     };
     snapshot.clash.0.extend(
@@ -131,7 +134,13 @@ async fn subscription_compile_reload_and_http_rejection() {
         .clash
         .0
         .insert("secret".into(), nanoid::nanoid!().into());
-    let files = ProfileFiles::from([("fixture.yaml".into(), Some(source))]);
+    let files = ProfileFiles::from([
+        ("fixture.yaml".into(), Some(source)),
+        (
+            crate::config::GLOBAL_SCRIPT_FILE.into(),
+            Some(crate::utils::tmpl::ITEM_GLOBAL_SCRIPT.into()),
+        ),
+    ]);
     snapshot.runtime =
         config_repository::compile(&snapshot, &files).expect("compile subscription fixture");
     let runtime = snapshot.runtime.config.as_mut().unwrap();

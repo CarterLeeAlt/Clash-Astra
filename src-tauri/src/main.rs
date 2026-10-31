@@ -91,13 +91,11 @@ fn main() -> std::io::Result<()> {
             cmds::get_clash_info,
             cmds::get_clash_logs,
             cmds::get_auto_delay_results,
-            cmds::trigger_auto_delay_test,
             cmds::patch_clash_config,
             cmds::patch_ports,
             cmds::change_clash_core,
             cmds::get_runtime_config,
             cmds::get_runtime_yaml,
-            cmds::get_runtime_exists,
             cmds::get_runtime_logs,
             cmds::invoke_uwp_tool,
             // 应用设置与诊断。

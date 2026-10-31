@@ -1,6 +1,5 @@
 use crate::config::DEFAULT_LATENCY_TEST_URL;
 use crate::utils::{dirs, help};
-use anyhow::Result;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 
@@ -8,7 +7,7 @@ pub const MIHOMO_CORE: &str = "mihomo";
 pub const MIHOMO_ALPHA_CORE: &str = "mihomo-alpha";
 pub const VALID_MIHOMO_CORES: [&str; 2] = [MIHOMO_CORE, MIHOMO_ALPHA_CORE];
 
-/// 应用设置的持久化字段；保留既有 YAML 字段名以兼容用户配置。
+/// 当前应用设置的持久化字段，运行中的修改统一经应用协调器提交。
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct IVerge {
     /// 单实例唤起服务的监听端口。
@@ -103,9 +102,6 @@ pub struct IVerge {
     /// 默认的延迟测试超时时间
     pub default_latency_timeout: Option<i32>,
 
-    /// 是否使用内部的脚本支持，默认为真
-    pub enable_builtin_enhanced: Option<bool>,
-
     /// proxy 页面布局 列数
     pub proxy_layout_column: Option<i32>,
 
@@ -173,15 +169,7 @@ impl IVerge {
         };
 
         match help::read_yaml::<IVerge>(&path) {
-            Ok(mut config) => {
-                let mut changed = config.normalize_auto_log_clean();
-                changed |= config.normalize_default_latency_test();
-
-                if changed {
-                    let _ = config.save_file();
-                }
-                config
-            }
+            Ok(config) => config,
             Err(err) => {
                 log::error!(target: "app", "{err}");
                 if path.exists() {
@@ -219,45 +207,29 @@ impl IVerge {
             enable_proxy_guard: Some(false),
             proxy_guard_duration: Some(30),
             auto_close_connection: Some(true),
-            enable_builtin_enhanced: Some(true),
             auto_log_clean: Some(1),
             default_latency_test: Some(DEFAULT_LATENCY_TEST_URL.into()),
+            test_list: Some(
+                [
+                    ("google", "Google", "https://www.google.com"),
+                    ("youtube", "YouTube", "https://www.youtube.com"),
+                    ("apple", "Apple", "https://www.apple.com"),
+                    ("github", "GitHub", "https://github.com"),
+                    ("chatgpt", "ChatGPT", "https://chatgpt.com"),
+                    ("anthropic", "Anthropic", "https://www.anthropic.com"),
+                    ("grok", "Grok", "https://grok.com"),
+                ]
+                .into_iter()
+                .map(|(id, name, url)| IVergeTestItem {
+                    uid: Some(format!("builtin-{id}")),
+                    name: Some(name.into()),
+                    url: Some(url.into()),
+                    icon: None,
+                })
+                .collect(),
+            ),
             ..Self::default()
         }
-    }
-
-    pub fn normalize_auto_log_clean(&mut self) -> bool {
-        let normalized = match self.auto_log_clean {
-            Some(0 | 1 | 2 | 3) => self.auto_log_clean,
-            _ => Some(1),
-        };
-
-        if self.auto_log_clean != normalized {
-            self.auto_log_clean = normalized;
-            return true;
-        }
-
-        false
-    }
-
-    pub fn normalize_default_latency_test(&mut self) -> bool {
-        let normalized = match self.default_latency_test.as_deref() {
-            Some(url) if url.trim().is_empty() => Some(DEFAULT_LATENCY_TEST_URL.to_string()),
-            Some(_) => self.default_latency_test.clone(),
-            None => Some(DEFAULT_LATENCY_TEST_URL.to_string()),
-        };
-
-        if self.default_latency_test != normalized {
-            self.default_latency_test = normalized;
-            return true;
-        }
-
-        false
-    }
-
-    /// 启动迁移时保存设置；运行中的修改统一经应用协调器提交。
-    pub fn save_file(&self) -> Result<()> {
-        help::save_yaml(&dirs::verge_path()?, &self, Some("# Clash Astra Config"))
     }
 
     /// 将请求中的已指定字段合入候选设置；此方法不执行 I/O。
@@ -306,7 +278,6 @@ impl IVerge {
         patch!(auto_close_connection);
         patch!(default_latency_test);
         patch!(default_latency_timeout);
-        patch!(enable_builtin_enhanced);
         patch!(proxy_layout_column);
         patch!(test_list);
         patch!(auto_log_clean);
@@ -364,56 +335,28 @@ mod tests {
     }
 
     #[test]
-    fn normalize_default_latency_test_fills_none() {
-        let mut config = IVerge {
-            default_latency_test: None,
-            ..IVerge::default()
-        };
-
-        assert!(config.normalize_default_latency_test());
-        assert_eq!(
-            config.default_latency_test.as_deref(),
-            Some(DEFAULT_LATENCY_TEST_URL)
-        );
+    fn fresh_settings_contain_the_complete_current_test_sites() {
+        let sites = IVerge::template().test_list.unwrap();
+        assert_eq!(sites.len(), 7);
+        assert_eq!(sites[0].uid.as_deref(), Some("builtin-google"));
+        assert_eq!(sites[4].url.as_deref(), Some("https://chatgpt.com"));
+        assert!(sites
+            .iter()
+            .all(|site| site.uid.is_some() && site.name.is_some() && site.url.is_some()));
     }
 
     #[test]
-    fn normalize_default_latency_test_fills_empty_string() {
-        let mut config = IVerge {
-            default_latency_test: Some("   ".into()),
-            ..IVerge::default()
-        };
-
-        assert!(config.normalize_default_latency_test());
+    fn settings_round_trip_preserves_current_user_values() {
+        let config: IVerge = serde_yaml::from_str(
+            "default_latency_test: https://example.com/healthz\nauto_log_clean: 0",
+        )
+        .unwrap();
+        let loaded: IVerge =
+            serde_yaml::from_str(&serde_yaml::to_string(&config).unwrap()).unwrap();
         assert_eq!(
-            config.default_latency_test.as_deref(),
-            Some(DEFAULT_LATENCY_TEST_URL)
+            loaded.default_latency_test.as_deref(),
+            Some("https://example.com/healthz")
         );
-    }
-
-    #[test]
-    fn normalize_default_latency_test_preserves_custom_url() {
-        let custom_url = "https://example.com/healthz";
-        let mut config = IVerge {
-            default_latency_test: Some(custom_url.into()),
-            ..IVerge::default()
-        };
-
-        assert!(!config.normalize_default_latency_test());
-        assert_eq!(config.default_latency_test.as_deref(), Some(custom_url));
-    }
-
-    #[test]
-    fn normalize_default_latency_test_keeps_current_default_without_changes() {
-        let mut config = IVerge {
-            default_latency_test: Some(DEFAULT_LATENCY_TEST_URL.into()),
-            ..IVerge::default()
-        };
-
-        assert!(!config.normalize_default_latency_test());
-        assert_eq!(
-            config.default_latency_test.as_deref(),
-            Some(DEFAULT_LATENCY_TEST_URL)
-        );
+        assert_eq!(loaded.auto_log_clean, Some(0));
     }
 }

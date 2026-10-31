@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 
-export type WsMsgFn = (event: MessageEvent<any>) => void;
+type WsMsgFn = (event: MessageEvent<any>) => void;
 
-export interface WsOptions {
+interface WsOptions {
   retryInterval?: number; // 首次重试间隔，默认 2500 毫秒。
   maxRetryInterval?: number;
   maxRetries?: number | "infinite";

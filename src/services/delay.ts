@@ -12,8 +12,8 @@ export { DEFAULT_LATENCY_TEST_URL };
 // 延迟结果的哨兵值：负数不是毫秒数
 export const DELAY_UNKNOWN = -1;
 export const DELAY_PENDING = -2;
-export const DELAY_NOT_APPLICABLE = -3; // REJECT 没有网络路径，不测
-export const DELAY_UNREACHABLE = -4; // DIRECT 直连不到目标，属预期结果
+const DELAY_NOT_APPLICABLE = -3; // REJECT 没有网络路径，不测
+const DELAY_UNREACHABLE = -4; // DIRECT 直连不到目标，属预期结果
 const DELAY_FAILED = 1e6;
 
 /** 延迟解析只需要名称、当前选中项与 history，分组与节点都满足 */

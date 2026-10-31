@@ -18,7 +18,7 @@ import {
   Switch,
 } from "@/components/base";
 
-export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
+export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
   const { verge, patchVerge } = useVerge();
 
@@ -26,7 +26,6 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
   const [values, setValues] = useState({
     appLogLevel: "info",
     autoCloseConnection: true,
-    enableBuiltinEnhanced: true,
     proxyLayoutColumn: 6,
     defaultLatencyTest: "",
     autoLogClean: 1,
@@ -39,7 +38,6 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
       setValues({
         appLogLevel: verge?.app_log_level ?? "info",
         autoCloseConnection: verge?.auto_close_connection ?? true,
-        enableBuiltinEnhanced: verge?.enable_builtin_enhanced ?? true,
         proxyLayoutColumn: verge?.proxy_layout_column ?? 6,
         defaultLatencyTest: verge?.default_latency_test ?? "",
         autoLogClean: verge?.auto_log_clean ?? 1,
@@ -61,7 +59,6 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
       await patchVerge({
         app_log_level: values.appLogLevel,
         auto_close_connection: values.autoCloseConnection,
-        enable_builtin_enhanced: values.enableBuiltinEnhanced,
         proxy_layout_column: values.proxyLayoutColumn,
         default_latency_test: values.defaultLatencyTest,
         default_latency_timeout: timeout,
@@ -113,17 +110,6 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
             checked={values.autoCloseConnection}
             onChange={(_, c) =>
               setValues((v) => ({ ...v, autoCloseConnection: c }))
-            }
-          />
-        </ListItem>
-
-        <ListItem sx={{ padding: "5px 2px" }}>
-          <ListItemText primary={t("Enable Builtin Enhanced")} />
-          <Switch
-            edge="end"
-            checked={values.enableBuiltinEnhanced}
-            onChange={(_, c) =>
-              setValues((v) => ({ ...v, enableBuiltinEnhanced: c }))
             }
           />
         </ListItem>

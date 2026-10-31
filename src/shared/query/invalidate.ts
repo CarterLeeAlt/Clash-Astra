@@ -12,25 +12,6 @@ export const invalidateClashRuntime = () => {
   mutate(queryKeys.proxyProviders);
 };
 
-export const invalidateClashConfig = () => {
-  mutate(queryKeys.clashConfig);
-  mutate(queryKeys.runtimeConfig);
-};
-
-export const invalidateProxies = () => {
-  mutate(queryKeys.proxies);
-};
-
-export const invalidateProxyProviders = () => {
-  mutate(queryKeys.proxies);
-  mutate(queryKeys.proxyProviders);
-};
-
-export const invalidateRules = () => {
-  mutate(queryKeys.rules);
-  mutate(queryKeys.ruleProviders);
-};
-
 export const invalidateProfiles = () => {
   mutate(queryKeys.profiles);
   mutate(queryKeys.runtimeLogs);

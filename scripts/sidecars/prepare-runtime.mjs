@@ -352,23 +352,13 @@ async function resolveResource(binInfo) {
 }
 
 /**
- * copy local windows service binaries to resources dir
+ * 将本地 Windows 服务二进制复制到资源目录。
  */
 const WINDOWS_SERVICE_BINARY_FILES = [
   "clash-astra-service.exe",
   "clash-astra-service-install.exe",
   "clash-astra-service-uninstall.exe",
   "clash-astra-firewall-helper.exe",
-];
-const OBSOLETE_WINDOWS_SERVICE_BINARY_FILES = [
-  "clash-verge-service.exe",
-  "install-service.exe",
-  "uninstall-service.exe",
-  "firewall-helper.exe",
-  "clash-verge-buty-service.exe",
-  "clash-verge-buty-service-install.exe",
-  "clash-verge-buty-service-uninstall.exe",
-  "clash-verge-buty-firewall-helper.exe",
 ];
 
 let windowsServiceBuildPromise = null;
@@ -485,11 +475,6 @@ async function copyLocalWindowsServiceBinaries() {
     await removeIfExists(dst);
     await fs.copyFile(src, dst);
     console.log(`[INFO]: ${file} copied from local repository`);
-  }
-
-  for (const file of OBSOLETE_WINDOWS_SERVICE_BINARY_FILES) {
-    await removeIfExists(path.join(targetDir, file));
-    await removeIfExists(path.join(sourceDir, file));
   }
 
   console.log(

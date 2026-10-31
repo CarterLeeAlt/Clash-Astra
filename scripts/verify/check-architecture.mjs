@@ -17,6 +17,8 @@ for (const file of files(path.join(repoRoot, "src-tauri/src")).filter((file) =>
   const source = fs.readFileSync(file, "utf8");
   if (/\.draft\(\)|\.discard\(\)/.test(source))
     failures.push(`${relative}: shared draft API is forbidden`);
+  if (/enable_builtin_enhanced|ChainSupport|ChainItem::builtin/.test(source))
+    failures.push(`${relative}: legacy core conversion is forbidden`);
   if (
     source.includes("Config::publish(") &&
     !relative.endsWith("application/configuration.rs")
@@ -46,6 +48,12 @@ for (const file of files(path.join(repoRoot, "src")).filter((file) =>
   const relative = path.relative(repoRoot, file).replaceAll("\\", "/");
   const source = fs.readFileSync(file, "utf8");
   if (
+    /enable_builtin_enhanced|normalizeTestList|versionData\?\.premium/.test(
+      source
+    )
+  )
+    failures.push(`${relative}: legacy configuration migration is forbidden`);
+  if (
     /import\s*\{[^}]*\binvoke\b[^}]*\}\s*from\s*["']@tauri-apps\/api\/tauri["']/.test(
       source
     ) &&
@@ -57,6 +65,11 @@ for (const file of files(path.join(repoRoot, "src")).filter((file) =>
     failures.push(
       `${relative}: persistent core mutations belong to backend operations`
     );
+}
+
+for (const name of ["meta_guard.js", "meta_hy_alpn.js"]) {
+  if (fs.existsSync(path.join(repoRoot, "src-tauri/src/enhance/builtin", name)))
+    failures.push(`Legacy core conversion resource must not exist: ${name}`);
 }
 
 if (failures.length) {

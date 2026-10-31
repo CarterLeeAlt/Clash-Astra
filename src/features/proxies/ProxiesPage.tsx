@@ -1,5 +1,4 @@
 import useSWR from "swr";
-import { useEffect, useMemo } from "react";
 import { useLockFn } from "ahooks";
 import { useTranslation } from "react-i18next";
 import lockIconUrl from "@/assets/icons/lock.svg";
@@ -49,12 +48,7 @@ const ProxyPage = () => {
 
   const isSizeLocked = verge?.window_size_locked ?? false;
 
-  const modeList = useMemo(() => {
-    if (verge?.clash_core?.startsWith("mihomo")) {
-      return ["rule", "global", "direct"];
-    }
-    return ["rule", "global", "direct", "script"];
-  }, [verge?.clash_core]);
+  const modeList = ["rule", "global", "direct"];
 
   const curMode = clashConfig?.mode?.toLowerCase();
 
@@ -84,12 +78,6 @@ const ProxyPage = () => {
       Notice.error(formatNoticeMessage(err));
     }
   });
-
-  useEffect(() => {
-    if (curMode && !modeList.includes(curMode)) {
-      onChangeMode("rule");
-    }
-  }, [curMode]);
 
   return (
     <BasePage

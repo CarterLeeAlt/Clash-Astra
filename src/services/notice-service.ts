@@ -13,7 +13,7 @@ export interface NoticeItem {
   timerId: ReturnType<typeof setTimeout>;
 }
 
-export interface ShowNoticeOptions {
+interface ShowNoticeOptions {
   type: NoticeType;
   message: ReactNode;
 }
@@ -21,7 +21,7 @@ export interface ShowNoticeOptions {
 type NoticeSubscriber = () => void;
 type NoticeShortcut = (message: ReactNode) => number;
 
-export interface NoticeInstance {
+interface NoticeInstance {
   (options: ShowNoticeOptions): number;
   success: NoticeShortcut;
   error: NoticeShortcut;
@@ -89,7 +89,7 @@ export const clearNotices = () => {
   notifySubscribers();
 };
 
-export const showNotice = ((options: ShowNoticeOptions) => {
+const showNotice = ((options: ShowNoticeOptions) => {
   const id = nextNoticeId++;
   const type = normalizeNoticeType(options.type);
   const duration = DEFAULT_NOTICE_DURATION;

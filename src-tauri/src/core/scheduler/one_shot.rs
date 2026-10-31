@@ -302,7 +302,7 @@ impl OneShotScheduler {
     }
 
     /// 返回所有尚未触发的一次性任务 key，按字典序排列。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn pending_keys(&self) -> Vec<String> {
         let jobs = self.jobs.lock();
         let mut keys: Vec<String> = jobs.keys().cloned().collect();
@@ -337,7 +337,7 @@ impl OneShotScheduler {
     }
 
     /// 指定一次性任务是否正在执行。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_running(&self, key: &str) -> bool {
         self.running.lock().contains_key(key)
     }

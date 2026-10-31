@@ -21,7 +21,7 @@ import {
   Switch,
 } from "@/components/base";
 
-export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
+export const SysproxyViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const [open, setOpen] = useState(false);

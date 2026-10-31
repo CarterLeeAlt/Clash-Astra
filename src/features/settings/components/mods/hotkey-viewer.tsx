@@ -27,7 +27,7 @@ const HOTKEY_FUNC = [
   "toggle_tun_mode",
 ];
 
-export const HotkeyViewer = forwardRef<DialogRef>((props, ref) => {
+export const HotkeyViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 

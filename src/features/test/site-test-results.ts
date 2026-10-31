@@ -3,7 +3,7 @@ import type { ITestDelayResult } from "@/services/cmds";
 /** 站点结果保留时间：超过后回到初始的 Check 状态。 */
 export const SITE_TEST_RESULT_TTL_MS = 2 * 60 * 1000;
 
-export interface SiteTestEntry {
+interface SiteTestEntry {
   result: ITestDelayResult;
   at: number;
 }
@@ -51,8 +51,6 @@ const listeners = new Set<(results: SiteTestResults) => void>();
 const emit = () => {
   listeners.forEach((listener) => listener(cache));
 };
-
-export const getSiteTestResults = () => cache;
 
 /** 只返回未过期的条目，并把过期条目从模块缓存中移除。 */
 export const getFreshSiteTestResults = (now = Date.now()) => {

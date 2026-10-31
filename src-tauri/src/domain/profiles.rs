@@ -1,5 +1,73 @@
-use crate::config::{IProfiles, PrfItem, GLOBAL_SCRIPT_UID};
+use crate::config::{
+    IProfiles, PrfItem, GLOBAL_SCRIPT_DESC, GLOBAL_SCRIPT_FILE, GLOBAL_SCRIPT_NAME,
+    GLOBAL_SCRIPT_UID,
+};
 use anyhow::{bail, Result};
+use std::collections::HashSet;
+
+/// 当前索引必须完整且引用有效；不补字段、不改名称、不修复旧结构。
+pub fn validate(profiles: &IProfiles) -> Result<()> {
+    let items = profiles
+        .items
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("profile items are missing"))?;
+    let mut uids = HashSet::new();
+    for item in items {
+        let uid = item
+            .uid
+            .as_deref()
+            .filter(|uid| !uid.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("profile UID is missing"))?;
+        anyhow::ensure!(uids.insert(uid), "duplicate profile UID: {uid}");
+        anyhow::ensure!(
+            matches!(
+                item.itype.as_deref(),
+                Some("remote" | "local" | "script" | "merge")
+            ),
+            "invalid profile type: {uid}"
+        );
+        anyhow::ensure!(
+            item.file
+                .as_deref()
+                .is_some_and(|file| !file.trim().is_empty()),
+            "profile file name is missing: {uid}"
+        );
+    }
+    let global = profiles.get_item(GLOBAL_SCRIPT_UID)?;
+    anyhow::ensure!(
+        items.first().and_then(|item| item.uid.as_deref()) == Some(GLOBAL_SCRIPT_UID)
+            && global.itype.as_deref() == Some("script")
+            && global.file.as_deref() == Some(GLOBAL_SCRIPT_FILE)
+            && global.name.as_deref() == Some(GLOBAL_SCRIPT_NAME)
+            && global.desc.as_deref() == Some(GLOBAL_SCRIPT_DESC),
+        "invalid Global Script identity"
+    );
+    if let Some(uid) = &profiles.current {
+        anyhow::ensure!(
+            is_activatable(profiles.get_item(uid)?),
+            "invalid current subscription"
+        );
+    }
+    let mut seen = HashSet::new();
+    for uid in profiles
+        .chain
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("profile chain is missing"))?
+    {
+        anyhow::ensure!(
+            uid != GLOBAL_SCRIPT_UID && seen.insert(uid),
+            "invalid or duplicate enhancement chain UID: {uid}"
+        );
+        anyhow::ensure!(
+            matches!(
+                profiles.get_item(uid)?.itype.as_deref(),
+                Some("merge" | "script")
+            ),
+            "invalid enhancement chain item: {uid}"
+        );
+    }
+    Ok(())
+}
 
 /// 激活请求只接受业务可写字段，订阅列表由独立的增删改操作维护。
 #[derive(serde::Deserialize)]
@@ -72,6 +140,70 @@ pub fn remove(profiles: &mut IProfiles, uid: &str) -> Result<PrfItem> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fresh_template_round_trips_as_a_valid_current_catalog() {
+        let profiles = IProfiles::template();
+        validate(&profiles).unwrap();
+        let loaded = serde_yaml::from_str(&serde_yaml::to_string(&profiles).unwrap()).unwrap();
+        validate(&loaded).unwrap();
+        assert_eq!(profiles.items.as_ref().unwrap().len(), 1);
+        assert!(profiles.current.is_none());
+    }
+
+    #[test]
+    fn incomplete_catalog_is_rejected_without_migration() {
+        for profiles in [
+            IProfiles::default(),
+            IProfiles {
+                items: Some(vec![]),
+                ..IProfiles::template()
+            },
+            IProfiles {
+                items: Some(vec![
+                    PrfItem::global_script(),
+                    PrfItem {
+                        itype: Some("remote".into()),
+                        name: Some("remote file".into()),
+                        ..Default::default()
+                    },
+                ]),
+                ..IProfiles::template()
+            },
+            IProfiles {
+                chain: Some(vec![GLOBAL_SCRIPT_UID.into()]),
+                ..IProfiles::template()
+            },
+            IProfiles {
+                current: Some("missing".into()),
+                ..IProfiles::template()
+            },
+        ] {
+            let before = serde_json::to_value(&profiles).unwrap();
+            assert!(validate(&profiles).is_err());
+            assert_eq!(serde_json::to_value(&profiles).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn current_catalog_preserves_user_names_and_rejects_duplicate_ids() {
+        let mut profiles = IProfiles::template();
+        let item = PrfItem {
+            uid: Some("one".into()),
+            itype: Some("local".into()),
+            file: Some("one.yaml".into()),
+            name: Some("local file".into()),
+            ..Default::default()
+        };
+        profiles.items.as_mut().unwrap().push(item.clone());
+        validate(&profiles).unwrap();
+        assert_eq!(
+            profiles.get_item("one").unwrap().name.as_deref(),
+            Some("local file")
+        );
+        profiles.items.as_mut().unwrap().push(item);
+        assert!(validate(&profiles).is_err());
+    }
 
     fn fixture() -> IProfiles {
         IProfiles {

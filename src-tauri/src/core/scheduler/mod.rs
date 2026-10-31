@@ -30,13 +30,9 @@ pub type JobFn = Arc<dyn Fn() -> JobFuture + Send + Sync>;
 #[serde(rename_all = "camelCase")]
 pub enum Schedule {
     /// 按秒重复。
-    #[allow(dead_code)]
     Seconds(u64),
     /// 按分钟重复。
     Minutes(u64),
-    /// 按 cron 表达式重复，使用本地时区。
-    #[allow(dead_code)]
-    Cron(String),
 }
 
 impl Schedule {
@@ -45,21 +41,18 @@ impl Schedule {
             Self::Seconds(0) | Self::Minutes(0) => {
                 bail!("scheduled task interval must be greater than zero");
             }
-            Self::Cron(expression) if expression.trim().is_empty() => {
-                bail!("scheduled task cron expression must not be empty");
-            }
             _ => {}
         }
 
         Ok(self)
     }
 
-    /// 单次执行的时间预算：短周期任务 60 秒，长周期/定时任务 10 分钟。
+    /// 单次执行的时间预算：按秒触发的任务 60 秒，按分钟触发的任务 10 分钟。
     /// 超时后丢弃 future，避免一个卡住的任务永久占住该 key。
     pub(crate) fn max_duration(&self) -> std::time::Duration {
         match self {
             Self::Seconds(_) => std::time::Duration::from_secs(60),
-            Self::Minutes(_) | Self::Cron(_) => std::time::Duration::from_secs(600),
+            Self::Minutes(_) => std::time::Duration::from_secs(600),
         }
     }
 }
@@ -121,11 +114,10 @@ mod tests {
     use super::Schedule;
 
     #[test]
-    fn schedule_rejects_zero_intervals_and_empty_cron() {
+    fn schedule_rejects_zero_intervals() {
         let _guard = super::test_lock();
         assert!(Schedule::Seconds(0).validate().is_err());
         assert!(Schedule::Minutes(0).validate().is_err());
-        assert!(Schedule::Cron("   ".to_string()).validate().is_err());
         assert!(Schedule::Seconds(1).validate().is_ok());
     }
 }

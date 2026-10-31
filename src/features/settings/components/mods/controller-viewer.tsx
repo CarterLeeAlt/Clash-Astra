@@ -10,7 +10,7 @@ import {
   Notice,
 } from "@/components/base";
 
-export const ControllerViewer = forwardRef<DialogRef>((props, ref) => {
+export const ControllerViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 

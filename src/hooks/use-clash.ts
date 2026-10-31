@@ -25,11 +25,7 @@ export const useClash = () => {
     await mutate(queryKeys.clashConfig);
   });
 
-  const version = versionData?.premium
-    ? `${versionData.version} Premium`
-    : versionData?.meta
-    ? `${versionData.version} Meta`
-    : versionData?.version || "-";
+  const version = versionData?.version || "-";
 
   return {
     clash,

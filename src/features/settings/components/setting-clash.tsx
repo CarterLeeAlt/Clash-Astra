@@ -97,8 +97,7 @@ const SettingClash = ({ onError }: Props) => {
 
       <SettingItem label={t("Log Level")}>
         <GuardState
-          // clash premium 2022.08.26 值为warn
-          value={logLevel === "warn" ? "warning" : logLevel ?? "info"}
+          value={logLevel ?? "info"}
           onCatch={onError}
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ "log-level": e })}

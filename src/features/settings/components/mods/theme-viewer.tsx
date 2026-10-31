@@ -18,7 +18,7 @@ import {
   Notice,
 } from "@/components/base";
 
-export const ThemeViewer = forwardRef<DialogRef>((props, ref) => {
+export const ThemeViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const [open, setOpen] = useState(false);

@@ -4,17 +4,15 @@ export const initConn: IConnections = {
   connections: [],
 };
 
-export type ConnectionOrderFunc = (
-  list: IConnectionsItem[]
-) => IConnectionsItem[];
+type ConnectionOrderFunc = (list: IConnectionsItem[]) => IConnectionsItem[];
 
-export const getActiveSpeed = (conn: IConnectionsItem) =>
+const getActiveSpeed = (conn: IConnectionsItem) =>
   (conn.curDownload ?? 0) + (conn.curUpload ?? 0);
 
-export const getTotalTraffic = (conn: IConnectionsItem) =>
+const getTotalTraffic = (conn: IConnectionsItem) =>
   (conn.download ?? 0) + (conn.upload ?? 0);
 
-export const getStartTimestamp = (conn: IConnectionsItem) => {
+const getStartTimestamp = (conn: IConnectionsItem) => {
   if (!conn.start) return 0;
   const ts = new Date(conn.start).getTime();
   return Number.isNaN(ts) ? 0 : ts;
@@ -59,7 +57,7 @@ export const mergeConnectionSnapshot = (
   return connections;
 };
 
-export const sortByActiveSpeed = (list: IConnectionsItem[]) =>
+const sortByActiveSpeed = (list: IConnectionsItem[]) =>
   list
     .map((item, index) => ({ item, index }))
     .sort((a, b) => {

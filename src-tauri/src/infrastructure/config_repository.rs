@@ -1,4 +1,4 @@
-use crate::config::{ConfigSnapshot, PrfItem, GLOBAL_SCRIPT_UID, RUNTIME_CONFIG};
+use crate::config::{ConfigSnapshot, PrfItem, RUNTIME_CONFIG};
 use crate::enhance::{
     self,
     chain::{ChainItem, ChainType},
@@ -65,6 +65,7 @@ fn chain_item(item: &PrfItem, files: &ProfileFiles) -> Result<ChainItem> {
 
 pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate::config::IRuntime> {
     let profiles = &snapshot.profiles;
+    crate::domain::profiles::validate(profiles)?;
     let (current, profile_name) = match profiles.current.as_ref() {
         Some(uid) => {
             let item = profiles.get_item(uid)?;
@@ -79,6 +80,7 @@ pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate:
         }
         None => (Mapping::new(), String::new()),
     };
+    crate::domain::network::validate_subscription(&current)?;
     let global_script = profiles
         .items
         .as_ref()
@@ -89,19 +91,20 @@ pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate:
         .chain
         .iter()
         .flatten()
-        .filter(|uid| uid.as_str() != GLOBAL_SCRIPT_UID)
         .map(|uid| chain_item(profiles.get_item(uid)?, files))
         .collect::<Result<Vec<_>>>()?;
-    Ok(enhance::compile(CompileInput {
+    let runtime = enhance::compile(CompileInput {
         clash_config: snapshot.clash.0.clone(),
-        clash_core: snapshot.verge.clash_core.clone(),
         enable_tun: snapshot.verge.enable_tun_mode.unwrap_or(false),
-        enable_builtin: snapshot.verge.enable_builtin_enhanced.unwrap_or(true),
         current,
         profile_name,
         global_script,
         chain,
-    }))
+    });
+    if let Some(config) = &runtime.config {
+        crate::domain::network::validate_subscription(config)?;
+    }
+    Ok(runtime)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -259,6 +262,7 @@ pub(crate) fn prepare_at(
     snapshot: &ConfigSnapshot,
     files: &ProfileFiles,
 ) -> Result<FileTransaction> {
+    crate::domain::profiles::validate(&snapshot.profiles)?;
     let mut writes = BTreeMap::new();
     writes.insert(
         "config.yaml".into(),

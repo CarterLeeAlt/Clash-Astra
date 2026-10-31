@@ -12,7 +12,7 @@ import {
 import { useVerge } from "@/hooks/use-verge";
 import { patchPorts } from "@/services/cmds";
 
-export const ClashPortViewer = forwardRef<DialogRef>((props, ref) => {
+export const ClashPortViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const { clashInfo, mutateInfo } = useClashInfo();

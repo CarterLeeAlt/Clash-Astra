@@ -2,13 +2,13 @@ import dayjs from "dayjs";
 
 export const MAX_LOG_NUM = 2000;
 
-export const getLogKey = (item: Partial<ILogItem>) => {
+const getLogKey = (item: Partial<ILogItem>) => {
   const payload =
     item.payload ?? (item as any).message ?? (item as any).msg ?? "";
   return `${item.time ?? ""}|${item.type ?? ""}|${payload}`;
 };
 
-export const normalizeLogTime = (time?: string) => {
+const normalizeLogTime = (time?: string) => {
   if (!time) return dayjs().format("MM-DD HH:mm:ss");
   const parsed = dayjs(time);
   return parsed.isValid() ? parsed.format("MM-DD HH:mm:ss") : time;

@@ -50,8 +50,35 @@ pub fn validate_patch(patch: &Mapping) -> Result<()> {
         }
     }
     if let Some(mode) = patch.get("mode") {
-        if !matches!(mode.as_str(), Some("rule" | "global" | "direct" | "script")) {
+        if !matches!(mode.as_str(), Some("rule" | "global" | "direct")) {
             bail!("invalid proxy mode");
+        }
+    }
+    Ok(())
+}
+
+/// 订阅和增强结果使用当前 Mihomo 格式，不对旧模式或旧字段做转换。
+pub fn validate_subscription(config: &Mapping) -> Result<()> {
+    if let Some(mode) = config.get("mode") {
+        if !matches!(mode.as_str(), Some("rule" | "global" | "direct")) {
+            bail!("subscription mode must be rule, global or direct");
+        }
+    }
+    if let Some(proxies) = config.get("proxies").and_then(Value::as_sequence) {
+        for proxy in proxies {
+            if matches!(
+                proxy.get("type").and_then(Value::as_str),
+                Some("hysteria" | "hysteria2")
+            ) {
+                if let Some(alpn) = proxy.get("alpn") {
+                    anyhow::ensure!(
+                        alpn.as_sequence().is_some_and(|values| values
+                            .iter()
+                            .all(|value| value.as_str().is_some())),
+                        "Hysteria alpn must be a list of strings"
+                    );
+                }
+            }
         }
     }
     Ok(())
@@ -60,6 +87,25 @@ pub fn validate_patch(patch: &Mapping) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn current_modes_and_alpn_are_validated_without_conversion() {
+        for source in [
+            "mode: rule",
+            "mode: global",
+            "mode: direct",
+            "proxies: [{type: hysteria, alpn: [h3]}]",
+        ] {
+            validate_subscription(&serde_yaml::from_str(source).unwrap()).unwrap();
+        }
+        for source in ["mode: script", "proxies: [{type: hysteria, alpn: h3}]"] {
+            let config = serde_yaml::from_str(source).unwrap();
+            let before = serde_yaml::to_string(&config).unwrap();
+            assert!(validate_subscription(&config).is_err());
+            assert_eq!(serde_yaml::to_string(&config).unwrap(), before);
+        }
+        assert!(validate_patch(&serde_yaml::from_str("mode: script").unwrap()).is_err());
+    }
 
     #[test]
     fn listener_ports_are_bounded_and_distinct() {

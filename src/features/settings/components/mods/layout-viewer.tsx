@@ -16,7 +16,7 @@ import { convertFileSrc } from "@tauri-apps/api/tauri";
 import { copyIconFile, getAppDir } from "@/services/cmds";
 import { join } from "@tauri-apps/api/path";
 
-export const LayoutViewer = forwardRef<DialogRef>((props, ref) => {
+export const LayoutViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
   const { verge, patchVerge, mutateVerge } = useVerge();
 

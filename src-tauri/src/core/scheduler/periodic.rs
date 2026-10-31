@@ -45,10 +45,6 @@ impl Scheduler {
     /// 同一个 key 的周期没有变化时保留原任务，不会重置计时；因此任务的运行
     /// 逻辑应从最新配置读取状态，不要依赖注册时捕获的可变快照。
     pub fn upsert(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
-        self.install(key, schedule, run)
-    }
-
-    fn install(&self, key: impl Into<String>, schedule: Schedule, run: JobFn) -> Result<()> {
         let key = key.into();
         let schedule = schedule.validate()?;
 
@@ -210,9 +206,6 @@ impl Scheduler {
             }
             Schedule::Minutes(minutes) => {
                 builder.set_frequency_repeated_by_minutes(*minutes);
-            }
-            Schedule::Cron(expression) => {
-                builder.set_frequency_repeated_by_cron_str(expression);
             }
         }
 

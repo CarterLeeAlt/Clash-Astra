@@ -513,7 +513,7 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
         );
     }
     mutate(move |change| {
-        change.reload = patch.enable_tun_mode.is_some() || patch.enable_builtin_enhanced.is_some();
+        change.reload = patch.enable_tun_mode.is_some();
         for (key, port) in [
             ("mixed-port", patch.verge_mixed_port),
             ("socks-port", patch.verge_socks_port),

@@ -12,14 +12,11 @@ use self::tun::*;
 use crate::config::IRuntime;
 use serde_yaml::{Mapping, Value};
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 /// 编译所需的输入快照；订阅文件由基础设施层读取后传入。
 pub struct CompileInput {
     pub clash_config: Mapping,
-    pub clash_core: Option<String>,
     pub enable_tun: bool,
-    pub enable_builtin: bool,
     pub current: Mapping,
     pub global_script: Option<ChainItem>,
     pub chain: Vec<ChainItem>,
@@ -30,9 +27,7 @@ pub struct CompileInput {
 pub fn compile(input: CompileInput) -> IRuntime {
     let CompileInput {
         clash_config,
-        clash_core,
         enable_tun,
-        enable_builtin,
         current: mut config,
         global_script,
         chain,
@@ -40,7 +35,6 @@ pub fn compile(input: CompileInput) -> IRuntime {
     } = input;
 
     let mut result_map = HashMap::new(); // 保存脚本日志
-    let mut exists_keys = use_keys(&config); // 保存出现过的keys
 
     // 全局脚本先执行，用户增强链按用户指定顺序继续处理。
     if let Some(item) = global_script {
@@ -48,7 +42,6 @@ pub fn compile(input: CompileInput) -> IRuntime {
             let mut logs = vec![];
             match use_script(script, config.to_owned(), &profile_name) {
                 Ok((res_config, res_logs)) => {
-                    exists_keys.extend(use_keys(&res_config));
                     config = res_config;
                     logs.extend(res_logs);
                 }
@@ -58,10 +51,9 @@ pub fn compile(input: CompileInput) -> IRuntime {
         }
     }
 
-    // 处理用户的profile
+    // 按顺序处理用户配置的增强链。
     chain.into_iter().for_each(|item| match item.data {
         ChainType::Merge(merge) => {
-            exists_keys.extend(use_keys(&merge));
             config = use_merge(merge, config.to_owned());
         }
         ChainType::Script(script) => {
@@ -69,7 +61,6 @@ pub fn compile(input: CompileInput) -> IRuntime {
 
             match use_script(script, config.to_owned(), &profile_name) {
                 Ok((res_config, res_logs)) => {
-                    exists_keys.extend(use_keys(&res_config));
                     config = res_config;
                     logs.extend(res_logs);
                 }
@@ -94,31 +85,6 @@ pub fn compile(input: CompileInput) -> IRuntime {
         }
     }
 
-    // 内建脚本最后跑
-    if enable_builtin {
-        ChainItem::builtin()
-            .into_iter()
-            .filter(|(s, _)| s.is_support(clash_core.as_ref()))
-            .map(|(_, c)| c)
-            .for_each(|item| {
-                log::debug!(target: "app", "run builtin script {}", item.uid);
-
-                match item.data {
-                    ChainType::Script(script) => {
-                        match use_script(script, config.to_owned(), &profile_name) {
-                            Ok((res_config, _)) => {
-                                config = res_config;
-                            }
-                            Err(err) => {
-                                log::error!(target: "app", "builtin script error `{err}`");
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            });
-    }
-
     let mut diagnostics = Vec::new();
     config = use_tun(
         config,
@@ -130,13 +96,8 @@ pub fn compile(input: CompileInput) -> IRuntime {
     config = apply_ipv6_to_dns(config);
     config = use_sort(config);
 
-    let mut exists_set = HashSet::new();
-    exists_set.extend(exists_keys.into_iter());
-    exists_keys = exists_set.into_iter().collect();
-
     IRuntime {
         config: Some(config),
-        exists_keys,
         chain_logs: result_map,
         diagnostics,
     }
@@ -150,9 +111,7 @@ mod tests {
     fn compiler_preserves_script_chain_and_application_override_order() {
         let output = compile(CompileInput {
             clash_config: serde_yaml::from_str("mode: rule\nipv6: false").unwrap(),
-            clash_core: Some("mihomo".into()),
             enable_tun: false,
-            enable_builtin: false,
             current: serde_yaml::from_str("mode: global\nmarker: source").unwrap(),
             global_script: Some(ChainItem::to_script(
                 "global",

@@ -19,7 +19,7 @@ const VALID_CORE = [
   { name: "Mihomo Alpha", core: "mihomo-alpha" },
 ];
 
-export const ClashCoreViewer = forwardRef<DialogRef>((props, ref) => {
+export const ClashCoreViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const { verge, mutateVerge } = useVerge();

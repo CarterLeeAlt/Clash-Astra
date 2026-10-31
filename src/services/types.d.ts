@@ -243,83 +243,10 @@ interface IVergeConfig {
   auto_close_connection?: boolean;
   default_latency_test?: string;
   default_latency_timeout?: number;
-  enable_builtin_enhanced?: boolean;
   auto_log_clean?: 0 | 1 | 2 | 3;
   proxy_layout_column?: number;
   test_list?: IVergeTestItem[];
   window_size_position?: number[];
   window_is_maximized?: boolean;
   window_size_locked?: boolean;
-}
-
-type IClashConfigValue = any;
-
-interface IProfileMerge {
-  // 内核默认支持的配置字段。
-  rules?: IClashConfigValue;
-  proxies?: IClashConfigValue;
-  "proxy-groups"?: IClashConfigValue;
-  "proxy-providers"?: IClashConfigValue;
-  "rule-providers"?: IClashConfigValue;
-  // 需要启用对应功能的内核配置字段。
-  tun?: IClashConfigValue;
-  dns?: IClashConfigValue;
-  hosts?: IClashConfigValue;
-  script?: IClashConfigValue;
-  profile?: IClashConfigValue;
-  payload?: IClashConfigValue;
-  "interface-name"?: IClashConfigValue;
-  "routing-mark"?: IClashConfigValue;
-  // 功能相关字段。
-  use?: string[];
-  "prepend-rules"?: any[];
-  "append-rules"?: any[];
-  "prepend-proxies"?: any[];
-  "append-proxies"?: any[];
-  "prepend-proxy-groups"?: any[];
-  "append-proxy-groups"?: any[];
-  // 内核配置覆盖字段。
-  ebpf?: any;
-  experimental?: any;
-  iptables?: any;
-  sniffer?: any;
-  authentication?: any;
-  "bind-address"?: any;
-  "external-ui"?: any;
-  "auto-redir"?: any;
-  "socks-port"?: any;
-  "redir-port"?: any;
-  "tproxy-port"?: any;
-  "geodata-mode"?: any;
-  "tcp-concurrent"?: any;
-}
-
-// 内核配置的局部视图。
-type IProfileData = Partial<{
-  rules: any[];
-  proxies: any[];
-  "proxy-groups": any[];
-  "proxy-providers": any[];
-  "rule-providers": any[];
-
-  [k: string]: any;
-}>;
-
-interface IChainItem {
-  item: IProfileItem;
-  merge?: IProfileMerge;
-  script?: string;
-}
-
-interface IEnhancedPayload {
-  chain: IChainItem[];
-  valid: string[];
-  current: IProfileData;
-  callback: string;
-}
-
-interface IEnhancedResult {
-  data: IProfileData;
-  status: string;
-  error?: string;
 }

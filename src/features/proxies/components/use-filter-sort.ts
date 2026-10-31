@@ -5,12 +5,11 @@ export type ProxySortType = 0 | 1 | 2;
 
 export function filterSort(
   proxies: IProxyItem[],
-  groupName: string,
   filterText: string,
   sortType: ProxySortType
 ) {
-  const fp = filterProxies(proxies, groupName, filterText);
-  const sp = sortProxies(fp, groupName, sortType);
+  const fp = filterProxies(proxies, filterText);
+  const sp = sortProxies(fp, sortType);
   return sp;
 }
 
@@ -20,15 +19,8 @@ export function filterSort(
 const regex1 = /delay([=<>])(\d+|timeout|error)/i;
 const regex2 = /type=(.*)/i;
 
-/**
- * filter the proxy
- * according to the regular conditions
- */
-function filterProxies(
-  proxies: IProxyItem[],
-  groupName: string,
-  filterText: string
-) {
+// 按名称、延迟或节点类型过滤代理节点。
+function filterProxies(proxies: IProxyItem[], filterText: string) {
   const proxyList = Array.isArray(proxies) ? proxies : [];
   if (!filterText) return proxyList;
 
@@ -62,14 +54,8 @@ function filterProxies(
   return proxyList.filter((p) => p.name.includes(filterText.trim()));
 }
 
-/**
- * sort the proxy
- */
-function sortProxies(
-  proxies: IProxyItem[],
-  groupName: string,
-  sortType: ProxySortType
-) {
+// 按用户选择的方式排序节点。
+function sortProxies(proxies: IProxyItem[], sortType: ProxySortType) {
   if (!proxies) return [];
   if (sortType === 0) return proxies;
 

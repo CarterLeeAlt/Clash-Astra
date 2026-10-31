@@ -117,7 +117,7 @@ const LogPage = () => {
         {filterLogs.length > 0 ? (
           <Virtuoso
             data={filterLogs}
-            itemContent={(index, item) => <LogItem value={item} />}
+            itemContent={(_index, item) => <LogItem value={item} />}
             followOutput={false}
           />
         ) : (

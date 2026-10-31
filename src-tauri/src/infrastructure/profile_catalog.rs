@@ -1,12 +1,10 @@
-use crate::config::{
-    IProfiles, PrfItem, GLOBAL_SCRIPT_DESC, GLOBAL_SCRIPT_FILE, GLOBAL_SCRIPT_NAME,
-    GLOBAL_SCRIPT_UID,
-};
+use crate::config::{IProfiles, GLOBAL_SCRIPT_FILE};
+use crate::domain::profiles::validate;
 use crate::utils::{dirs, help, tmpl};
 use anyhow::{Context, Result};
 use std::{
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -46,73 +44,31 @@ pub fn load() -> IProfiles {
 
 fn load_inner() -> Result<IProfiles> {
     let path = dirs::profiles_path()?;
-    let mut profiles = match help::read_yaml::<IProfiles>(&path) {
-        Ok(profiles) => profiles,
+    let profiles = load_at(&path)?;
+    // 全局脚本文件缺失属于当前数据恢复；索引身份已经通过校验，不改写用户脚本。
+    let global_script = help::resolve_profile_path(GLOBAL_SCRIPT_FILE)?;
+    if !global_script.exists() {
+        help::write_file_atomic(&global_script, tmpl::ITEM_GLOBAL_SCRIPT.as_bytes())?;
+    }
+    Ok(profiles)
+}
+
+fn load_at(path: &PathBuf) -> Result<IProfiles> {
+    match help::read_yaml::<IProfiles>(path).and_then(|profiles| {
+        validate(&profiles)?;
+        Ok(profiles)
+    }) {
+        Ok(profiles) => Ok(profiles),
         Err(error) => {
             log::warn!(target: "app", "profile catalog load failed: {error:#}");
             if path.exists() {
                 preserve_invalid(&path)?;
             }
-            IProfiles::template()
-        }
-    };
-    let mut changed = normalize(&mut profiles);
-    let items = profiles.items.get_or_insert_with(Vec::new);
-    if let Some(item) = items
-        .iter_mut()
-        .find(|item| item.uid.as_deref() == Some(GLOBAL_SCRIPT_UID))
-    {
-        if item.itype.as_deref() != Some("script")
-            || item.file.as_deref() != Some(GLOBAL_SCRIPT_FILE)
-            || item.name.as_deref() != Some(GLOBAL_SCRIPT_NAME)
-            || item.desc.as_deref() != Some(GLOBAL_SCRIPT_DESC)
-        {
-            item.itype = Some("script".into());
-            item.file = Some(GLOBAL_SCRIPT_FILE.into());
-            item.name = Some(GLOBAL_SCRIPT_NAME.into());
-            item.desc = Some(GLOBAL_SCRIPT_DESC.into());
-            changed = true;
-        }
-    } else {
-        items.insert(0, PrfItem::global_script());
-        changed = true;
-    }
-    let global_script = help::resolve_profile_path(GLOBAL_SCRIPT_FILE)?;
-    if !global_script.exists() {
-        help::write_file_atomic(&global_script, tmpl::ITEM_GLOBAL_SCRIPT.as_bytes())?;
-    }
-    if changed {
-        help::save_yaml(&path, &profiles, Some("# Profiles Config for Clash Astra"))?;
-    }
-    Ok(profiles)
-}
-
-/// 迁移仅补齐历史缺失字段与历史默认名称，保留用户自定义名称。
-fn normalize(profiles: &mut IProfiles) -> bool {
-    let mut changed = profiles.items.is_none();
-    for item in profiles.items.get_or_insert_with(Vec::new) {
-        if item.uid.is_none() {
-            item.uid = Some(help::get_uid("d"));
-            changed = true;
-        }
-        let name = match (item.itype.as_deref(), item.name.as_deref()) {
-            (Some("remote"), Some("remote file")) => Some("远程订阅"),
-            (Some("local"), Some("local file")) => Some("本地文件"),
-            (Some("script"), Some("script file")) => Some("脚本文件"),
-            (Some("merge"), Some("merge file")) => Some("合并文件"),
-            _ => None,
-        };
-        if let Some(name) = name {
-            item.name = Some(name.into());
-            changed = true;
+            let profiles = IProfiles::template();
+            help::save_yaml(path, &profiles, Some("# Profiles Config for Clash Astra"))?;
+            Ok(profiles)
         }
     }
-    if let Some(chain) = &mut profiles.chain {
-        let previous_len = chain.len();
-        chain.retain(|uid| uid != GLOBAL_SCRIPT_UID);
-        changed |= previous_len != chain.len();
-    }
-    changed
 }
 
 #[cfg(test)]
@@ -120,28 +76,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn migration_is_idempotent_and_preserves_user_names() {
-        let mut profiles = IProfiles {
-            items: Some(vec![
-                PrfItem {
-                    itype: Some("remote".into()),
-                    name: Some("remote file".into()),
-                    ..Default::default()
-                },
-                PrfItem {
-                    itype: Some("remote".into()),
-                    name: Some("我的订阅".into()),
-                    ..Default::default()
-                },
-            ]),
-            chain: Some(vec![GLOBAL_SCRIPT_UID.into(), "user-script".into()]),
-            ..Default::default()
-        };
-        assert!(normalize(&mut profiles));
-        let items = profiles.items.as_ref().unwrap();
-        assert_eq!(items[0].name.as_deref(), Some("远程订阅"));
-        assert_eq!(items[1].name.as_deref(), Some("我的订阅"));
-        assert_eq!(profiles.chain.as_ref().unwrap(), &["user-script"]);
-        assert!(!normalize(&mut profiles));
+    fn current_catalog_is_read_without_rewriting() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../.tmp/current-catalog")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                crate::utils::help::get_uid("test")
+            ));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("profiles.yaml");
+        let source = serde_yaml::to_string(&IProfiles::template()).unwrap();
+        fs::write(&path, &source).unwrap();
+        validate(&load_at(&path).unwrap()).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), source);
+    }
+
+    #[test]
+    fn invalid_catalog_is_preserved_before_resetting_current_state() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../.tmp/current-catalog")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                crate::utils::help::get_uid("test")
+            ));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("profiles.yaml");
+        let source = "items:\n  - type: remote\n    name: remote file\n";
+        fs::write(&path, source).unwrap();
+        let profiles = load_at(&path).unwrap();
+        validate(&profiles).unwrap();
+        assert_eq!(profiles.items.unwrap().len(), 1);
+        let backups = fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "bak"))
+            .collect::<Vec<_>>();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(fs::read_to_string(&backups[0]).unwrap(), source);
     }
 }

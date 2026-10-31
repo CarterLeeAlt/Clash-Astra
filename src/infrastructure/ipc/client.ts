@@ -1,13 +1,13 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/tauri";
 
-export interface CommandFailure {
+interface CommandFailure {
   code: string;
   message: string;
   stage?: string;
   recoveryError?: string;
 }
 
-export class CommandError extends Error {
+class CommandError extends Error {
   readonly code: string;
   readonly stage?: string;
   readonly recoveryError?: string;

@@ -82,20 +82,18 @@ pub async fn activate(patch: model::ActivationRequest) -> Result<()> {
             model::select(&mut change.next.profiles, &uid)?;
         }
         if let Some(chain) = patch.chain {
-            for uid in chain.iter().filter(|uid| uid.as_str() != GLOBAL_SCRIPT_UID) {
+            for uid in &chain {
+                anyhow::ensure!(
+                    uid != GLOBAL_SCRIPT_UID,
+                    "Global Script is not a user enhancement"
+                );
                 let item = change.next.profiles.get_item(uid)?;
                 anyhow::ensure!(
                     matches!(item.itype.as_deref(), Some("merge" | "script")),
                     "invalid enhancement chain item"
                 );
             }
-            let mut seen = std::collections::HashSet::new();
-            change.next.profiles.chain = Some(
-                chain
-                    .into_iter()
-                    .filter(|uid| uid != GLOBAL_SCRIPT_UID && seen.insert(uid.clone()))
-                    .collect(),
-            );
+            change.next.profiles.chain = Some(chain);
         }
         change.reload = true;
         change.restore_selection = true;

@@ -63,7 +63,7 @@ export const useRenderList = (mode: string) => {
     if (!proxiesData) return [];
 
     // global 和 direct 使用展开的样式
-    const useRule = mode === "rule" || mode === "script";
+    const useRule = mode === "rule";
     const renderGroups =
       (useRule && proxiesData.groups.length
         ? proxiesData.groups
@@ -78,7 +78,6 @@ export const useRenderList = (mode: string) => {
       if (headState?.open || !useRule) {
         const proxies = filterSort(
           group.all,
-          group.name,
           headState.filterText,
           headState.sortType
         );

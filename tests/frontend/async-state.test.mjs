@@ -8,7 +8,7 @@ import {
   setSiteTestRuntime,
 } from "../../src/features/test/site-test-results.ts";
 import { mergeConnectionSnapshot } from "../../src/features/connections/model.ts";
-import { normalizeTestList } from "../../src/features/test/normalize.ts";
+import { presentTestList } from "../../src/features/test/presentation.ts";
 
 const deferred = () => {
   let resolve, reject;
@@ -144,7 +144,7 @@ test("connection merge preserves order without mutating incoming snapshots", () 
   assert.equal(incoming[0].curUpload, undefined);
 });
 
-test("built-in site normalization is idempotent and preserves custom sites", () => {
+test("site presentation preserves stored values and adds only runtime metadata", () => {
   const builtin = {
     uid: "builtin-a",
     name: "A",
@@ -152,13 +152,20 @@ test("built-in site normalization is idempotent and preserves custom sites", () 
     icon: "icon",
     builtIn: true,
   };
-  const defaults = new Map([["A::https://example.com", builtin]]);
+  const defaults = new Map([[builtin.uid, builtin]]);
   const custom = { uid: "custom", name: "Custom", url: "https://example.org" };
-  const first = normalizeTestList([custom], defaults);
-  assert.equal(first.changed, true);
-  assert.deepEqual(first.normalized, [builtin, custom]);
-  const persisted = first.normalized.map(({ builtIn, ...item }) => item);
-  const second = normalizeTestList(persisted, defaults);
-  assert.equal(second.changed, false);
-  assert.deepEqual(second.normalized, [builtin, custom]);
+  const stored = Object.freeze({
+    uid: builtin.uid,
+    name: "Stored name",
+    url: "https://stored.example",
+  });
+  const first = presentTestList([custom, stored], defaults);
+  assert.deepEqual(first, [
+    { ...custom, builtIn: false },
+    { ...stored, icon: "icon", builtIn: true },
+  ]);
+  assert.deepEqual(presentTestList(first, defaults), first);
+  assert.deepEqual(presentTestList([], defaults), []);
+  const sameNameAndUrl = { ...custom, name: builtin.name, url: builtin.url };
+  assert.equal(presentTestList([sameNameAndUrl], defaults)[0].builtIn, false);
 });
