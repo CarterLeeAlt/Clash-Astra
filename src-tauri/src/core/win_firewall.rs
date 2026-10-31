@@ -47,7 +47,6 @@ pub fn reconcile_lan_firewall_on_startup() -> Result<()> {
     use crate::config::Config;
 
     let allow_lan = Config::clash()
-        .latest()
         .0
         .get("allow-lan")
         .and_then(|value| value.as_bool())
@@ -71,7 +70,6 @@ pub fn notify_lan_firewall_if_needed() {
     use crate::core::handle::Handle;
 
     let allow_lan = Config::clash()
-        .latest()
         .0
         .get("allow-lan")
         .and_then(|value| value.as_bool())

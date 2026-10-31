@@ -23,36 +23,45 @@ use std::sync::atomic::AtomicU8;
 impl CoreManager {
     /// 启动核心
     pub async fn run_core(&self) -> Result<()> {
+        let _operation = crate::application::operation().await?;
+        self.run_core_with(&Config::snapshot()).await?;
+        crate::core::handle::Handle::refresh_clash();
+        Ok(())
+    }
+
+    pub async fn run_core_with(&self, snapshot: &ConfigSnapshot) -> Result<()> {
         self.desired_running.store(true, Ordering::SeqCst);
-        let result = self.run_core_inner().await;
+        let result = self.run_core_inner(snapshot).await;
         if result.is_err() && self.desired_running.load(Ordering::SeqCst) && !self.is_core_ready() {
             Self::global().schedule_core_recovery();
         }
         result
     }
 
-    async fn run_core_inner(&self) -> Result<()> {
+    async fn run_core_inner(&self, snapshot: &ConfigSnapshot) -> Result<()> {
         let _operation = self.core_operation.lock().await;
-        self.start_core_locked().await
+        self.start_core_locked(snapshot).await
     }
 
     async fn recover_core_if_needed(&self) -> Result<bool> {
+        let _change = crate::application::operation().await?;
         let _operation = self.core_operation.lock().await;
         if !self.desired_running.load(Ordering::SeqCst) || self.is_core_ready() {
             return Ok(false);
         }
-        self.start_core_locked().await?;
+        self.start_core_locked(&Config::snapshot()).await?;
+        crate::core::handle::Handle::refresh_clash();
         Ok(true)
     }
 
-    pub(super) async fn start_core_locked(&self) -> Result<()> {
-        let config_path = Config::generate_file(ConfigType::Run)?;
+    pub(super) async fn start_core_locked(&self, snapshot: &ConfigSnapshot) -> Result<()> {
+        let config_path = snapshot.write_runtime(ConfigType::Run)?;
 
         self.core_ready.store(false, Ordering::SeqCst);
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         self.active_generation.store(generation, Ordering::SeqCst);
         log::info!(target: "app", "starting core with runtime config: {}", dirs::path_to_str(&config_path)?);
-        self.log_tun_prerequisites();
+        self.log_tun_prerequisites(snapshot);
 
         let killed_sidecar = match self.sidecar.lock().take() {
             Some(child) => {
@@ -82,7 +91,7 @@ impl CoreManager {
             use crate::core::win_service;
 
             // 服务模式
-            let enable = { Config::verge().latest().enable_service_mode };
+            let enable = snapshot.verge.enable_service_mode;
             let enable = enable.unwrap_or(false);
 
             *self.use_service_mode.lock() = enable;
@@ -90,11 +99,11 @@ impl CoreManager {
             if enable {
                 // 服务模式启动失败直接报错，避免误判为服务托管
                 log::debug!(target: "app", "try to run core in service mode");
-                let tun_enabled = Config::verge().latest().enable_tun_mode.unwrap_or(false);
+                let tun_enabled = snapshot.verge.enable_tun_mode.unwrap_or(false);
 
                 match (|| async {
                     win_service::ensure_service_ready().await?;
-                    win_service::run_core_by_service(&config_path).await
+                    win_service::run_core_by_service(&config_path, snapshot).await
                 })()
                 .await
                 {
@@ -124,7 +133,7 @@ impl CoreManager {
         let app_dir = dirs::app_home_dir()?;
         let app_dir = dirs::path_to_str(&app_dir)?;
 
-        let clash_core = { Config::verge().latest().clash_core.clone() };
+        let clash_core = snapshot.verge.clash_core.clone();
         let clash_core = clash_core.unwrap_or_else(|| MIHOMO_CORE.into());
 
         let config_path = dirs::path_to_str(&config_path)?;
@@ -186,7 +195,12 @@ impl CoreManager {
             }
         });
 
-        if let Err(err) = clash_api::wait_for_core_ready(Duration::from_secs(12)).await {
+        if let Err(err) = clash_api::wait_for_core_ready(
+            snapshot.clash.get_client_info(),
+            Duration::from_secs(12),
+        )
+        .await
+        {
             if self
                 .active_generation
                 .compare_exchange(generation, 0, Ordering::SeqCst, Ordering::SeqCst)
@@ -208,8 +222,8 @@ impl CoreManager {
         Ok(())
     }
 
-    fn log_tun_prerequisites(&self) {
-        let tun_enabled = Config::verge().latest().enable_tun_mode.unwrap_or(false);
+    fn log_tun_prerequisites(&self, snapshot: &ConfigSnapshot) {
+        let tun_enabled = snapshot.verge.enable_tun_mode.unwrap_or(false);
         if !tun_enabled {
             return;
         }
@@ -217,10 +231,7 @@ impl CoreManager {
         {
             use crate::core::handle::Handle;
             use deelevate::{PrivilegeLevel, Token};
-            let service_mode = Config::verge()
-                .latest()
-                .enable_service_mode
-                .unwrap_or(false);
+            let service_mode = snapshot.verge.enable_service_mode.unwrap_or(false);
             let privilege = Token::with_current_process()
                 .ok()
                 .and_then(|t| t.privilege_level().ok());
@@ -251,6 +262,10 @@ impl CoreManager {
         self.core_ready.load(Ordering::SeqCst)
     }
 
+    pub fn generation(&self) -> u64 {
+        self.active_generation.load(Ordering::SeqCst)
+    }
+
     pub(super) async fn initialize_sysproxy_after_core_ready(&'static self) {
         if self.proxy_initialized.load(Ordering::SeqCst) {
             return;
@@ -268,7 +283,9 @@ impl CoreManager {
                     self.proxy_initialized.store(true, Ordering::SeqCst);
                     // 核心就绪后立即补一轮自动延迟测试，不必等首个 2 分钟周期
                     tauri::async_runtime::spawn(async {
-                        if let Err(err) = crate::feat::run_auto_delay_test().await {
+                        if let Err(err) =
+                            crate::application::diagnostics::run_auto_delay_test().await
+                        {
                             log::warn!(target: "app", "initial auto delay test failed: {err:#}");
                         }
                     });
@@ -281,8 +298,7 @@ impl CoreManager {
                     log::error!(target: "app", "system proxy initialization task failed; retrying: {err}");
                 }
             }
-            // Keep the guard chain registered even while initialization keeps
-            // failing, so every guard cycle also retries applying the proxy.
+            // 初始化失败期间保留守卫调度，使后续周期仍有机会重新应用代理。
             crate::core::sysopt::Sysopt::global().guard_proxy();
             sleep(retry_delay).await;
             retry_delay = (retry_delay * 2).min(Duration::from_secs(15));
@@ -412,7 +428,7 @@ impl CoreManager {
         }
     }
 
-    async fn stop_core_async(&self) -> Result<()> {
+    pub(crate) async fn stop_core_async(&self) -> Result<()> {
         let _operation = self.core_operation.lock().await;
         self.desired_running.store(false, Ordering::SeqCst);
         self.core_ready.store(false, Ordering::SeqCst);

@@ -1,25 +1,18 @@
 #![cfg(target_os = "windows")]
 
 use super::clash_api;
-use crate::config::{Config, MIHOMO_CORE};
+use crate::config::MIHOMO_CORE;
+use crate::service_protocol::*;
 use crate::utils::dirs;
 use anyhow::{bail, Context, Result};
 use deelevate::{PrivilegeLevel, Token};
 use runas::Command as RunasCommand;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{env::current_exe, process::Command as StdCommand};
 use tokio::time::sleep;
-
-const SERVICE_URL: &str = "http://127.0.0.1:33211";
-const SERVICE_STOP_URL: &str = "http://127.0.0.1:33211/stop_service";
-const SERVICE_NAME: &str = "clash-astra-service";
-const SERVICE_BINARY: &str = "clash-astra-service.exe";
-const INSTALL_HELPER: &str = "clash-astra-service-install.exe";
-const UNINSTALL_HELPER: &str = "clash-astra-service-uninstall.exe";
 
 pub fn is_current_process_elevated() -> Result<bool> {
     let token = Token::with_current_process()?;
@@ -211,24 +204,14 @@ pub struct ResponseBody {
     pub log_file: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct JsonResponse {
-    pub code: u64,
-    pub msg: String,
-    pub data: Option<ResponseBody>,
-}
+pub type JsonResponse = ServiceReply<ResponseBody>;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HealthData {
     pub service: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct HealthResponse {
-    pub code: u64,
-    pub msg: String,
-    pub data: Option<HealthData>,
-}
+pub type HealthResponse = ServiceReply<HealthData>;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ServiceStatus {
@@ -247,7 +230,7 @@ async fn get_service_health() -> Result<HealthResponse> {
         .no_proxy()
         .timeout(Duration::from_millis(1200))
         .build()?
-        .get(format!("{SERVICE_URL}/health"))
+        .get(service_url(API_HEALTH))
         .bearer_auth(token)
         .send()
         .await?
@@ -262,7 +245,7 @@ async fn get_service_clash_state() -> Result<JsonResponse> {
         .no_proxy()
         .timeout(Duration::from_millis(1200))
         .build()?
-        .get(format!("{SERVICE_URL}/get_clash"))
+        .get(service_url(API_GET_CLASH))
         .bearer_auth(token)
         .send()
         .await?
@@ -280,7 +263,7 @@ pub async fn is_service_core_running() -> bool {
         .unwrap_or(false)
 }
 
-pub async fn install_service() -> Result<()> {
+pub fn install_service() -> Result<()> {
     let binary_path = dirs::service_path()?;
     let install_path = binary_path.with_file_name(INSTALL_HELPER);
     if !install_path.exists() {
@@ -323,7 +306,10 @@ pub async fn uninstall_service() -> Result<()> {
     }
 
     log::info!(target: "app", "uninstall_service: helper_path={}", uninstall_path.display());
-    let helper_result = run_uninstall_helper_sync(&uninstall_path)?;
+    let helper_result =
+        tokio::task::spawn_blocking(move || run_uninstall_helper_sync(&uninstall_path))
+            .await
+            .context("service uninstall worker failed")??;
     log::info!(
         target: "app",
         "uninstall_service: helper elevated={}, success={}, exit_code={:?}, status={}, stdout={}, stderr={}",
@@ -435,15 +421,18 @@ pub async fn ensure_service_ready() -> Result<()> {
     }
 }
 
-pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
+pub(super) async fn run_core_by_service(
+    config_file: &PathBuf,
+    snapshot: &crate::config::ConfigSnapshot,
+) -> Result<()> {
     ensure_service_ready().await?;
     let status = check_service().await?;
     if status.core_managed {
         stop_core_by_service().await?;
         sleep(Duration::from_secs(1)).await;
     }
-    let clash_core = Config::verge()
-        .latest()
+    let clash_core = snapshot
+        .verge
         .clash_core
         .clone()
         .unwrap_or_else(|| MIHOMO_CORE.into());
@@ -455,12 +444,13 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
     let config_dir = dirs::path_to_str(&config_dir_buf)?;
     let log_path = dirs::path_to_str(&log_path_buf)?;
     let config_file = dirs::path_to_str(config_file)?;
-    let mut map = HashMap::new();
-    map.insert("core_type", clash_core.as_str());
-    map.insert("bin_path", bin_path);
-    map.insert("config_dir", config_dir);
-    map.insert("config_file", config_file);
-    map.insert("log_file", log_path);
+    let request = StartClashRequest {
+        core_type: clash_core.clone(),
+        bin_path: bin_path.into(),
+        config_dir: config_dir.into(),
+        config_file: config_file.into(),
+        log_file: log_path.into(),
+    };
     log::info!(target: "app", "service mode enabled: calling /start_clash");
     log::info!(target: "app", "start_clash request field summary: core_type={clash_core}, bin_path_exists={}, config_dir_exists={}, config_file={}, log_file={}", bin_path_buf.exists(), config_dir_buf.exists(), config_file, log_path);
     let token = service_api_token()?;
@@ -469,9 +459,9 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
         .connect_timeout(Duration::from_secs(2))
         .timeout(Duration::from_secs(10))
         .build()?
-        .post(format!("{SERVICE_URL}/start_clash"))
+        .post(service_url(API_START_CLASH))
         .bearer_auth(token)
-        .json(&map)
+        .json(&request)
         .send()
         .await?
         .json::<JsonResponse>()
@@ -498,7 +488,7 @@ pub(super) async fn run_core_by_service(config_file: &PathBuf) -> Result<()> {
     }
 
     log::info!(target: "app", "waiting for configured Mihomo controller readiness");
-    clash_api::wait_for_core_ready(Duration::from_secs(12))
+    clash_api::wait_for_core_ready(snapshot.clash.get_client_info(), Duration::from_secs(12))
         .await
         .with_context(|| {
             format!(
@@ -513,7 +503,7 @@ pub async fn stop_core_by_service() -> Result<()> {
         .no_proxy()
         .timeout(Duration::from_millis(1500))
         .build()?
-        .post(format!("{SERVICE_URL}/stop_clash"))
+        .post(service_url(API_STOP_CLASH))
         .bearer_auth(token)
         .send()
         .await?
@@ -541,7 +531,7 @@ pub async fn stop_service_if_idle() -> Result<()> {
         .no_proxy()
         .timeout(Duration::from_millis(1500))
         .build()?
-        .post(SERVICE_STOP_URL)
+        .post(service_url(API_STOP_SERVICE))
         .bearer_auth(token)
         .send()
         .await?

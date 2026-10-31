@@ -1,4 +1,4 @@
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 import { useMemo, useRef, useState } from "react";
 import { useLockFn } from "ahooks";
 import { useSetRecoilState } from "recoil";
@@ -34,17 +34,14 @@ import {
 } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import {
-  getProfiles,
   importProfile,
   enhanceProfiles,
   getRuntimeLogs,
   deleteProfile,
   updateProfile,
   reorderProfile,
-  triggerAutoDelayTest,
 } from "@/services/cmds";
 import { atomLoadingCache } from "@/services/states";
-import { closeAllConnections } from "@/services/api";
 import {
   BasePage,
   DialogRef,
@@ -57,7 +54,7 @@ import { ProfileMore } from "./components/profile-more";
 import { useProfiles } from "@/hooks/use-profiles";
 import { ConfigViewer } from "@/features/settings/components/mods/config-viewer";
 import { throttle } from "lodash-es";
-import { classifyProfiles, GLOBAL_SCRIPT_UID } from "./model";
+import { classifyProfiles } from "./model";
 
 const ProfilePage = () => {
   const { t } = useTranslation();
@@ -72,12 +69,7 @@ const ProfilePage = () => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-  const {
-    profiles = {},
-    activateSelected,
-    patchProfiles,
-    mutateProfiles,
-  } = useProfiles();
+  const { profiles = {}, patchProfiles, mutateProfiles } = useProfiles();
 
   const { data: chainLogs = {}, mutate: mutateLogs } = useSWR(
     "getRuntimeLogs",
@@ -88,7 +80,7 @@ const ProfilePage = () => {
   const viewerRef = useRef<ProfileViewerRef>(null);
   const configRef = useRef<DialogRef>(null);
 
-  // distinguish type
+  // 将可激活订阅、固定全局脚本和用户增强项分别展示。
   const { regularItems, globalScriptItem, enhanceItems } = useMemo(
     () => classifyProfiles(profiles.items || [], profiles.chain || []),
     [profiles]
@@ -104,17 +96,7 @@ const ProfilePage = () => {
       setUrl("");
       setLoading(false);
 
-      getProfiles().then((newProfiles) => {
-        mutate("getProfiles", newProfiles);
-
-        const remoteItem = newProfiles.items?.find((e) => e.type === "remote");
-        if (!newProfiles.current && remoteItem) {
-          const current = remoteItem.uid;
-          patchProfiles({ current });
-          mutateLogs();
-          setTimeout(() => activateSelected(), 2000);
-        }
-      });
+      await Promise.all([mutateProfiles(), mutateLogs()]);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
       setLoading(false);
@@ -141,8 +123,6 @@ const ProfilePage = () => {
     try {
       await patchProfiles({ current });
       mutateLogs();
-      closeAllConnections();
-      setTimeout(() => activateSelected(), 2000);
       Notice.success("Clash config refreshed.");
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
@@ -216,22 +196,19 @@ const ProfilePage = () => {
       }
     };
 
-    return new Promise((resolve) => {
-      setLoadingCache((cache) => {
-        // 获取没有正在更新的订阅
-        const items = regularItems.filter(
-          (e) => e.type === "remote" && !cache[e.uid]
-        );
-        const change = Object.fromEntries(items.map((e) => [e.uid, true]));
-
-        Promise.allSettled(items.map((e) => updateOne(e.uid))).then(() => {
-          // 全部更新完后补一轮延迟测试
-          triggerAutoDelayTest().catch(() => undefined);
-          resolve(undefined);
-        });
-        return { ...cache, ...change };
-      });
-    });
+    const items = regularItems.filter((item) => item.type === "remote");
+    setLoadingCache((cache) => ({
+      ...cache,
+      ...Object.fromEntries(items.map((item) => [item.uid, true])),
+    }));
+    const results = await Promise.allSettled(
+      items.map((item) => updateOne(item.uid))
+    );
+    throttleMutate.cancel();
+    await mutateProfiles();
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length)
+      Notice.error(`${failures.length} subscription update(s) failed.`);
   });
 
   const onCopyLink = async () => {

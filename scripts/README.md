@@ -4,12 +4,13 @@
 
 ## 入口
 
-| 入口                          | 用途                                                                                          |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `pnpm.mjs`                    | 工作区工具链入口：使用本地 Node/pnpm，固定 pnpm store/cache/state、`TEMP` 与 `XDG_*` 到工作区 |
-| `check-workspace-hygiene.mjs` | 校验工具链、lockfile、store/cache/state 与 `.gitignore` 约定                                  |
-| `release/release-notes.mjs`   | 按 tag 区间生成发布说明，可同步写入 `UPDATELOG.md`                                            |
-| `build/build-icons.ps1`       | 由 `assets/brand/` 母版生成全部图标；`-Check` 校验生成物是否漂移                              |
+| 入口                            | 用途                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pnpm.mjs`                      | 工作区工具链入口：使用本地 Node/pnpm，固定 pnpm store/cache/state、`TEMP` 与 `XDG_*` 到工作区 |
+| `check-workspace-hygiene.mjs`   | 校验工具链、lockfile、store/cache/state 与 `.gitignore` 约定                                  |
+| `release/release-notes.mjs`     | 按 tag 区间生成发布说明，可同步写入 `UPDATELOG.md`                                            |
+| `build/build-icons.ps1`         | 由 `assets/brand/` 母版生成全部图标；`-Check` 校验生成物是否漂移                              |
+| `verify/check-architecture.mjs` | 校验配置单写入口、纯配置编译、领域层依赖和结构化 IPC 边界                                     |
 
 ## 目录
 

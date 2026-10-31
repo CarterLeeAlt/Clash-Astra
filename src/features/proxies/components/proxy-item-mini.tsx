@@ -1,0 +1,171 @@
+import { CheckCircleOutlineRounded } from "@mui/icons-material";
+import { alpha, Box, ListItemButton, styled, Typography } from "@mui/material";
+import { BaseLoading } from "@/components/base";
+import delayManager, {
+  DELAY_PENDING,
+  DELAY_UNKNOWN,
+  hasDelayResult,
+} from "@/services/delay";
+import { useProxyDelay } from "@/features/proxies/use-proxy-delay";
+
+interface Props {
+  groupName: string;
+  proxy: IProxyItem;
+  selected: boolean;
+  showType?: boolean;
+  onClick?: (name: string) => void;
+}
+
+// 多列布局
+export const ProxyItemMini = (props: Props) => {
+  const { groupName, proxy, selected, showType = true, onClick } = props;
+
+  // 负数哨兵见 delay.ts：-1 未测、-2 测速中、-3 不适用、-4 预期不可达
+  const { delay, onDelay, timeout } = useProxyDelay(proxy, groupName);
+
+  return (
+    <ListItemButton
+      dense
+      selected={selected}
+      onClick={() => onClick?.(proxy.name)}
+      sx={[
+        {
+          height: 56,
+          borderRadius: 1.5,
+          pl: 1.5,
+          pr: 1,
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        ({ palette: { mode, primary } }) => {
+          const bgcolor = mode === "light" ? "#ffffff" : "#24252f";
+          const showDelay = hasDelayResult(delay);
+          const selectColor = mode === "light" ? primary.main : primary.light;
+
+          return {
+            "&:hover .the-check": { display: !showDelay ? "block" : "none" },
+            "&:hover .the-delay": { display: showDelay ? "block" : "none" },
+            "&:hover .the-icon": { display: "none" },
+            "&.Mui-selected": {
+              boxShadow: `inset 3px 0 0 ${selectColor}`,
+              bgcolor:
+                mode === "light"
+                  ? alpha(primary.main, 0.15)
+                  : alpha(primary.main, 0.35),
+            },
+            backgroundColor: bgcolor,
+          };
+        },
+      ]}
+    >
+      <Box title={proxy.name} sx={{ overflow: "hidden" }}>
+        <Typography
+          variant="body2"
+          component="div"
+          color="text.primary"
+          sx={{
+            display: "block",
+            textOverflow: "ellipsis",
+            wordBreak: "break-all",
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {proxy.name}
+        </Typography>
+
+        {showType && (
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "nowrap",
+              flex: "none",
+              marginTop: "4px",
+            }}
+          >
+            {!!proxy.provider && (
+              <TypeBox component="span">{proxy.provider}</TypeBox>
+            )}
+            <TypeBox component="span">{proxy.type}</TypeBox>
+            {proxy.udp && <TypeBox component="span">UDP</TypeBox>}
+            {proxy.xudp && <TypeBox component="span">XUDP</TypeBox>}
+            {proxy.tfo && <TypeBox component="span">TFO</TypeBox>}
+          </Box>
+        )}
+      </Box>
+
+      <Box sx={{ ml: 0.5, color: "primary.main" }}>
+        {delay === DELAY_PENDING && (
+          <Widget>
+            <BaseLoading />
+          </Widget>
+        )}
+
+        {!proxy.provider && delay !== DELAY_PENDING && (
+          <Widget
+            className="the-check"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelay();
+            }}
+            sx={({ palette }) => ({
+              display: "none",
+              ":hover": { bgcolor: alpha(palette.primary.main, 0.15) },
+            })}
+          >
+            Check
+          </Widget>
+        )}
+
+        {hasDelayResult(delay) && (
+          <Widget
+            className="the-delay"
+            onClick={(e) => {
+              if (proxy.provider) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onDelay();
+            }}
+            color={delayManager.formatDelayColor(delay, timeout)}
+            sx={({ palette }) =>
+              !proxy.provider
+                ? { ":hover": { bgcolor: alpha(palette.primary.main, 0.15) } }
+                : {}
+            }
+          >
+            {delayManager.formatDelay(delay, timeout)}
+          </Widget>
+        )}
+
+        {delay === DELAY_UNKNOWN && selected && (
+          <CheckCircleOutlineRounded
+            className="the-icon"
+            sx={{ fontSize: 16, mr: 0.5, display: "block" }}
+          />
+        )}
+      </Box>
+    </ListItemButton>
+  );
+};
+
+const Widget = styled(Box)(({ theme: { typography } }) => ({
+  padding: "2px 4px",
+  fontSize: 12,
+  fontFamily: typography.fontFamily,
+  borderRadius: "4px",
+}));
+
+const TypeBox = styled(Box)(({ theme: { palette, typography } }) => ({
+  display: "inline-block",
+  border: "1px solid #ccc",
+  borderColor: palette.mode === "light" ? "#d9d9d9" : "#424242",
+  color: palette.mode === "light" ? "#8c8c8c" : "#ffffff",
+  borderRadius: 4,
+  fontSize: 10,
+  fontFamily: typography.fontFamily,
+  marginRight: "4px",
+  marginTop: "auto",
+  padding: "0 4px",
+  lineHeight: 1.5,
+}));

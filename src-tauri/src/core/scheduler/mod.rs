@@ -75,7 +75,9 @@ pub fn init() -> Result<()> {
     Scheduler::global().upsert(
         "proxy.auto_delay_test",
         Schedule::Minutes(2),
-        Arc::new(|| Box::pin(async { crate::feat::run_auto_delay_test().await })),
+        Arc::new(|| {
+            Box::pin(async { crate::application::diagnostics::run_auto_delay_test().await })
+        }),
     )?;
 
     // 系统代理自愈：开关开启时每 10 秒核对实际状态，漂移即重新应用。

@@ -10,15 +10,16 @@
 
 ```text
 Clash-Astra/
-├─ src/                          # React 前端源码
+├─ src/                          # React 前端：app 装配、features 业务、infrastructure 传输、shared 公共逻辑
 ├─ src-tauri/                    # Tauri/Rust 主程序
-│  ├─ src/
+│  ├─ src/                       # commands 接口、application 协调、domain 规则、infrastructure 适配
 │  ├─ watchdog/                  # 独立 watchdog crate
 │  ├─ windows-service-src/       # Windows service crate
 │  ├─ vendor-crates/             # 内部 vendored crate
 │  ├─ icons/ sidecar/ resources/ local-binaries/
 │  └─ target/                    # Rust 构建输出（忽略）
 ├─ scripts/                      # 构建、校验、发布脚本（见 scripts/README.md）
+├─ tests/frontend/               # 前端异步状态、快照与模型回归
 ├─ docs/                         # 当前文档与历史归档（见 docs/README.md）
 ├─ artifacts/                    # 发布交付物与 CI staging（忽略）
 ├─ dist/                         # Vite 前端产物（忽略）
@@ -56,6 +57,7 @@ Clash-Astra/
 ## 放置规则
 
 - 新增脚本按用途放入 `scripts/build/`、`release/`、`verify/`、`sidecars/`、`metadata/`，并同步更新 `scripts/README.md`。
+- 业务分层、状态归属与模块依赖规则见 [业务流程](application-flow.md)，配置修改经应用协调器，不在页面或 IPC 适配器中重复编排。
 - 新的发布交付物一律写入 `artifacts/portable/`；不要在 `dist/` 下创建交付物或 staging 目录。
 - 新的当前说明放 `docs/architecture/`、`docs/reference/` 或 `docs/release/`；历史验证记录放 `docs/archive/`，开头注明版本与日期。
 - 临时文件放 `.tmp/<任务>/`，任务结束清理；不要写入系统 Temp 或工作区外。

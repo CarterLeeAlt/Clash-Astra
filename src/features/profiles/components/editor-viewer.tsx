@@ -37,31 +37,38 @@ export const EditorViewer = (props: Props) => {
 
   useEffect(() => {
     if (!open) return;
+    let disposed = false;
 
-    readProfileFile(uid).then((data) => {
-      const dom = editorRef.current;
+    readProfileFile(uid)
+      .then((data) => {
+        if (disposed) return;
+        const dom = editorRef.current;
 
-      if (!dom) return;
-      if (instanceRef.current) instanceRef.current.dispose();
+        if (!dom) return;
+        if (instanceRef.current) instanceRef.current.dispose();
 
-      instanceRef.current = editor.create(editorRef.current, {
-        value: data,
-        language: mode,
-        theme: themeMode === "light" ? "vs" : "vs-dark",
-        minimap: { enabled: false },
-        fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,
+        instanceRef.current = editor.create(editorRef.current, {
+          value: data,
+          language: mode,
+          theme: themeMode === "light" ? "vs" : "vs-dark",
+          minimap: { enabled: false },
+          fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,
+        });
+
+        instanceRef.current.focus();
+      })
+      .catch((error) => {
+        if (!disposed) Notice.error(formatNoticeMessage(error));
       });
 
-      instanceRef.current.focus();
-    });
-
     return () => {
+      disposed = true;
       if (instanceRef.current) {
         instanceRef.current.dispose();
         instanceRef.current = null;
       }
     };
-  }, [open]);
+  }, [open, uid, mode]);
 
   const onSave = useLockFn(async () => {
     const value = instanceRef.current?.getValue();

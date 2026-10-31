@@ -33,22 +33,27 @@ export const mergeConnectionSnapshot = (
   const rest: IConnectionsItem[] = [];
 
   incoming.forEach((each) => {
+    const next = { ...each };
     const index = oldIndexMap.get(each.id);
     if (index !== undefined && index < maxLen) {
       const prev = oldConn[index];
-      each.curUpload = (each.upload ?? 0) - (prev.upload ?? 0);
-      each.curDownload = (each.download ?? 0) - (prev.download ?? 0);
-      connections[index] = each;
+      next.curUpload = Math.max(0, (each.upload ?? 0) - (prev.upload ?? 0));
+      next.curDownload = Math.max(
+        0,
+        (each.download ?? 0) - (prev.download ?? 0)
+      );
+      connections[index] = next;
     } else {
-      each.curUpload = 0;
-      each.curDownload = 0;
-      rest.push(each);
+      next.curUpload = 0;
+      next.curDownload = 0;
+      rest.push(next);
     }
   });
 
-  for (let i = 0; i < maxLen && rest.length > 0; ++i) {
+  let restIndex = 0;
+  for (let i = 0; i < maxLen && restIndex < rest.length; ++i) {
     if (!connections[i]) {
-      connections[i] = rest.shift()!;
+      connections[i] = rest[restIndex++];
     }
   }
   return connections;

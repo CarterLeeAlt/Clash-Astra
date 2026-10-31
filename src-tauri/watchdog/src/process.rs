@@ -8,8 +8,16 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, HWND},
-    System::Threading::{CreateMutexW, CREATE_NO_WINDOW},
+    Foundation::{
+        CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, HWND, INVALID_HANDLE_VALUE,
+    },
+    System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+    },
+    System::Threading::{
+        CreateMutexW, OpenThread, ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED,
+        THREAD_SUSPEND_RESUME,
+    },
 };
 
 use crate::{
@@ -106,7 +114,7 @@ pub fn supervise_child(
     let started_ms = unix_millis(SystemTime::now());
     let mut child = match Command::new(exe)
         .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
+        .creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED)
         .spawn()
     {
         Ok(child) => child,
@@ -126,6 +134,16 @@ pub fn supervise_child(
                 "failed to assign GUI pid={pid} to job: {err}; falling back to taskkill for tree cleanup"
             ));
         }
+    }
+
+    // 先加入 Job 再恢复主线程，避免 GUI 在监督归属建立前抢先创建子进程。
+    if let Err(error) = resume_initial_thread(pid) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Outcome::Exited {
+            status: Err(error),
+            uptime: started.elapsed(),
+        };
     }
 
     let mut window_hwnd = None;
@@ -279,6 +297,43 @@ pub fn supervise_child(
         }
 
         thread::sleep(Duration::from_millis(500));
+    }
+}
+
+fn resume_initial_thread(pid: u32) -> io::Result<()> {
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return Err(io::Error::last_os_error());
+        }
+        let mut entry: THREADENTRY32 = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+        let mut found = Thread32First(snapshot, &mut entry) != 0;
+        let mut result = Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "suspended GUI initial thread not found",
+        ));
+        while found {
+            if entry.th32OwnerProcessID == pid {
+                let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
+                result = if thread == 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    let resumed = ResumeThread(thread);
+                    let result = if resumed == u32::MAX {
+                        Err(io::Error::last_os_error())
+                    } else {
+                        Ok(())
+                    };
+                    CloseHandle(thread);
+                    result
+                };
+                break;
+            }
+            found = Thread32Next(snapshot, &mut entry) != 0;
+        }
+        CloseHandle(snapshot);
+        result
     }
 }
 

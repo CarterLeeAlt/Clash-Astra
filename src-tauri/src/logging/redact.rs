@@ -11,8 +11,7 @@ static SENSITIVE_QUERY_RE: Lazy<Regex> = Lazy::new(|| {
         .expect("valid sensitive query redaction regex")
 });
 
-/// Redact credentials that may appear in app/file logs while preserving ordinary
-/// domains, rule names, strategy names, and node display names used for troubleshooting.
+/// 隐去日志中的凭据，保留排查所需的普通域名、规则名、策略名和节点显示名称。
 pub fn redact_log_text(input: &str) -> String {
     let text = PROXY_URI_RE.replace_all(input, "$1://[REDACTED]");
     let text = SENSITIVE_QUERY_RE.replace_all(&text, "$1$2=[REDACTED]");

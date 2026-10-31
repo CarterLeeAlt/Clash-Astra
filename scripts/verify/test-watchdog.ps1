@@ -17,6 +17,7 @@ function Start-Case([string]$mode, [string]$name) {
     New-Item -ItemType Directory $dir | Out-Null
     $start = [Diagnostics.ProcessStartInfo]::new($helper)
     $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
     foreach ($arg in $fixture, $mode, $dir, 'path with spaces\') { $start.ArgumentList.Add($arg) }
     @{ Proc=[Diagnostics.Process]::Start($start); Dir=$dir }
 }
@@ -47,10 +48,14 @@ if (-not $held.Proc.WaitForExit(5000)) { throw 'singleton exit timeout' }
 Write-Output 'PASS singleton'
 $external = Start-Case 'external-survives' 'external-survives'
 Wait-File (Join-Path $external.Dir 'external.pid')
+Wait-File (Join-Path $external.Dir 'owned.pid')
 $externalPid = [int](Get-Content (Join-Path $external.Dir 'external.pid'))
+$ownedPid = [int](Get-Content (Join-Path $external.Dir 'owned.pid'))
 [IO.File]::WriteAllText((Join-Path $external.Dir 'exit'), 'exit')
 if (-not $external.Proc.WaitForExit(5000)) { throw 'external case exit timeout' }
 if (-not (Get-Process -Id $externalPid -ErrorAction SilentlyContinue)) { throw 'external application killed' }
+if (Get-Process -Id $ownedPid -ErrorAction SilentlyContinue) { throw 'owned child survived supervisor cleanup' }
 Stop-Process -Id $externalPid
 Write-Output 'PASS external application survives'
+Write-Output 'PASS owned child is cleaned up'
 Write-Output "Test artifacts: $WorkDir"

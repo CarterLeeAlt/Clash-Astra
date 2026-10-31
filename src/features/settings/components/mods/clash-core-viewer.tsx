@@ -13,7 +13,6 @@ import { LoadingButton } from "@mui/lab";
 import { SwitchAccessShortcut, RestartAlt } from "@mui/icons-material";
 import { Box, Button, List, ListItemButton, ListItemText } from "@mui/material";
 import { changeClashCore, restartSidecar, upgradeCore } from "@/services/cmds";
-import { closeAllConnections } from "@/services/api";
 
 const VALID_CORE = [
   { name: "Mihomo", core: "mihomo" },
@@ -39,13 +38,12 @@ export const ClashCoreViewer = forwardRef<DialogRef>((props, ref) => {
     if (core === clash_core) return;
 
     try {
-      closeAllConnections();
       await changeClashCore(core);
-      mutateVerge();
-      setTimeout(() => {
-        mutate("getClashConfig");
-        mutate("getVersion");
-      }, 100);
+      await Promise.all([
+        mutateVerge(),
+        mutate("getClashConfig"),
+        mutate("getVersion"),
+      ]);
       Notice.success(`Switched to ${core}.`);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));

@@ -5,6 +5,13 @@ import { createRequire } from "module";
 import { getOctokit, context } from "@actions/github";
 
 const target = process.argv.slice(2)[0];
+// 同版本的本地修复包用标签区分，不覆盖用户已经下载或正在使用的旧包。
+const label = process.env.PORTABLE_LABEL || "";
+if (label && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(label)) {
+  throw new Error(
+    "PORTABLE_LABEL must contain lowercase letters, digits and single hyphens"
+  );
+}
 
 const MACHINE_NAME = "clash-astra";
 const OUTPUT_DIR = path.join("artifacts", "portable");
@@ -34,8 +41,7 @@ async function getPackageInfo() {
   return { version };
 }
 
-/// Script for ci
-/// 打包绿色版/便携版 (only Windows)
+/// 构建 Windows 便携 ZIP，可供本机交付或 CI 上传使用。
 async function resolvePortable() {
   if (process.platform !== "win32") return;
 
@@ -132,7 +138,8 @@ async function resolvePortable() {
   zip.addLocalFolder(resourcesPath, "resources");
 
   const unsignedSuffix = process.env.UNSIGNED_BUILD === "1" ? "_unsigned" : "";
-  const zipFile = `${MACHINE_NAME}_${version}_${ARCH_MAP[target]}_portable${unsignedSuffix}.zip`;
+  const labelSuffix = label ? `_${label}` : "";
+  const zipFile = `${MACHINE_NAME}_${version}_${ARCH_MAP[target]}_portable${labelSuffix}${unsignedSuffix}.zip`;
   const zipPath = path.join(OUTPUT_DIR, zipFile);
   await fs.ensureDir(OUTPUT_DIR);
   zip.writeZip(zipPath);

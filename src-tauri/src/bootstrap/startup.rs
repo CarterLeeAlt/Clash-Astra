@@ -9,7 +9,6 @@ const STARTUP_SCRIPT_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 pub fn startup_script() -> Result<()> {
     let path = {
         let verge = Config::verge();
-        let verge = verge.latest();
         verge.startup_script.clone().unwrap_or("".to_string())
     };
 

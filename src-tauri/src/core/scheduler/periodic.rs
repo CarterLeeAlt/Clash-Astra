@@ -3,7 +3,7 @@ use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, Task, TaskBuilder};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use super::{JobFn, Schedule};
 
@@ -22,6 +22,7 @@ struct JobEntry {
 
 /// 全局任务调度器。
 pub struct Scheduler {
+    stopped: AtomicBool,
     delay_timer: Mutex<DelayTimer>,
     jobs: Mutex<HashMap<String, JobEntry>>,
     next_task_id: AtomicU64,
@@ -32,6 +33,7 @@ impl Scheduler {
         static SCHEDULER: OnceCell<Scheduler> = OnceCell::new();
 
         SCHEDULER.get_or_init(|| Scheduler {
+            stopped: AtomicBool::new(false),
             delay_timer: Mutex::new(DelayTimerBuilder::default().build()),
             jobs: Mutex::new(HashMap::new()),
             next_task_id: AtomicU64::new(1),
@@ -51,6 +53,9 @@ impl Scheduler {
         let schedule = schedule.validate()?;
 
         let mut jobs = self.jobs.lock();
+        if self.stopped.load(Ordering::SeqCst) {
+            bail!("periodic scheduler is shut down");
+        }
         if let Some(entry) = jobs.get(&key) {
             if entry.schedule == schedule {
                 log::trace!(target: "app", "scheduler task `{key}` unchanged");
@@ -84,6 +89,7 @@ impl Scheduler {
     ///
     /// 正在执行的任务不会被强制中断；此方法只保证之后不会再触发。
     pub fn shutdown(&self) -> Result<()> {
+        self.stopped.store(true, Ordering::SeqCst);
         let tasks: Vec<(String, u64)> = self
             .jobs
             .lock()
@@ -248,6 +254,7 @@ mod tests {
 
     fn test_scheduler() -> Scheduler {
         Scheduler {
+            stopped: std::sync::atomic::AtomicBool::new(false),
             delay_timer: parking_lot::Mutex::new(DelayTimerBuilder::default().build()),
             jobs: parking_lot::Mutex::new(HashMap::new()),
             next_task_id: AtomicU64::new(1),
@@ -276,6 +283,9 @@ mod tests {
         scheduler.shutdown().unwrap();
         assert!(scheduler.keys().is_empty());
         assert!(!scheduler.is_registered("test.scheduler.shutdown"));
+        assert!(scheduler
+            .upsert("test.after_shutdown", Schedule::Seconds(1), run.clone())
+            .is_err());
 
         // 再次停止不应报告错误，也不应改变空注册表。
         scheduler.shutdown().unwrap();

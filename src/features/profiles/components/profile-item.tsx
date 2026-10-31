@@ -17,12 +17,7 @@ import {
 } from "@mui/material";
 import { RefreshRounded, DragIndicator } from "@mui/icons-material";
 import { atomLoadingCache } from "@/services/states";
-import {
-  updateProfile,
-  deleteProfile,
-  viewProfile,
-  triggerAutoDelayTest,
-} from "@/services/cmds";
+import { updateProfile, deleteProfile, viewProfile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { invalidateProfiles } from "@/shared/query/invalidate";
 import { parseExpire } from "../format";
@@ -67,7 +62,7 @@ export const ProfileItem = (props: Props) => {
 
   const loading = loadingCache[itemData.uid] ?? false;
 
-  // interval update fromNow field
+  // 按时间跨度更新相对时间显示，超过一天后停止刷新。
   const [, setRefresh] = useState({});
   useEffect(() => {
     if (!hasUrl) return;
@@ -134,7 +129,7 @@ export const ProfileItem = (props: Props) => {
       option.with_proxy = false;
       option.self_proxy = false;
     } else if (type === 1) {
-      // nothing
+      // 使用订阅已保存的下载选项。
     } else if (type === 2) {
       if (itemData.option?.self_proxy) {
         option.with_proxy = false;
@@ -147,8 +142,6 @@ export const ProfileItem = (props: Props) => {
 
     try {
       await updateProfile(itemData.uid, option);
-      // 更新订阅后补一轮延迟测试
-      triggerAutoDelayTest().catch(() => undefined);
       invalidateProfiles();
     } catch (err: any) {
       const errmsg = formatNoticeMessage(err).replace(

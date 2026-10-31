@@ -23,7 +23,7 @@ import { ThemeViewer } from "./mods/theme-viewer";
 import { GuardState } from "./mods/guard-state";
 import { LayoutViewer } from "./mods/layout-viewer";
 import getSystem from "@/utils/get-system";
-import { routers } from "@/pages/_routers";
+import { navigation } from "@/shared/navigation";
 interface Props {
   onError?: (err: Error) => void;
 }
@@ -43,7 +43,7 @@ const SettingVerge = ({ onError }: Props) => {
   const layoutRef = useRef<DialogRef>(null);
 
   const onChangeData = (patch: Partial<IVergeConfig>) => {
-    mutateVerge({ ...verge, ...patch }, false);
+    mutateVerge((current) => ({ ...current, ...patch }), false);
   };
 
   return (
@@ -106,7 +106,7 @@ const SettingVerge = ({ onError }: Props) => {
           onGuard={(e) => patchVerge({ start_page: e })}
         >
           <Select size="small" sx={{ width: 140, "> div": { py: "7.5px" } }}>
-            {routers.map((page: { label: string; link: string }) => {
+            {Object.values(navigation).map((page) => {
               return (
                 <MenuItem key={page.link} value={page.link}>
                   {t(page.label)}

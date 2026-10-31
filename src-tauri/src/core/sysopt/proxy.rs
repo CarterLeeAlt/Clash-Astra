@@ -152,8 +152,7 @@ fn rearm_windows_proxy_recovery(
 }
 
 impl Sysopt {
-    /// Recover a Windows proxy session left by an unclean shutdown before the
-    /// rest of application startup can perform network access.
+    /// 在启动网络访问前，恢复上次异常退出留下的 Windows 代理会话。
     pub fn recover_pending_sysproxy(&self) -> Result<()> {
         let _operation = self.proxy_operation.lock();
         #[cfg(target_os = "windows")]
@@ -165,8 +164,10 @@ impl Sysopt {
         Ok(())
     }
 
-    /// init the sysproxy
+    /// 核心就绪后接管系统代理，并保存可恢复的原始状态。
     pub fn init_sysproxy(&self) -> Result<()> {
+        let _change = crate::application::background_operation()
+            .ok_or_else(|| anyhow!("configuration operation in progress"))?;
         let _operation = self.proxy_operation.lock();
         #[cfg(target_os = "windows")]
         if WindowsProxySnapshot::recover_pending()
@@ -176,13 +177,11 @@ impl Sysopt {
         }
 
         let port = Config::verge()
-            .latest()
             .verge_mixed_port
-            .unwrap_or(Config::clash().data().get_mixed_port());
+            .unwrap_or(Config::clash().get_mixed_port());
 
         let (enable, bypass) = {
             let verge = Config::verge();
-            let verge = verge.latest();
             (
                 verge.enable_system_proxy.unwrap_or(false),
                 verge.system_proxy_bypass.clone(),
@@ -261,27 +260,26 @@ impl Sysopt {
             *self.cur_sysproxy.lock() = Some(current);
         }
 
-        // run the system proxy guard
+        // 按已提交配置注册代理守卫。
         self.guard_proxy();
         Ok(())
     }
 
-    /// update the system proxy
+    /// 根据已提交快照重新应用系统代理。
     pub fn update_sysproxy(&self) -> Result<()> {
-        let _operation = self.proxy_operation.lock();
-        let (enable, bypass) = {
-            let verge = Config::verge();
-            let verge = verge.latest();
-            (
-                verge.enable_system_proxy.unwrap_or(false),
-                verge.system_proxy_bypass.clone(),
-            )
-        };
+        let snapshot = Config::snapshot();
+        self.apply_sysproxy(&snapshot.verge, &snapshot.clash)
+    }
 
-        let port = Config::verge()
-            .latest()
-            .verge_mixed_port
-            .unwrap_or(Config::clash().data().get_mixed_port());
+    pub fn apply_sysproxy(
+        &self,
+        verge: &crate::config::IVerge,
+        clash: &crate::config::IClashTemp,
+    ) -> Result<()> {
+        let _operation = self.proxy_operation.lock();
+        let enable = verge.enable_system_proxy.unwrap_or(false);
+        let bypass = verge.system_proxy_bypass.clone();
+        let port = verge.verge_mixed_port.unwrap_or(clash.get_mixed_port());
 
         let target_proxy = Sysproxy {
             enable,
@@ -483,15 +481,17 @@ impl Sysopt {
     /// 系统代理状态自愈：开关为开启但实际系统代理与目标不一致时重新应用。
     /// 失败只记日志，不通知前端；由周期任务驱动，不依赖窗口是否打开。
     pub fn heal_sysproxy(&self) {
+        let Some(_change) = crate::application::background_operation() else {
+            return;
+        };
         let (enable, bypass, port) = {
             let verge = Config::verge();
-            let verge = verge.latest();
             (
                 verge.enable_system_proxy.unwrap_or(false),
                 verge.system_proxy_bypass.clone(),
                 verge
                     .verge_mixed_port
-                    .unwrap_or(Config::clash().data().get_mixed_port()),
+                    .unwrap_or(Config::clash().get_mixed_port()),
             )
         };
 
@@ -526,7 +526,7 @@ impl Sysopt {
         }
     }
 
-    /// reset the sysproxy
+    /// 退出时仅恢复仍由本程序拥有的系统代理设置。
     pub fn reset_sysproxy(&self) -> Result<()> {
         let _operation = self.proxy_operation.lock();
         #[cfg(target_os = "windows")]

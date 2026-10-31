@@ -19,6 +19,7 @@
 - 异常退出：最多重试三次，每次等待十秒；超过次数后 Watchdog 退出。
 - 单实例：同名互斥体保证同一时刻只有一个 Watchdog；重复启动的监督程序直接退出，不启动 GUI。
 - 外部应用：通过托盘或外部方式启动的其他程序不会被 Watchdog 结束。
+- 进程归属：GUI 以挂起方式启动，加入监督 Job 后恢复；普通子进程继承 Job，桌面适配器启动的外部应用显式脱离。
 - “系统代理守卫”仍由 GUI 负责，与 Watchdog 的职责分离。
 - 启动时依据前次核心 PID、可执行文件路径和 `-d` 配置目录核验并清理残留 Mihomo。
 - 日志位于应用配置目录下的 `logs/watchdog/`（`.config/io.github.clash-astra/logs/watchdog/`）。
@@ -51,7 +52,7 @@ Watchdog 没有单元测试，行为验收使用黑盒回归：
 pwsh -File scripts/verify/test-watchdog.ps1
 ```
 
-脚本覆盖正常退出、失败一次后恢复、退出 42 重启、四次启动后耗尽三次重试、互斥单实例、外部应用继续存活六种场景。直接运行前需要把工作区 `.cargo\bin` 前置到 `PATH` 并设置 `CARGO_HOME`、`RUSTUP_HOME`、`TEMP`；环境设置见 `AGENTS.md`。测试产物写入 `.tmp/` 下的独立目录。
+脚本覆盖正常退出、失败一次后恢复、退出 42 重启、四次启动后耗尽三次重试、互斥单实例、外部应用继续存活、受管子进程清理七项断言。直接运行前需要把工作区 `.cargo\bin` 前置到 `PATH` 并设置 `CARGO_HOME`、`RUSTUP_HOME`、`TEMP`；环境设置见 `AGENTS.md`。测试产物写入 `.tmp/` 下的独立目录。
 
 ## 打包
 

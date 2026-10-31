@@ -13,12 +13,12 @@ import { useWebsocket } from "@/hooks/use-websocket";
 import parseTraffic from "@/utils/parse-traffic";
 import { buildControllerWsUrl } from "@/utils/controller";
 
-// setup the traffic
+// 订阅流量与内存快照，供侧栏展示。
 export const LayoutTraffic = () => {
   const { clashInfo } = useClashInfo();
   const { verge } = useVerge();
 
-  // whether hide traffic graph
+  // 用户是否隐藏流量图。
   const trafficGraph = verge?.traffic_graph ?? true;
 
   const trafficRef = useRef<TrafficRef>(null);

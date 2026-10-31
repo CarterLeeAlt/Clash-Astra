@@ -1,4 +1,5 @@
 use crate::core::handle;
+use crate::service_protocol::{API_TOKEN_DIR, API_TOKEN_FILE, FIREWALL_HELPER, SERVICE_BINARY};
 use anyhow::Result;
 use std::path::PathBuf;
 use tauri::{api::path::resource_dir, Env};
@@ -12,8 +13,7 @@ static CLASH_CONFIG: &str = "config.yaml";
 static VERGE_CONFIG: &str = "verge.yaml";
 static PROFILE_YAML: &str = "profiles.yaml";
 
-/// Directory that contains the running executable. All application-created
-/// files must stay in this directory or one of its descendants.
+/// 当前可执行文件所在目录；程序创建的数据均放在该目录树中。
 pub fn executable_dir() -> Result<PathBuf> {
     use tauri::utils::platform::current_exe;
 
@@ -24,22 +24,22 @@ pub fn executable_dir() -> Result<PathBuf> {
         .ok_or(anyhow::anyhow!("failed to get the executable directory"))
 }
 
-/// get the verge app home dir
+/// 应用配置根目录。
 pub fn app_home_dir() -> Result<PathBuf> {
     Ok(executable_dir()?.join(".config").join(APP_ID))
 }
 
-/// WebView cache, cookies, LocalStorage and IndexedDB.
+/// WebView 缓存、Cookie、LocalStorage 和 IndexedDB 的存储目录。
 pub fn webview_data_dir() -> Result<PathBuf> {
     Ok(app_home_dir()?.join("webview"))
 }
 
-/// Temporary files owned by this application.
+/// 本应用管理的临时文件目录。
 pub fn app_temp_dir() -> Result<PathBuf> {
     Ok(app_home_dir()?.join("temp"))
 }
 
-/// get the resources dir
+/// Tauri 打包资源目录。
 pub fn app_resources_dir() -> Result<PathBuf> {
     let handle = handle::Handle::global();
     let app_handle = handle.app_handle.lock();
@@ -52,24 +52,24 @@ pub fn app_resources_dir() -> Result<PathBuf> {
     Err(anyhow::anyhow!("failed to get the resource dir"))
 }
 
-/// profiles dir
+/// 订阅文件目录。
 pub fn app_profiles_dir() -> Result<PathBuf> {
     Ok(app_home_dir()?.join("profiles"))
 }
 
-/// logs dir
+/// 日志根目录。
 pub fn logs_dir() -> Result<PathBuf> {
     Ok(app_home_dir()?.join("logs"))
 }
 
-/// app logs dir
+/// 应用日志目录。
 pub fn app_logs_dir() -> Result<PathBuf> {
     let dir = logs_dir()?.join("app");
     let _ = std::fs::create_dir_all(&dir);
     Ok(dir)
 }
 
-/// service logs dir
+/// Windows 服务日志目录。
 pub fn service_logs_dir() -> Result<PathBuf> {
     let dir = logs_dir()?.join("service");
     let _ = std::fs::create_dir_all(&dir);
@@ -94,19 +94,19 @@ pub fn clash_pid_path() -> Result<PathBuf> {
 
 #[cfg(windows)]
 pub fn service_path() -> Result<PathBuf> {
-    Ok(app_resources_dir()?.join("clash-astra-service.exe"))
+    Ok(app_resources_dir()?.join(SERVICE_BINARY))
 }
 
 #[cfg(windows)]
 pub fn firewall_helper_path() -> Result<PathBuf> {
-    Ok(app_resources_dir()?.join("clash-astra-firewall-helper.exe"))
+    Ok(app_resources_dir()?.join(FIREWALL_HELPER))
 }
 
 #[cfg(windows)]
 pub fn service_api_token_path() -> Result<PathBuf> {
     Ok(app_resources_dir()?
-        .join("service-data")
-        .join("service-api-token"))
+        .join(API_TOKEN_DIR)
+        .join(API_TOKEN_FILE))
 }
 
 #[cfg(windows)]

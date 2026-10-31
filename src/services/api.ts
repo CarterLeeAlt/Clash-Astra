@@ -1,2 +1,2 @@
-export * from "./clash-api/client";
-export * from "./clash-api/endpoints";
+export * from "@/infrastructure/mihomo/client";
+export * from "@/infrastructure/mihomo/endpoints";

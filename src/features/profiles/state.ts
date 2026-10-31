@@ -1,6 +1,6 @@
 import { atom } from "recoil";
 
-// save the state of each profile item loading
+// 按订阅标识保存更新中的交互状态。
 export const atomLoadingCache = atom<Record<string, boolean>>({
   key: "atomLoadingCache",
   default: {},

@@ -102,13 +102,6 @@ export const ServiceViewer = forwardRef<DialogRef, Props>((props, ref) => {
       if (enableTun) {
         throw new Error("Disable TUN mode before uninstalling the service.");
       }
-      if (enable || enableTun) {
-        await patchVergeConfig({
-          enable_service_mode: false,
-          enable_tun_mode: false,
-        } as IVergeConfig);
-      }
-
       await uninstallService();
       setOpen(false);
       void Promise.allSettled([
@@ -132,7 +125,7 @@ export const ServiceViewer = forwardRef<DialogRef, Props>((props, ref) => {
     }
   });
 
-  // fix unhandled error of the service mode
+  // 服务操作失败由统一提示入口呈现。
   const onDisable = useLockFn(async () => {
     try {
       await patchVergeConfig({

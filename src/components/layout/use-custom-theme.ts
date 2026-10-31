@@ -3,7 +3,7 @@ import { useRecoilState } from "recoil";
 import { alpha, createTheme, Shadows, Theme } from "@mui/material";
 import { appWindow } from "@tauri-apps/api/window";
 import { atomThemeMode } from "@/services/states";
-import { defaultTheme, defaultDarkTheme } from "@/pages/_theme";
+import { defaultTheme, defaultDarkTheme } from "@/app/theme";
 import { useVerge } from "@/hooks/use-verge";
 
 /**
@@ -65,7 +65,7 @@ export const useCustomTheme = () => {
         },
       });
     } catch {
-      // fix #294
+      // 用户主题字段无效时，保留可用的基础调色板以保证界面能够渲染。
       theme = createTheme({
         breakpoints: {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
@@ -84,7 +84,7 @@ export const useCustomTheme = () => {
       });
     }
 
-    // css
+    // 同步供非 MUI 组件使用的主题 CSS 变量。
     const backgroundColor = mode === "light" ? "#f0f0f0" : "#2e303d";
     const selectColor = mode === "light" ? "#f5f5f5" : "#d5d5d5";
     const scrollColor = mode === "light" ? "#90939980" : "#54545480";
@@ -102,7 +102,7 @@ export const useCustomTheme = () => {
       alpha(theme.palette.primary.main, 0.1)
     );
 
-    // inject css
+    // 应用用户配置的主题 CSS。
     let style = document.querySelector("style#verge-theme");
     if (!style) {
       style = document.createElement("style");
@@ -113,7 +113,7 @@ export const useCustomTheme = () => {
       style.innerHTML = setting.css_injection || "";
     }
 
-    // update svg icon
+    // 同步 SVG 图标颜色。
     const { palette } = theme;
 
     setTimeout(() => {

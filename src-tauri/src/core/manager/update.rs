@@ -1,7 +1,6 @@
 use super::CoreManager;
 use crate::config::*;
 use crate::core::clash_api;
-use crate::core::logger::Logger;
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::sync::atomic::Ordering;
@@ -128,8 +127,7 @@ impl CoreManager {
             let _ = child.kill();
         }
 
-        // Mihomo's /upgrade endpoint starts the replacement executable itself.
-        // Reap that unmanaged process before starting it again through CoreManager.
+        // /upgrade 会自行启动替换后的程序；先清理该进程，再由 CoreManager 接管。
         for _ in 0..8 {
             let killed = kill_processes_at_path(core_path);
             if killed > 0 {
@@ -141,11 +139,12 @@ impl CoreManager {
 
     #[cfg(target_os = "windows")]
     async fn activate_updated_core_locked(&self, should_run: bool) -> Result<()> {
-        self.check_config()
+        let snapshot = Config::snapshot();
+        self.check_config(&snapshot)
             .context("updated Mihomo executable failed configuration validation")?;
         self.desired_running.store(should_run, Ordering::SeqCst);
         if should_run {
-            self.start_core_locked()
+            self.start_core_locked(&snapshot)
                 .await
                 .context("updated Mihomo executable failed to start")?;
         }
@@ -193,18 +192,17 @@ impl CoreManager {
         Ok(())
     }
 
-    /// Update the selected portable Mihomo executable while retaining process
-    /// ownership in CoreManager and rolling back if validation or restart fails.
+    /// 更新选定的便携内核，保持进程归属；校验或重启失败时恢复原可执行文件。
     pub async fn upgrade_core(&'static self) -> Result<bool> {
         #[cfg(target_os = "windows")]
         {
+            let _change = crate::application::operation().await?;
             let _operation = self.core_operation.lock().await;
             if !self.is_core_ready() {
                 bail!("Mihomo core is not ready");
             }
 
             let core = Config::verge()
-                .latest()
                 .clash_core
                 .clone()
                 .unwrap_or_else(|| MIHOMO_CORE.into());
@@ -296,60 +294,6 @@ impl CoreManager {
                 ),
             }
             Ok(true)
-        }
-    }
-
-    /// 切换核心
-    pub async fn change_core(&self, clash_core: Option<String>) -> Result<()> {
-        let clash_core = clash_core.ok_or(anyhow::anyhow!("Mihomo core is null"))?;
-        if !VALID_MIHOMO_CORES.contains(&clash_core.as_str()) {
-            bail!("invalid Mihomo core name \"{clash_core}\"");
-        }
-
-        log::debug!(target: "app", "change core to `{clash_core}`");
-
-        Config::verge().draft().clash_core = Some(clash_core);
-        let mut restart_attempted = false;
-        let change_result = async {
-            // 更新订阅
-            Config::generate()?;
-            self.check_config()?;
-
-            // 清掉旧日志
-            Logger::global().clear_log();
-            restart_attempted = true;
-            self.run_core().await?;
-            Config::save_verge_snapshot()?;
-            <Result<()>>::Ok(())
-        }
-        .await;
-
-        match change_result {
-            Ok(_) => {
-                Config::verge().apply();
-                Config::runtime().apply();
-                Ok(())
-            }
-            Err(err) => {
-                Config::verge().discard();
-                Config::runtime().discard();
-
-                if restart_attempted {
-                    let rollback = async {
-                        Config::generate()?;
-                        self.run_core().await?;
-                        Config::runtime().apply();
-                        <Result<()>>::Ok(())
-                    }
-                    .await;
-                    if let Err(rollback_err) = rollback {
-                        return Err(anyhow::anyhow!(
-                            "{err}; restoring the previous core also failed: {rollback_err}"
-                        ));
-                    }
-                }
-                Err(err)
-            }
         }
     }
 }

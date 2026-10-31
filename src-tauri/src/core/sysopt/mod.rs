@@ -11,25 +11,24 @@ mod guard;
 mod proxy;
 
 pub struct Sysopt {
-    /// current system proxy setting
+    /// 本程序最近一次应用的系统代理设置。
     cur_sysproxy: Arc<Mutex<Option<Sysproxy>>>,
 
-    /// record the original system proxy
-    /// recover it when exit
+    /// 接管前的代理设置，用于退出恢复。
     old_sysproxy: Arc<Mutex<Option<Sysproxy>>>,
 
-    /// exact Windows registry state before this app owns the proxy
+    /// 接管前的 Windows 注册表完整快照。
     #[cfg(target_os = "windows")]
     old_windows_proxy: Arc<Mutex<Option<WindowsProxySnapshot>>>,
 
-    /// Windows registry state immediately after this app set the proxy
+    /// 接管后的注册表快照，用于核验恢复时的所有权。
     #[cfg(target_os = "windows")]
     owned_windows_proxy: Arc<Mutex<Option<WindowsProxySnapshot>>>,
 
-    /// helps to auto launch the app
+    /// 系统自动启动项适配器。
     auto_launch: Arc<Mutex<Option<AutoLaunch>>>,
 
-    /// serialize proxy writes, restores, and guard refreshes
+    /// 串行化代理写入、恢复与守卫刷新。
     proxy_operation: Arc<Mutex<()>>,
 }
 

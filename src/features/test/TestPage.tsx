@@ -114,7 +114,7 @@ const TestPage = () => {
   );
   const { verge, mutateVerge, patchVerge } = useVerge();
 
-  // test list
+  // 默认站点与用户站点统一生成展示列表。
   const testList = useMemo(
     () =>
       verge?.test_list
@@ -134,13 +134,13 @@ const TestPage = () => {
         }
         return x;
       });
-      mutateVerge({ ...verge, test_list: newList }, false);
+      mutateVerge((current) => ({ ...current, test_list: newList }), false);
     } else {
       mutateVerge();
     }
   };
 
-  const onDeleteTestListItem = (uid: string) => {
+  const onDeleteTestListItem = async (uid: string) => {
     const target = testList.find((x) => x.uid === uid);
 
     if (target?.builtIn) {
@@ -148,8 +148,7 @@ const TestPage = () => {
     }
 
     const newList = testList.filter((x) => x.uid !== uid);
-    patchVerge({ test_list: newList });
-    mutateVerge({ ...verge, test_list: newList }, false);
+    await patchVerge({ test_list: newList });
   };
 
   const reorder = (list: any[], startIndex: number, endIndex: number) => {
@@ -169,30 +168,29 @@ const TestPage = () => {
           return;
         }
         let newList = reorder(testList, old_index, new_index);
-        await mutateVerge({ ...verge, test_list: newList }, false);
-        await patchVerge({ test_list: newList });
+        try {
+          await patchVerge({ test_list: newList });
+        } catch (error) {
+          Notice.error(formatNoticeMessage(error));
+        }
       }
     }
   };
 
+  const normalizationAttempt = useRef("");
   useEffect(() => {
     if (!verge) return;
-
-    if (!verge.test_list) {
-      patchVerge({ test_list: DEFAULT_TEST_LIST }).catch(() => undefined);
-      mutateVerge({ ...verge, test_list: DEFAULT_TEST_LIST }, false);
-      return;
-    }
-
     const { normalized, changed } = normalizeTestList(
-      verge.test_list,
+      verge.test_list ?? [],
       DEFAULT_TEST_MAP
     );
-
-    if (changed) {
-      patchVerge({ test_list: normalized }).catch(() => undefined);
-      mutateVerge({ ...verge, test_list: normalized }, false);
-    }
+    const signature = JSON.stringify(verge.test_list ?? null);
+    if (!changed || signature === normalizationAttempt.current) return;
+    // 同一输入最多迁移一次，失败时显示错误，不用乐观缓存掩盖后端拒绝并循环重试。
+    normalizationAttempt.current = signature;
+    void patchVerge({ test_list: normalized }).catch((error) =>
+      Notice.error(formatNoticeMessage(error))
+    );
   }, [verge]);
 
   const viewerRef = useRef<TestViewerRef>(null);
@@ -274,15 +272,7 @@ const TestPage = () => {
               setPending(new Set(urls));
               setTesting(true);
               try {
-                await Promise.race([
-                  triggerAutoSiteTest(),
-                  new Promise<never>((_, reject) => {
-                    window.setTimeout(
-                      () => reject(new Error("site test timed out")),
-                      60000
-                    );
-                  }),
-                ]);
+                await triggerAutoSiteTest();
               } catch (err: any) {
                 Notice.error(formatNoticeMessage(err));
               } finally {

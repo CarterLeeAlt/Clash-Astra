@@ -102,6 +102,7 @@ struct RunningEntry {
 /// 触发的旧任务并重新计时，因此同 key 的重复调用就是尾沿防抖，只保留最后
 /// 一次。普通任务进入执行后不会被取消；可取消任务可以通过取消令牌协作退出。
 pub struct OneShotScheduler {
+    stopped: AtomicBool,
     jobs: Mutex<HashMap<String, OneShotEntry>>,
     running: Mutex<HashMap<String, Vec<RunningEntry>>>,
     next_generation: AtomicU64,
@@ -112,6 +113,7 @@ impl OneShotScheduler {
         static ONE_SHOT: OnceCell<OneShotScheduler> = OnceCell::new();
 
         ONE_SHOT.get_or_init(|| OneShotScheduler {
+            stopped: AtomicBool::new(false),
             jobs: Mutex::new(HashMap::new()),
             running: Mutex::new(HashMap::new()),
             next_generation: AtomicU64::new(1),
@@ -142,6 +144,9 @@ impl OneShotScheduler {
         let deadline = tokio::time::Instant::now() + delay;
 
         let mut jobs = self.jobs.lock();
+        if self.stopped.load(Ordering::SeqCst) {
+            bail!("one-shot scheduler is shut down");
+        }
         if let Some(entry) = jobs.get_mut(&key) {
             entry.generation = generation;
             entry.deadline = deadline;
@@ -191,6 +196,12 @@ impl OneShotScheduler {
     /// 防抖：同 key 的重复调用只保留最后一次。
     pub fn debounce(&self, key: impl Into<String>, delay: Duration, run: JobFn) -> Result<()> {
         self.schedule_once(key, delay, run)
+    }
+
+    /// 退出后拒绝新的续约，避免正在执行的回调在 cancel_all 后复活任务。
+    pub fn shutdown(&self) {
+        self.stopped.store(true, Ordering::SeqCst);
+        self.cancel_all();
     }
 
     /// 取消一次性任务；返回是否确实发出了取消。

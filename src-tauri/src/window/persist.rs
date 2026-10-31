@@ -1,6 +1,6 @@
 use super::state::*;
-use crate::config::Config;
 use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
+use crate::domain::window_geometry::geometry_to_persist;
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +11,7 @@ pub fn schedule_window_state_save(app_handle: AppHandle, delay: Duration) {
     let run: JobFn = Arc::new(move || {
         let app_handle = app_handle.clone();
         let future: JobFuture = Box::pin(async move {
-            match save_window_size_position(&app_handle, true) {
+            match save_window_size_position(&app_handle) {
                 Ok(_) => log::debug!(target: "app", "window state saved after delayed request"),
                 Err(err) => log::trace!(
                     target: "app",
@@ -74,7 +74,7 @@ pub fn schedule_save_window_size_position(app_handle: AppHandle) {
             }
 
             let elapsed = current_time_millis().saturating_sub(moved_at);
-            match save_window_size_position(&app_handle, false) {
+            match save_window_size_position(&app_handle) {
                 Ok(_) => log::debug!(
                     target: "app",
                     "window moved/resized saved after quiet, elapsed_ms={elapsed}"
@@ -103,8 +103,8 @@ pub fn schedule_save_window_size_position(app_handle: AppHandle) {
     }
 }
 
-/// save window size and position
-pub fn save_window_size_position(app_handle: &AppHandle, save_to_file: bool) -> Result<()> {
+/// 采集逻辑坐标下的窗口几何信息，过程中不持有配置写锁。
+pub(crate) fn read_window_state(app_handle: &AppHandle) -> Result<(Option<Vec<f64>>, bool)> {
     let win = app_handle
         .get_window("main")
         .ok_or(anyhow::anyhow!("failed to get window"))?;
@@ -118,17 +118,21 @@ pub fn save_window_size_position(app_handle: &AppHandle, save_to_file: bool) -> 
     let pos = pos.to_logical::<f64>(scale);
     let is_maximized = win.is_maximized()?;
 
-    let snapshot = {
-        let verge = Config::verge();
-        let mut verge = verge.latest();
-        verge.window_is_maximized = Some(is_maximized);
-        if !is_maximized && size.width >= 1060.0 && size.height >= 680.0 {
-            verge.window_size_position = Some(vec![size.width, size.height, pos.x, pos.y]);
-        }
-        verge.clone()
-    };
-    if save_to_file {
-        snapshot.save_file()?;
-    }
+    let position = geometry_to_persist(size.width, size.height, pos.x, pos.y, is_maximized);
+    Ok((position, is_maximized))
+}
+
+/// 窗口事件只采集几何状态，写盘排入应用协调器，避免阻塞主线程。
+pub fn save_window_size_position(app_handle: &AppHandle) -> Result<()> {
+    let (position, maximized) = read_window_state(app_handle)?;
+    crate::application::configuration::save_window_state(position, maximized);
     Ok(())
+}
+
+/// 退出工作线程等待窗口状态写入结束后，再关闭业务入口和外部资源。
+pub fn save_window_state_before_shutdown(app_handle: &AppHandle) -> Result<()> {
+    let (position, maximized) = read_window_state(app_handle)?;
+    tauri::async_runtime::block_on(crate::application::configuration::persist_window_state(
+        position, maximized,
+    ))
 }

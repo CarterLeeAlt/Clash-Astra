@@ -21,7 +21,7 @@ on:
           - signpath
           - ossign
 
-# Serialize release builds on main so auto version bumps never race each other
+# 串行执行 main 分支发版，避免自动版本提交相互竞争。
 concurrency:
   group: release-windows-main
   cancel-in-progress: false
@@ -214,6 +214,8 @@ jobs:
       - name: Pnpm install, sync version and check
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           pnpm i
 
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
@@ -223,6 +225,12 @@ jobs:
           pnpm sync-metadata
           pnpm check:naming
           pnpm prepare:runtime ${{ matrix.target }}
+          pnpm check:architecture
+          pnpm test:frontend
+          cargo test --manifest-path src-tauri/Cargo.toml --bin clash-astra
+          if ($LASTEXITCODE -ne 0) { throw "business regression tests failed" }
+          cargo test --manifest-path src-tauri/windows-service-src/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw "Windows service regression tests failed" }
 
       - name: Detect signing availability
         id: sign_mode
@@ -269,6 +277,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
           # Cargo 产物名不能带空格，发布名在这里落成用户可见名称
           Copy-Item -LiteralPath $watchdogSource -Destination (Join-Path $releaseDir "Clash Astra Watchdog.exe") -Force
+          pwsh -NoProfile -File scripts/verify/test-watchdog.ps1 -WatchdogPath $watchdogSource
+          if ($LASTEXITCODE -ne 0) { throw "watchdog lifecycle regression failed" }
 
       - name: Restore certificate
         if: steps.sign_mode.outputs.mode == 'pfx' && steps.sign_mode.outputs.can_sign == 'true'

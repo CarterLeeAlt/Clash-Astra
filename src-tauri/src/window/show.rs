@@ -2,102 +2,44 @@ use super::create::create_window;
 use super::state::*;
 use crate::core::scheduler::{CancellableJobFn, JobFn, JobFuture, OneShotScheduler};
 use crate::trace_err;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 pub(crate) fn register_frontend_ready_listener(app_handle: &AppHandle, show_when_ready: bool) {
-    FRONTEND_SHOW_WHEN_READY.store(show_when_ready, Ordering::SeqCst);
-
-    if FRONTEND_READY_LISTENING
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
     {
-        log::trace!(
-            "frontend ready listener already registered, show_when_ready={}",
-            show_when_ready
-        );
-        return;
+        let mut state = lifecycle();
+        if state.ready_listening {
+            return;
+        }
+        state.desired_visible = show_when_ready;
+        state.ready_listening = true;
     }
-
     let listener_app_handle = app_handle.clone();
     let ready_app_handle = app_handle.clone();
-    log::trace!(
-        "register frontend ready listener, show_when_ready={}",
-        show_when_ready
-    );
     listener_app_handle.listen_global("frontend://ready", move |_| {
-        if FRONTEND_READY_HANDLED
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            log::trace!("frontend ready already handled, skip");
-            return;
-        }
-
-        let show_when_ready = FRONTEND_SHOW_WHEN_READY.load(Ordering::SeqCst);
-        let show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
-
-        #[cfg(target_os = "windows")]
-        crate::core::win_firewall::notify_lan_firewall_if_needed();
-        log::trace!(
-            "frontend ready received, show_when_ready={}, show_request_id={}",
-            show_when_ready,
-            show_request_id
-        );
-
-        if show_when_ready || show_request_id > 0 {
-            log::trace!(
-                "frontend ready wants show, show_when_ready={}, show_request_id={}",
-                show_when_ready,
-                show_request_id
-            );
-            if let Some(window) = ready_app_handle.get_window("main") {
-                show_existing_window(&window, show_request_id, ShowReason::FrontendReady);
-            } else {
-                log::trace!("frontend ready wants show but main window is missing");
-                create_window(&ready_app_handle, true);
-            }
-            return;
-        }
-
-        if let Some(window) = ready_app_handle.get_window("main") {
-            log::trace!(
-                "frontend ready wants hide, show_request_id={}",
-                show_request_id
-            );
-            let latest_show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
-            if latest_show_request_id > 0 {
-                log::trace!(
-                    "frontend ready hide skipped because show requested, show_request_id={}",
-                    latest_show_request_id
-                );
-                show_existing_window(
-                    &window,
-                    latest_show_request_id,
-                    ShowReason::FrontendReadyRestore,
-                );
+        let state = {
+            let mut state = lifecycle();
+            if state.frontend_ready || state.quitting {
                 return;
             }
-
-            trace_err!(window.hide(), "set win hidden after frontend ready");
-            let latest_show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
-            if latest_show_request_id > 0 {
-                log::trace!(
-                    "frontend ready post-hide show requested, restore main window, show_request_id={}",
-                    latest_show_request_id
-                );
-                show_existing_window(
-                    &window,
-                    latest_show_request_id,
-                    ShowReason::FrontendReadyRestore,
-                );
+            state.frontend_ready = true;
+            state.clone()
+        };
+        crate::core::win_firewall::notify_lan_firewall_if_needed();
+        if state.desired_visible {
+            if let Some(window) = ready_app_handle.get_window("main") {
+                show_existing_window(&window, state.show_request, ShowReason::FrontendReady);
             } else {
-                log::trace!("frontend ready hide completed without show request");
+                create_window(&ready_app_handle, true);
             }
-        } else {
-            log::trace!("frontend ready wants hide but main window is missing while silent");
+        } else if let Some(window) = ready_app_handle.get_window("main") {
+            trace_err!(window.hide(), "set win hidden after frontend ready");
+            // 隐藏过程中收到显式显示意图时，按最新意图恢复。
+            let latest = lifecycle_snapshot();
+            if latest.desired_visible && !latest.quitting {
+                show_existing_window(&window, latest.show_request, ShowReason::FrontendReady);
+            }
         }
     });
 }
@@ -287,18 +229,7 @@ pub fn focus_main_window_if_open(app_handle: &AppHandle, context: &str) -> bool 
 }
 
 fn record_pending_show_request(request_id: u64) {
-    let mut pending = MAIN_WINDOW_SHOW_PENDING_ID.load(Ordering::SeqCst);
-    while request_id > pending {
-        match MAIN_WINDOW_SHOW_PENDING_ID.compare_exchange(
-            pending,
-            request_id,
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-        ) {
-            Ok(_) => return,
-            Err(next_pending) => pending = next_pending,
-        }
-    }
+    record_pending_show(request_id);
 }
 
 fn window_show_once_fast(window: &tauri::Window, request_id: u64, reason: ShowReason) {
@@ -340,7 +271,7 @@ fn finish_show_flow(
     drop(showing_guard);
     log_window_state(window, "show_existing_window released final");
 
-    let pending_request_id = MAIN_WINDOW_SHOW_PENDING_ID.load(Ordering::SeqCst);
+    let pending_request_id = pending_show_request();
     if pending_request_id <= current_request_id {
         return;
     }
@@ -410,8 +341,8 @@ fn schedule_windows_show_retries(
                     return Ok(());
                 }
 
-                let latest_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
-                if latest_request_id != request_id {
+                let latest_request_id = latest_show_request_id();
+                if !lifecycle_snapshot().can_retry_show(request_id) {
                     log::trace!(
                         "windows delayed retry skipped because stale, request_id={}, latest_request_id={}, attempt={}, delay_ms={}",
                         request_id,
@@ -488,7 +419,7 @@ fn request_show_existing_window(window: &tauri::Window, request_id: u64, reason:
         return;
     };
 
-    let current_request_id = MAIN_WINDOW_SHOW_PENDING_ID.swap(0, Ordering::SeqCst);
+    let current_request_id = take_pending_show_request();
     window_show_once_fast(window, current_request_id, reason);
 
     #[cfg(target_os = "windows")]
@@ -539,15 +470,15 @@ pub fn show_main_window_after_hide_transition(app_handle: AppHandle) {
     }
 }
 
-/// show and focus the main window
+/// 记录显式显示意图，再显示并聚焦主窗口。
 pub fn show_main_window(app_handle: &AppHandle) {
     // 显式显示请求覆盖之前的隐藏：清掉隐藏标记，否则本次显示的修复重试会被当成
     // “用户正在隐藏”而跳过。延迟显示（show_main_window_after_hide_transition）
     // 在调用这里之前已经按标记等过隐藏动画。
-    WINDOW_HIDE_IN_PROGRESS_UNTIL_MS.store(0, Ordering::SeqCst);
     check_main_window_health(app_handle, "show_main_window");
-    let show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.fetch_add(1, Ordering::SeqCst) + 1;
-    FRONTEND_SHOW_WHEN_READY.store(true, Ordering::SeqCst);
+    let Some(show_request_id) = lifecycle().request_show() else {
+        return;
+    };
     let existing = app_handle.get_window("main");
     log::trace!(
         "show_main_window called, existing window {}, show_request_id={}",

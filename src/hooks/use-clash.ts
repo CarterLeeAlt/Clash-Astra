@@ -1,6 +1,6 @@
 import useSWR, { mutate } from "swr";
 import { useLockFn } from "ahooks";
-import { getAxios, getVersion, updateConfigs } from "@/services/api";
+import { getAxios, getVersion } from "@/services/api";
 import {
   getClashInfo,
   patchClashConfig,
@@ -20,22 +20,9 @@ export const useClash = () => {
   );
 
   const patchClash = useLockFn(async (patch: Partial<IConfigData>) => {
-    const hasAllowLanPatch = patch["allow-lan"] != null;
-    const hasRuntimePatch =
-      patch.ipv6 != null ||
-      patch["allow-lan"] != null ||
-      patch["log-level"] != null;
-
-    if (!hasAllowLanPatch) {
-      await updateConfigs(patch);
-    }
     await patchClashConfig(patch);
     await mutateClash();
     await mutate(queryKeys.clashConfig);
-
-    if (hasRuntimePatch) {
-      await mutateClash();
-    }
   });
 
   const version = versionData?.premium
@@ -81,8 +68,8 @@ export const useClashInfo = () => {
       if (port < 1000) {
         throw new Error("The port should not < 1000");
       }
-      if (port > 65536) {
-        throw new Error("The port should not > 65536");
+      if (port > 65535) {
+        throw new Error("The port should not > 65535");
       }
     }
 
@@ -91,8 +78,8 @@ export const useClashInfo = () => {
       if (port < 1000) {
         throw new Error("The port should not < 1000");
       }
-      if (port > 65536) {
-        throw new Error("The port should not > 65536");
+      if (port > 65535) {
+        throw new Error("The port should not > 65535");
       }
     }
 
@@ -101,8 +88,8 @@ export const useClashInfo = () => {
       if (port < 1000) {
         throw new Error("The port should not < 1000");
       }
-      if (port > 65536) {
-        throw new Error("The port should not > 65536");
+      if (port > 65535) {
+        throw new Error("The port should not > 65535");
       }
     }
 

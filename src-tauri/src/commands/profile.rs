@@ -1,99 +1,65 @@
 use super::CmdResult;
 use crate::{
+    application::{configuration, profiles},
     config::*,
-    core::{handle, timer, CoreManager},
-    feat, ret_err,
+    ret_err,
     utils::help,
     wrap_err,
 };
-use anyhow::{bail, Context, Result};
 
 #[tauri::command(async)]
 pub fn get_profiles() -> CmdResult<IProfiles> {
-    Ok(Config::profiles().data().clone())
+    Ok(Config::profiles())
 }
 
 #[tauri::command]
 pub async fn enhance_profiles() -> CmdResult {
-    wrap_err!(CoreManager::global().update_config().await)?;
-    handle::Handle::refresh_clash();
-    Ok(())
+    wrap_err!(configuration::reload().await)
 }
 
 #[tauri::command]
 pub async fn import_profile(url: String, option: Option<PrfOption>) -> CmdResult {
-    let item = wrap_err!(PrfItem::from_url(&url, None, None, option).await)?;
-    wrap_err!(Config::profiles().data().append_item(item))
+    wrap_err!(profiles::import(url, option).await)
 }
 
 #[tauri::command]
 pub async fn reorder_profile(active_id: String, over_id: String) -> CmdResult {
-    wrap_err!(Config::profiles().data().reorder(active_id, over_id))
+    wrap_err!(profiles::reorder(active_id, over_id).await)
 }
 
 #[tauri::command]
 pub async fn create_profile(item: PrfItem, file_data: Option<String>) -> CmdResult {
-    let item = wrap_err!(PrfItem::from(item, file_data).await)?;
-    wrap_err!(Config::profiles().data().append_item(item))
+    wrap_err!(profiles::create(item, file_data).await)
 }
 
 #[tauri::command]
 pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResult {
-    wrap_err!(feat::update_profile(index, option).await)
+    wrap_err!(profiles::update_profile(index, option).await)
 }
 
 #[tauri::command]
 pub async fn delete_profile(index: String) -> CmdResult {
-    let should_update = wrap_err!({ Config::profiles().data().delete_item(index) })?;
-    if should_update {
-        wrap_err!(CoreManager::global().update_config().await)?;
-        handle::Handle::refresh_clash();
-    }
-
-    Ok(())
+    wrap_err!(profiles::delete(index).await)
 }
 
 /// 修改profiles的
 #[tauri::command]
-pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult {
-    wrap_err!({ Config::profiles().draft().patch_config(profiles) })?;
-
-    match CoreManager::global().update_config().await {
-        Ok(_) => {
-            // 先落盘再 apply：apply 之后再存盘失败会让内存与文件不一致，
-            // 前端收到错误却已经生效，重启后又回跳
-            if let Err(err) = Config::save_profiles_draft_snapshot() {
-                Config::profiles().discard();
-                log::error!(target: "app", "{err}");
-                return Err(format!("{err}"));
-            }
-            handle::Handle::refresh_clash();
-            Config::profiles().apply();
-            Ok(())
-        }
-        Err(err) => {
-            Config::profiles().discard();
-            log::error!(target: "app", "{err}");
-            Err(format!("{err}"))
-        }
-    }
+pub async fn patch_profiles_config(
+    profiles: crate::domain::profiles::ActivationRequest,
+) -> CmdResult {
+    wrap_err!(self::profiles::activate(profiles).await)
 }
 
 /// 修改某个profile item的
 #[tauri::command]
 pub async fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
-    tokio::task::spawn_blocking(move || -> CmdResult {
-        wrap_err!(Config::profiles().data().patch_item(index, profile))?;
-        wrap_err!(timer::sync())
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    wrap_err!(profiles::patch(index, profile).await)
 }
 
 #[tauri::command]
-pub async fn view_profile(app_handle: tauri::AppHandle, index: String) -> CmdResult {
+pub async fn view_profile(index: String) -> CmdResult {
     let file = {
-        wrap_err!(Config::profiles().latest().get_item(&index))?
+        wrap_err!(Config::profiles().get_item(&index))?
             .file
             .clone()
             .ok_or("the file field is null")
@@ -106,16 +72,18 @@ pub async fn view_profile(app_handle: tauri::AppHandle, index: String) -> CmdRes
         ret_err!("the file not found");
     }
 
-    tokio::task::spawn_blocking(move || wrap_err!(help::open_file(app_handle, canonical_path)))
-        .await
-        .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || {
+        wrap_err!(crate::infrastructure::desktop::open_file(canonical_path))
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
 pub async fn read_profile_file(index: String) -> CmdResult<String> {
+    let _operation = wrap_err!(crate::application::operation().await)?;
     let item = {
         let profiles = Config::profiles();
-        let profiles = profiles.latest();
         wrap_err!(profiles.get_item(&index))?.clone()
     };
 
@@ -130,67 +98,10 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
         return Ok(());
     };
 
-    let item = {
-        let profiles = Config::profiles();
-        let profiles = profiles.latest();
-        wrap_err!(profiles.get_item(&index))?.clone()
-    };
-
-    if item.is_global_script() {
-        wrap_err!(save_global_script_file(item, data).await)
-    } else {
-        wrap_err!(item.save_file(data))
-    }
+    wrap_err!(profiles::save_file(index, data).await)
 }
 
-async fn save_global_script_file(item: PrfItem, data: String) -> Result<()> {
-    let (current_config, profile_name) = {
-        let profiles = Config::profiles();
-        let profiles = profiles.latest();
-        let current_uid = profiles.get_current();
-        let profile_name = current_uid
-            .as_ref()
-            .and_then(|uid| profiles.get_item(uid).ok())
-            .and_then(|item| item.name.clone())
-            .unwrap_or_default();
-        (profiles.current_mapping().unwrap_or_default(), profile_name)
-    };
-
-    crate::enhance::script::validate_script_strict(data.clone(), current_config, &profile_name)
-        .context("global script validation failed")?;
-
-    let old_data = item.read_file()?;
-    item.save_file(data)?;
-
-    match CoreManager::global().update_config().await {
-        Ok(_) => {
-            handle::Handle::refresh_clash();
-            Ok(())
-        }
-        Err(err) => {
-            let rollback_err = item.save_file(old_data).err();
-            let recovery_err = match CoreManager::global().update_config().await {
-                Ok(_) => {
-                    handle::Handle::refresh_clash();
-                    None
-                }
-                Err(recovery_err) => {
-                    log::error!(target: "app", "failed to recover config after global script rollback: {recovery_err}");
-                    Some(recovery_err)
-                }
-            };
-            match (rollback_err, recovery_err) {
-                (Some(rollback_err), Some(recovery_err)) => bail!(
-                    "global script rejected: {err}; rollback failed: {rollback_err}; recovery update failed: {recovery_err}"
-                ),
-                (Some(rollback_err), None) => {
-                    bail!("global script rejected: {err}; rollback failed: {rollback_err}")
-                }
-                (None, Some(recovery_err)) => bail!(
-                    "global script rejected: {err}; rollback restored the old file but recovery update failed: {recovery_err}"
-                ),
-                (None, None) => bail!("global script rejected: {err}"),
-            }
-        }
-    }
+#[tauri::command]
+pub async fn select_proxy(profile_uid: String, group: String, proxy: String) -> CmdResult {
+    wrap_err!(profiles::select_proxy(profile_uid, group, proxy).await)
 }

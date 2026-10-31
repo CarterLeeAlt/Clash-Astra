@@ -8,8 +8,7 @@
   display: flex;
   flex-direction: column;
   > header {
-    // Match the visual bottom edge of .layout__left .the-logo; its
-    // translateY(-2px) moves the painted border without changing layout.
+    // 与侧栏标志的可见底边对齐；translateY(-2px) 只移动绘制边框，不改变布局占位。
     $pageHeaderHeight: 60px;
 
     flex: 0 0 $pageHeaderHeight;

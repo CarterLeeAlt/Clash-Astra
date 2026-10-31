@@ -2,12 +2,11 @@ use super::use_lowercase;
 use anyhow::{bail, Result};
 use serde_yaml::{Mapping, Value};
 
-// Global Script behavior and profileName support are adapted from
-// clash-verge-rev/clash-verge-rev.
-// Source:
+// 全局脚本行为与 profileName 支持参考 clash-verge-rev/clash-verge-rev。
+// 来源：
 // https://github.com/clash-verge-rev/clash-verge-rev/blob/658312fe7be95d69b4dad379c6cd00fc93f29d5f/src-tauri/src/enhance/mod.rs
 // https://github.com/clash-verge-rev/clash-verge-rev/blob/658312fe7be95d69b4dad379c6cd00fc93f29d5f/src-tauri/src/enhance/script.rs
-// License: GPL-3.0-only
+// 许可证：GPL-3.0-only
 
 const SCRIPT_MEMORY_LIMIT: usize = 256 * 1024 * 1024;
 const SCRIPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -107,8 +106,8 @@ fn run_script_inner(
     }
 }
 
-// Only validate fields whose JavaScript types can be checked independently.
-// Mihomo performs the authoritative full-config validation after the script is saved.
+// 此处只校验能够独立判断的 JavaScript 输出类型；
+// 应用层随后对候选运行时配置调用 Mihomo，执行最终完整校验。
 fn validate_script_output_shape(config: &Mapping) -> Result<()> {
     for key in ["rules", "proxies", "proxy-groups"] {
         if let Some(value) = config.get(&Value::String(key.into())) {

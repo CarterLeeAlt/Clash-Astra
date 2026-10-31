@@ -156,7 +156,7 @@ export const TrafficGraph = forwardRef<TrafficRef>((props, ref) => {
 
       context.clearRect(0, 0, width, height);
 
-      // Reference lines
+      // 绘制流量参考线。
       context.beginPath();
       context.globalAlpha = refLineAlpha;
       context.lineWidth = refLineWidth;

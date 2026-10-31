@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import { RecoilRoot } from "recoil";
 import { BrowserRouter } from "react-router-dom";
 import { BaseErrorBoundary } from "./components/base";
-import Layout from "./pages/_layout";
+import Layout from "./app/layout";
 import { frontendHeartbeat } from "./services/cmds";
 import "./services/i18n";
 

@@ -11,7 +11,7 @@ export const FileInput = (props: Props) => {
   const { onChange } = props;
 
   const { t } = useTranslation();
-  // file input
+  // 选择文件并读取待提交内容。
   const inputRef = useRef<any>();
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState("");

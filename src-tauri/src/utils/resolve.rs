@@ -1,37 +1,17 @@
 pub use crate::window::*;
 
-use crate::config::IVerge;
+use crate::bootstrap as init;
 use crate::core::scheduler::{OneShotScheduler, Scheduler};
-use crate::utils::init;
 use crate::window::show::register_frontend_ready_listener;
 use crate::{config::Config, core::*, log_err, utils::server};
 use anyhow::Result;
 use once_cell::sync::OnceCell;
-use serde_yaml::Mapping;
 use std::fs;
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{App, Manager};
 
 pub static VERSION: OnceCell<String> = OnceCell::new();
-
-pub fn find_unused_port() -> Result<u16> {
-    match TcpListener::bind("127.0.0.1:0") {
-        Ok(listener) => {
-            let port = listener.local_addr()?.port();
-            Ok(port)
-        }
-        Err(_) => {
-            let port = Config::verge()
-                .latest()
-                .verge_mixed_port
-                .unwrap_or(Config::clash().data().get_mixed_port());
-            log::warn!(target: "app", "use default port: {}", port);
-            Ok(port)
-        }
-    }
-}
 
 fn watchdog_runtime_file(name: &str) -> Result<PathBuf> {
     Ok(crate::utils::dirs::app_home_dir()?
@@ -84,7 +64,7 @@ pub fn reset_watchdog_files() {
     }
 }
 
-/// handle something when start app
+/// 按依赖顺序启动配置、内核、单实例通信、托盘、窗口和后台任务。
 pub fn resolve_setup(app: &mut App) {
     let version = app.package_info().version.to_string();
     handle::Handle::global().init(app.app_handle());
@@ -98,41 +78,14 @@ pub fn resolve_setup(app: &mut App) {
         log_err!(crate::core::win_firewall::reconcile_lan_firewall_on_startup());
     });
     log_err!(init::startup_script());
-    // 处理随机端口
-    let enable_random_port = Config::verge().latest().enable_random_port.unwrap_or(false);
-
-    let mut port = Config::verge()
-        .latest()
-        .verge_mixed_port
-        .unwrap_or(Config::clash().data().get_mixed_port());
-
-    if enable_random_port {
-        port = find_unused_port().unwrap_or(
-            Config::verge()
-                .latest()
-                .verge_mixed_port
-                .unwrap_or(Config::clash().data().get_mixed_port()),
-        );
+    match crate::application::configuration::initialize() {
+        Ok(()) => log_err!(CoreManager::global().init()),
+        Err(error) => {
+            log::error!(target: "app", "configuration initialization failed; open the dashboard to repair it: {error:#}")
+        }
     }
 
-    Config::verge().data().patch_config(IVerge {
-        verge_mixed_port: Some(port),
-        ..IVerge::default()
-    });
-    let _ = Config::save_verge_snapshot();
-    let mut mapping = Mapping::new();
-    mapping.insert("mixed-port".into(), port.into());
-    Config::clash().data().patch_config(mapping);
-    let _ = Config::clash().data().save_config();
-
-    // 启动核心
-    log::trace!("init config");
-    log_err!(Config::init_config());
-
-    log::trace!("launch core");
-    log_err!(CoreManager::global().init());
-
-    // setup a simple http server for singleton
+    // 启动单实例唤起服务器。
     log::trace!("launch embed server");
     server::embed_server(app.app_handle());
 
@@ -141,7 +94,7 @@ pub fn resolve_setup(app: &mut App) {
 
     let recovered_visible = crate::utils::watchdog::show_after_recovery();
     let recovered_hidden = crate::utils::watchdog::hide_after_recovery();
-    let silent_start = ({ Config::verge().data().enable_silent_start.unwrap_or(false) }
+    let silent_start = ({ Config::verge().enable_silent_start.unwrap_or(false) }
         || recovered_hidden)
         && !recovered_visible;
     let show_when_ready = !silent_start;
@@ -165,9 +118,10 @@ pub fn resolve_setup(app: &mut App) {
     log_err!(scheduler::init());
 }
 
-/// reset system proxy
+/// 关闭业务入口并等待在途修改完成，然后停止任务、恢复代理并停止内核。
 pub fn resolve_reset() {
-    OneShotScheduler::global().cancel_all();
+    let _operations = crate::application::shutdown_guard();
+    OneShotScheduler::global().shutdown();
     log_err!(Scheduler::global().shutdown());
     log_err!(sysopt::Sysopt::global().reset_sysproxy());
     log_err!(CoreManager::global().stop_core());

@@ -1,5 +1,5 @@
 import { ReactNode, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
+import { reportFrontendError } from "@/infrastructure/ipc/system";
 import { ErrorBoundary, FallbackProps } from "react-error-boundary";
 
 const AUTO_RELOAD_KEY = "clash-astra:error-auto-reloads";
@@ -86,9 +86,7 @@ export const BaseErrorBoundary = (props: Props) => {
       )}
       onError={(error) => {
         const { message, stack } = describeError(error);
-        invoke("report_frontend_error", { message, stack }).catch(
-          () => undefined
-        );
+        reportFrontendError(message, stack).catch(() => undefined);
       }}
     >
       {props.children}

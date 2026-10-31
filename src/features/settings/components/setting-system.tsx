@@ -36,7 +36,7 @@ const SettingSystem = ({ onError }: Props) => {
 
   const { verge, mutateVerge, patchVerge } = useVerge();
 
-  // service mode
+  // 读取实际服务状态，与用户请求的运行模式分别展示。
   const { data: serviceStatus, mutate: mutateServiceStatus } =
     useServiceStatus(isWIN);
 
@@ -60,7 +60,7 @@ const SettingSystem = ({ onError }: Props) => {
   const switchesBusy = pendingSwitch !== null;
   const [proxyMismatch, setProxyMismatch] = useState(false);
   const onChangeData = (patch: Partial<IVergeConfig>) => {
-    mutateVerge({ ...verge, ...patch }, false);
+    mutateVerge((current) => ({ ...current, ...patch }), false);
   };
   const onSwitchCatch = (err: Error) => {
     if (isSwitchOperationInProgressError(err)) return;

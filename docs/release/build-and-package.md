@@ -81,6 +81,7 @@ node scripts/pnpm.mjs run portable x86_64-pc-windows-msvc
 
 - `SKIP_RELEASE_UPLOAD=1`：只生成 zip，不访问 GitHub Release。
 - `UNSIGNED_BUILD=1`：未签名构建，文件名带 `_unsigned`；签名模式见 [Windows 签名](windows-signing.md)。
+- `PORTABLE_LABEL`：可选的本地修复包标签，如 `icons-fixed`；只接受小写字母、数字和单个连字符，标签位于 `portable` 与 `unsigned` 之间，用于保留同版本的旧包。
 
 输出：
 

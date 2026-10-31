@@ -1,5 +1,4 @@
-// get the system os
-// according to UA
+// 根据构建平台标记与 User-Agent 判断运行平台。
 export default function getSystem() {
   const ua = navigator.userAgent;
   const platform = OS_PLATFORM;

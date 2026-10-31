@@ -30,6 +30,8 @@
     "web:serve": "vite preview",
     "check:naming": "node scripts/verify/check-naming.mjs",
     "check:workspace": "node scripts/check-workspace-hygiene.mjs",
+    "test:frontend": "node --test tests/frontend/*.test.mjs",
+    "check:architecture": "node scripts/verify/check-architecture.mjs",
     "prepare:runtime": "node scripts/sidecars/prepare-runtime.mjs",
     "portable": "node scripts/release/portable.mjs",
     "sync-metadata": "node scripts/metadata/sync-metadata.mjs",

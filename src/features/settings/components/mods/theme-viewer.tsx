@@ -10,7 +10,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { useVerge } from "@/hooks/use-verge";
-import { defaultTheme, defaultDarkTheme } from "@/pages/_theme";
+import { defaultTheme, defaultDarkTheme } from "@/app/theme";
 import {
   BaseDialog,
   DialogRef,
@@ -53,7 +53,7 @@ export const ThemeViewer = forwardRef<DialogRef>((props, ref) => {
     }
   });
 
-  // default theme
+  // 按当前明暗模式选择默认主题。
   const { palette } = useTheme();
 
   const dt = palette.mode === "light" ? defaultTheme : defaultDarkTheme;

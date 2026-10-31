@@ -41,8 +41,7 @@ fn copy_redacted_logs_from_dir(source_dir: &Path, target_dir: &Path) -> Result<(
     Ok(())
 }
 
-/// Build a sanitized copy of local log files for issue reports or manual upload.
-/// The live log buffers used by the in-app Logs/Connections pages are not touched.
+/// 为问题报告生成脱敏日志副本，界面正在使用的实时日志缓冲保持独立。
 pub fn prepare_redacted_logs_export() -> Result<PathBuf> {
     let logs_dir = dirs::logs_dir()?;
     let export_dir = logs_dir.join(REDACTED_EXPORT_DIR);

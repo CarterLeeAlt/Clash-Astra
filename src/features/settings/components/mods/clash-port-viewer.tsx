@@ -10,12 +10,13 @@ import {
   Notice,
 } from "@/components/base";
 import { useVerge } from "@/hooks/use-verge";
+import { patchPorts } from "@/services/cmds";
 
 export const ClashPortViewer = forwardRef<DialogRef>((props, ref) => {
   const { t } = useTranslation();
 
-  const { clashInfo, patchInfo } = useClashInfo();
-  const { verge, patchVerge } = useVerge();
+  const { clashInfo, mutateInfo } = useClashInfo();
+  const { verge, mutateVerge } = useVerge();
 
   const [open, setOpen] = useState(false);
   const [mixedPort, setMixedPort] = useState(
@@ -48,12 +49,8 @@ export const ClashPortViewer = forwardRef<DialogRef>((props, ref) => {
       return;
     }
     try {
-      await patchInfo({ "mixed-port": mixedPort });
-      await patchInfo({ "socks-port": socksPort });
-      await patchInfo({ port });
-      await patchVerge({ verge_mixed_port: mixedPort });
-      await patchVerge({ verge_socks_port: socksPort });
-      await patchVerge({ verge_port: port });
+      await patchPorts({ mixed: mixedPort, socks: socksPort, http: port });
+      await Promise.all([mutateInfo(), mutateVerge()]);
       setOpen(false);
       Notice.success("Clash ports updated.");
     } catch (err: any) {

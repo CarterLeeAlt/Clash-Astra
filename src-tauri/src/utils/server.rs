@@ -129,8 +129,7 @@ pub fn check_singleton() -> Result<()> {
     Ok(())
 }
 
-/// The embed server only be used to implement singleton process
-/// maybe it can be used as pac server later
+/// 内嵌服务器负责单实例唤起通信。
 pub fn embed_server(app_handle: AppHandle) {
     let port = IVerge::get_singleton_port();
 

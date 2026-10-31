@@ -4,7 +4,7 @@ use std::backtrace::Backtrace;
 use std::fs;
 use std::panic;
 
-/// Initialize panic hook to persist crash diagnostics before the process exits.
+/// 在进程异常退出前，将崩溃诊断信息写入文件。
 pub fn init_panic_hook() {
     panic::set_hook(Box::new(|info| {
         let timestamp = Local::now();

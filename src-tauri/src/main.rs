@@ -3,19 +3,23 @@
     windows_subsystem = "windows"
 )]
 
+mod application;
 mod bootstrap;
-mod cmds;
 mod commands;
 mod config;
 mod core;
+mod domain;
 mod enhance;
-mod feat;
-mod features;
+mod infrastructure;
 mod logging;
+mod service_protocol;
 mod utils;
 mod window;
 
-use crate::utils::{init, resolve, server};
+use crate::{
+    bootstrap as init, commands as cmds,
+    utils::{resolve, server},
+};
 use std::time::Duration;
 use tauri::{Manager, SystemTray};
 
@@ -74,7 +78,7 @@ fn main() -> std::io::Result<()> {
         })
         .on_system_tray_event(core::tray::Tray::on_system_tray_event)
         .invoke_handler(tauri::generate_handler![
-            // common
+            // 系统与应用操作。
             cmds::get_sys_proxy,
             cmds::repair_system_proxy,
             cmds::open_app_dir,
@@ -83,19 +87,20 @@ fn main() -> std::io::Result<()> {
             cmds::open_core_dir,
             cmds::restart_sidecar,
             cmds::upgrade_core,
-            // clash
+            // 内核查询与配置操作。
             cmds::get_clash_info,
             cmds::get_clash_logs,
             cmds::get_auto_delay_results,
             cmds::trigger_auto_delay_test,
             cmds::patch_clash_config,
+            cmds::patch_ports,
             cmds::change_clash_core,
             cmds::get_runtime_config,
             cmds::get_runtime_yaml,
             cmds::get_runtime_exists,
             cmds::get_runtime_logs,
-            cmds::uwp::invoke_uwp_tool,
-            // verge
+            cmds::invoke_uwp_tool,
+            // 应用设置与诊断。
             cmds::get_verge_config,
             cmds::patch_verge_config,
             cmds::test_delay,
@@ -109,7 +114,7 @@ fn main() -> std::io::Result<()> {
             cmds::get_window_style_config,
             cmds::get_scheduler_state,
             cmds::set_window_size_locked,
-            // profile
+            // 订阅管理。
             cmds::get_profiles,
             cmds::enhance_profiles,
             cmds::patch_profiles_config,
@@ -122,17 +127,24 @@ fn main() -> std::io::Result<()> {
             cmds::delete_profile,
             cmds::read_profile_file,
             cmds::save_profile_file,
-            // service mode
+            cmds::select_proxy,
+            // Windows 服务管理。
             cmds::service::check_service,
             cmds::service::is_elevated,
             cmds::service::install_service,
             cmds::service::uninstall_service,
-            // clash api
+            // 内核诊断接口。
             cmds::clash_api_get_proxy_delay
         ]);
 
+    let mut context = tauri::generate_context!();
+    // Windows 由原生资源适配器分别设置大小图标，禁止 Tauri 用 ICO 首帧覆盖它们。
+    #[cfg(target_os = "windows")]
+    {
+        *context.default_window_icon_mut() = None;
+    }
     let app = builder
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while running tauri application");
 
     app.run(|app_handle, e| match e {
@@ -211,6 +223,12 @@ fn main() -> std::io::Result<()> {
                     }
                     tauri::WindowEvent::Focused(focused) => {
                         log::debug!(target: "app", "main window focused={focused}");
+                    }
+                    tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                        #[cfg(target_os = "windows")]
+                        if let Some(window) = app_handle.get_window("main") {
+                            window::icons::refresh(&window);
+                        }
                     }
                     tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
                         resolve::schedule_save_window_size_position(app_handle.clone());

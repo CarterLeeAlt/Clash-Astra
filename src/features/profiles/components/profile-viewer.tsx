@@ -45,8 +45,7 @@ export interface ProfileViewerRef {
   edit: (item: IProfileItem) => void;
 }
 
-// create or edit the profile
-// remote / local / merge / script
+// 创建或编辑 remote、local、merge、script 条目。
 export const ProfileViewer = forwardRef<ProfileViewerRef, Props>(
   (props, ref) => {
     const { t } = useTranslation();
@@ -54,7 +53,7 @@ export const ProfileViewer = forwardRef<ProfileViewerRef, Props>(
     const [openType, setOpenType] = useState<"new" | "edit">("new");
     const [loading, setLoading] = useState(false);
 
-    // file input
+    // 新建本地订阅时提交的文件内容。
     const fileDataRef = useRef<string | null>(null);
 
     const { control, watch, register, ...formIns } = useForm<IProfileItem>({
@@ -73,14 +72,13 @@ export const ProfileViewer = forwardRef<ProfileViewerRef, Props>(
 
     useImperativeHandle(ref, () => ({
       create: () => {
+        formIns.reset();
         setOpenType("new");
         setOpen(true);
       },
       edit: (item) => {
         if (item) {
-          Object.entries(item).forEach(([key, value]) => {
-            formIns.setValue(key as any, value);
-          });
+          formIns.reset(item);
         }
         setOpenType("edit");
         setOpen(true);
@@ -126,7 +124,6 @@ export const ProfileViewer = forwardRef<ProfileViewerRef, Props>(
           }
           setOpen(false);
           setLoading(false);
-          setTimeout(() => formIns.reset(), 500);
           fileDataRef.current = null;
           props.onChange();
         } catch (err: any) {
@@ -139,7 +136,6 @@ export const ProfileViewer = forwardRef<ProfileViewerRef, Props>(
     const handleClose = () => {
       setOpen(false);
       fileDataRef.current = null;
-      setTimeout(() => formIns.reset(), 500);
     };
 
     const text = {

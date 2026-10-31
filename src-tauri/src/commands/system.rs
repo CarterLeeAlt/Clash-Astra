@@ -1,6 +1,5 @@
 use super::CmdResult;
 use crate::{
-    core::sysopt,
     ret_err,
     utils::{dirs, resolve},
     wrap_err,
@@ -9,7 +8,12 @@ use serde_yaml::Mapping;
 use sysproxy::Sysproxy;
 use tauri::{api, Manager};
 
-/// get the system proxy
+#[tauri::command]
+pub async fn invoke_uwp_tool() -> CmdResult {
+    wrap_err!(crate::core::win_uwp::invoke_uwptools().await)
+}
+
+/// 读取 Windows 当前实际代理设置。
 #[tauri::command]
 pub async fn get_sys_proxy() -> CmdResult<Mapping> {
     tokio::task::spawn_blocking(|| -> CmdResult<Mapping> {
@@ -27,23 +31,17 @@ pub async fn get_sys_proxy() -> CmdResult<Mapping> {
     .map_err(|err| err.to_string())?
 }
 
-/// reapply the system proxy from the current verge config
+/// 通过写入协调器重新应用已提交的代理配置。
 #[tauri::command]
 pub async fn repair_system_proxy() -> CmdResult<()> {
-    tokio::task::spawn_blocking(|| -> CmdResult<()> {
-        wrap_err!(sysopt::Sysopt::global().update_sysproxy())?;
-        sysopt::Sysopt::global().guard_proxy();
-        Ok(())
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    wrap_err!(crate::application::configuration::repair_system_proxy().await)
 }
 
 #[tauri::command]
 pub async fn open_app_dir() -> CmdResult<()> {
     tokio::task::spawn_blocking(|| -> CmdResult<()> {
         let app_dir = wrap_err!(dirs::app_home_dir())?;
-        wrap_err!(open::that(app_dir))
+        wrap_err!(crate::infrastructure::desktop::open(app_dir))
     })
     .await
     .map_err(|err| err.to_string())?
@@ -54,7 +52,7 @@ pub async fn open_core_dir() -> CmdResult<()> {
     tokio::task::spawn_blocking(|| -> CmdResult<()> {
         let core_dir = wrap_err!(tauri::utils::platform::current_exe())?;
         let core_dir = core_dir.parent().ok_or("failed to get core dir")?;
-        wrap_err!(open::that(core_dir))
+        wrap_err!(crate::infrastructure::desktop::open(core_dir))
     })
     .await
     .map_err(|err| err.to_string())?
@@ -64,7 +62,7 @@ pub async fn open_core_dir() -> CmdResult<()> {
 pub async fn open_logs_dir() -> CmdResult<()> {
     tokio::task::spawn_blocking(|| -> CmdResult<()> {
         let log_dir = wrap_err!(crate::utils::log_export::prepare_redacted_logs_export())?;
-        wrap_err!(open::that(log_dir))
+        wrap_err!(crate::infrastructure::desktop::open(log_dir))
     })
     .await
     .map_err(|err| err.to_string())?
@@ -79,7 +77,7 @@ pub async fn open_web_url(url: String) -> CmdResult<()> {
         ret_err!("Only http(s) URLs are allowed");
     }
 
-    tokio::task::spawn_blocking(move || wrap_err!(open::that(url)))
+    tokio::task::spawn_blocking(move || wrap_err!(crate::infrastructure::desktop::open(url)))
         .await
         .map_err(|err| err.to_string())?
 }
@@ -113,10 +111,10 @@ pub async fn copy_icon_file(path: String, name: String) -> CmdResult<String> {
         if file_path.exists() {
             match std::fs::copy(file_path, &dest_path) {
                 Ok(_) => Ok(dest_path.to_string_lossy().to_string()),
-                Err(err) => Err(err.to_string()),
+                Err(err) => Err(err.to_string().into()),
             }
         } else {
-            Err("file not found".to_string())
+            Err("file not found".into())
         }
     })
     .await
@@ -152,10 +150,12 @@ pub fn restart_app(app_handle: tauri::AppHandle) {
 
     log::info!(target: "app", "restart_app without supervisor, restarting directly");
     resolve::set_app_quitting(true);
-    let _ = resolve::save_window_size_position(&app_handle, true);
-    resolve::resolve_reset();
-    api::process::kill_children();
-    api::process::restart(&app_handle.env());
+    std::thread::spawn(move || {
+        let _ = crate::window::persist::save_window_state_before_shutdown(&app_handle);
+        resolve::resolve_reset();
+        api::process::kill_children();
+        api::process::restart(&app_handle.env());
+    });
 }
 
 static SHUTDOWN_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -202,7 +202,7 @@ fn shutdown_app(app_handle: tauri::AppHandle, exit_code: i32) {
 }
 
 fn run_shutdown(app_handle: tauri::AppHandle, exit_code: i32) {
-    let _ = resolve::save_window_size_position(&app_handle, true);
+    let _ = crate::window::persist::save_window_state_before_shutdown(&app_handle);
     if let Some(window) = app_handle.get_window("main") {
         let _ = window.hide();
     }

@@ -11,6 +11,41 @@ export interface SiteTestEntry {
 export type SiteTestResults = Record<string, SiteTestEntry>;
 
 let cache: SiteTestResults = {};
+let runId = 0;
+let sequence = 0;
+let expectedRuntime:
+  | { runtimeRevision: number; generation: number }
+  | undefined;
+
+export function setSiteTestRuntime(runtime: {
+  runtimeRevision: number;
+  generation: number;
+}) {
+  expectedRuntime = runtime;
+  clearSiteTestResults();
+}
+
+export function acceptSiteTestVersion(version: {
+  runId: number;
+  sequence: number;
+  runtimeRevision: number;
+  generation: number;
+}) {
+  if (
+    expectedRuntime &&
+    (version.runtimeRevision !== expectedRuntime.runtimeRevision ||
+      version.generation !== expectedRuntime.generation)
+  )
+    return false;
+  if (
+    version.runId < runId ||
+    (version.runId === runId && version.sequence < sequence)
+  )
+    return false;
+  runId = version.runId;
+  sequence = version.sequence;
+  return true;
+}
 const listeners = new Set<(results: SiteTestResults) => void>();
 
 const emit = () => {

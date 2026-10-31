@@ -1,4 +1,4 @@
-mod chain;
+pub mod chain;
 pub mod field;
 mod merge;
 pub mod script;
@@ -9,64 +9,40 @@ use self::field::*;
 use self::merge::*;
 use self::script::*;
 use self::tun::*;
-use crate::config::{Config, GLOBAL_SCRIPT_UID};
+use crate::config::IRuntime;
 use serde_yaml::{Mapping, Value};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-type ResultLog = Vec<(String, String)>;
+/// 编译所需的输入快照；订阅文件由基础设施层读取后传入。
+pub struct CompileInput {
+    pub clash_config: Mapping,
+    pub clash_core: Option<String>,
+    pub enable_tun: bool,
+    pub enable_builtin: bool,
+    pub current: Mapping,
+    pub global_script: Option<ChainItem>,
+    pub chain: Vec<ChainItem>,
+    pub profile_name: String,
+}
 
-/// Enhance mode
-/// 返回最终订阅、该订阅包含的键、和script执行的结果
-pub fn enhance() -> (Mapping, Vec<String>, HashMap<String, ResultLog>) {
-    // config.yaml 的订阅
-    let clash_config = { Config::clash().latest().0.clone() };
-
-    let (clash_core, enable_tun, enable_builtin) = {
-        let verge = Config::verge();
-        let verge = verge.latest();
-        (
-            verge.clash_core.clone(),
-            verge.enable_tun_mode.unwrap_or(false),
-            verge.enable_builtin_enhanced.unwrap_or(true),
-        )
-    };
-
-    // 从profiles里拿东西
-    let (mut config, global_script, chain, profile_name) = {
-        let profiles = Config::profiles();
-        let profiles = profiles.latest();
-
-        let current_uid = profiles.get_current();
-        let profile_name = current_uid
-            .as_ref()
-            .and_then(|uid| profiles.get_item(uid).ok())
-            .and_then(|item| item.name.clone())
-            .unwrap_or_default();
-        let current = profiles.current_mapping().unwrap_or_default();
-
-        let global_script = profiles
-            .get_item(&GLOBAL_SCRIPT_UID.to_string())
-            .ok()
-            .and_then(<Option<ChainItem>>::from);
-
-        let chain = match profiles.chain.as_ref() {
-            Some(chain) => chain
-                .iter()
-                .filter(|uid| is_not_global_script_uid(uid.as_str()))
-                .filter_map(|uid| profiles.get_item(uid).ok())
-                .filter_map(<Option<ChainItem>>::from)
-                .collect::<Vec<ChainItem>>(),
-            None => vec![],
-        };
-
-        (current, global_script, chain, profile_name)
-    };
+/// 按固定顺序编译显式输入，返回运行时配置与脚本诊断；不读取全局配置、不写文件。
+pub fn compile(input: CompileInput) -> IRuntime {
+    let CompileInput {
+        clash_config,
+        clash_core,
+        enable_tun,
+        enable_builtin,
+        current: mut config,
+        global_script,
+        chain,
+        profile_name,
+    } = input;
 
     let mut result_map = HashMap::new(); // 保存脚本日志
     let mut exists_keys = use_keys(&config); // 保存出现过的keys
 
-    // Run the fixed Global Script before the user-managed chain.
+    // 全局脚本先执行，用户增强链按用户指定顺序继续处理。
     if let Some(item) = global_script {
         if let ChainType::Script(script) = item.data {
             let mut logs = vec![];
@@ -143,7 +119,14 @@ pub fn enhance() -> (Mapping, Vec<String>, HashMap<String, ResultLog>) {
             });
     }
 
-    config = use_tun(config, enable_tun, source_has_tun, clash_tun_default);
+    let mut diagnostics = Vec::new();
+    config = use_tun(
+        config,
+        enable_tun,
+        source_has_tun,
+        clash_tun_default,
+        &mut diagnostics,
+    );
     config = apply_ipv6_to_dns(config);
     config = use_sort(config);
 
@@ -151,11 +134,12 @@ pub fn enhance() -> (Mapping, Vec<String>, HashMap<String, ResultLog>) {
     exists_set.extend(exists_keys.into_iter());
     exists_keys = exists_set.into_iter().collect();
 
-    (config, exists_keys, result_map)
-}
-
-fn is_not_global_script_uid(uid: &str) -> bool {
-    uid != GLOBAL_SCRIPT_UID
+    IRuntime {
+        config: Some(config),
+        exists_keys,
+        chain_logs: result_map,
+        diagnostics,
+    }
 }
 
 #[cfg(test)]
@@ -163,14 +147,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn enhance_chain_filter_skips_global_script_uid() {
-        let chain = ["merge-a", GLOBAL_SCRIPT_UID, "script-b"];
-        let filtered = chain
-            .into_iter()
-            .filter(|uid| is_not_global_script_uid(uid))
-            .collect::<Vec<_>>();
-
-        assert_eq!(filtered, vec!["merge-a", "script-b"]);
+    fn compiler_preserves_script_chain_and_application_override_order() {
+        let output = compile(CompileInput {
+            clash_config: serde_yaml::from_str("mode: rule\nipv6: false").unwrap(),
+            clash_core: Some("mihomo".into()),
+            enable_tun: false,
+            enable_builtin: false,
+            current: serde_yaml::from_str("mode: global\nmarker: source").unwrap(),
+            global_script: Some(ChainItem::to_script(
+                "global",
+                "function main(config) { config.marker = 'global'; return config; }",
+            )),
+            chain: vec![ChainItem::to_script(
+                "user",
+                "function main(config) { config.marker += '-user'; return config; }",
+            )],
+            profile_name: "fixture".into(),
+        });
+        let config = output.config.unwrap();
+        assert_eq!(config.get("marker").unwrap().as_str(), Some("global-user"));
+        assert_eq!(config.get("mode").unwrap().as_str(), Some("rule"));
+        assert_eq!(
+            config.get("dns").unwrap().get("ipv6").unwrap().as_bool(),
+            Some(false)
+        );
     }
 }
 

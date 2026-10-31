@@ -1,21 +1,26 @@
 use super::CmdResult;
-use crate::{config::*, core::scheduler, feat, wrap_err};
+use crate::{
+    application::{configuration, diagnostics},
+    config::*,
+    core::scheduler,
+    wrap_err,
+};
 
 #[tauri::command(async)]
 pub fn get_verge_config() -> CmdResult<IVerge> {
-    Ok(Config::verge().data().clone())
+    Ok(Config::verge())
 }
 
 #[tauri::command]
 pub async fn patch_verge_config(payload: IVerge) -> CmdResult {
-    wrap_err!(feat::patch_verge(payload).await)
+    wrap_err!(configuration::patch_verge(payload).await)
 }
 
 #[tauri::command]
-pub async fn test_delay(url: String) -> CmdResult<feat::TestDelayResult> {
-    Ok(feat::test_delay(url)
+pub async fn test_delay(url: String) -> CmdResult<diagnostics::TestDelayResult> {
+    Ok(diagnostics::test_delay(url)
         .await
-        .unwrap_or(feat::TestDelayResult {
+        .unwrap_or(diagnostics::TestDelayResult {
             delay: 10000u32,
             proxy: None,
         }))
@@ -23,14 +28,14 @@ pub async fn test_delay(url: String) -> CmdResult<feat::TestDelayResult> {
 
 /// 最近一轮站点检测快照（结果 + 更新时间）
 #[tauri::command(async)]
-pub fn get_auto_site_test_results() -> CmdResult<feat::SiteTestSnapshot> {
-    Ok(feat::latest_site_test_snapshot())
+pub fn get_auto_site_test_results() -> CmdResult<diagnostics::SiteTestSnapshot> {
+    Ok(diagnostics::latest_site_test_snapshot())
 }
 
 /// 立即触发一轮站点检测（测试页 Test All 调用）
 #[tauri::command]
 pub async fn trigger_auto_site_test() -> CmdResult {
-    wrap_err!(feat::run_auto_site_test().await)
+    wrap_err!(diagnostics::run_auto_site_test().await)
 }
 
 #[derive(serde::Serialize)]

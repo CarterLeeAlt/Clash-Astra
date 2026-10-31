@@ -1,4 +1,6 @@
 pub mod create;
+#[cfg(target_os = "windows")]
+pub mod icons;
 pub mod persist;
 pub mod show;
 pub mod state;

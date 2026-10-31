@@ -1,20 +1,6 @@
-// Keep these constants aligned with src-tauri/src/core/win_service.rs.
-pub const SERVICE_NAME: &str = "clash-astra-service";
-pub const SERVICE_DISPLAY_NAME: &str = "Clash Astra Service";
-pub const SERVICE_BINARY: &str = "clash-astra-service.exe";
-pub const INSTALL_HELPER: &str = "clash-astra-service-install.exe";
-pub const UNINSTALL_HELPER: &str = "clash-astra-service-uninstall.exe";
-pub const FIREWALL_HELPER: &str = "clash-astra-firewall-helper.exe";
-
-pub const API_ADDR: &str = "127.0.0.1:33211";
-pub const API_HEALTH: &str = "/health";
-pub const API_GET_CLASH: &str = "/get_clash";
-pub const API_START_CLASH: &str = "/start_clash";
-pub const API_STOP_CLASH: &str = "/stop_clash";
-pub const API_STOP_SERVICE: &str = "/stop_service";
-
-pub const API_TOKEN_DIR: &str = "service-data";
-pub const API_TOKEN_FILE: &str = "service-api-token";
+#[path = "../../src/service_protocol.rs"]
+mod protocol;
+pub use protocol::*;
 
 pub fn api_token_path() -> Option<std::path::PathBuf> {
     std::env::current_exe()

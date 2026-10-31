@@ -32,9 +32,11 @@ async fn run_guard_cycle() -> Result<()> {
 }
 
 fn run_guard_cycle_blocking() -> Result<()> {
+    let Some(_change) = crate::application::background_operation() else {
+        return reschedule_guard(1);
+    };
     let (enable, guard, guard_duration, bypass) = {
         let verge = Config::verge();
-        let verge = verge.latest();
         (
             verge.enable_system_proxy.unwrap_or(false),
             verge.enable_proxy_guard.unwrap_or(false),
@@ -66,9 +68,8 @@ fn run_guard_cycle_blocking() -> Result<()> {
 
     let port = {
         Config::verge()
-            .latest()
             .verge_mixed_port
-            .unwrap_or(Config::clash().data().get_mixed_port())
+            .unwrap_or(Config::clash().get_mixed_port())
     };
 
     let sysproxy = Sysproxy {
@@ -89,7 +90,6 @@ fn run_guard_cycle_blocking() -> Result<()> {
         let _operation = Sysopt::global().proxy_operation.lock();
         let still_enabled = {
             let verge = Config::verge();
-            let verge = verge.latest();
             verge.enable_system_proxy.unwrap_or(false) && verge.enable_proxy_guard.unwrap_or(false)
         };
         if !still_enabled {
@@ -127,6 +127,9 @@ fn run_guard_cycle_blocking() -> Result<()> {
 }
 
 fn reschedule_guard(interval_secs: u64) -> Result<()> {
+    if crate::window::is_app_quitting() {
+        return Ok(());
+    }
     OneShotScheduler::global().schedule_once(
         GUARD_TASK_KEY,
         Duration::from_secs(interval_secs.max(1)),
@@ -151,7 +154,6 @@ impl Sysopt {
         let scheduler = OneShotScheduler::global();
         let (enable, guard) = {
             let verge = Config::verge();
-            let verge = verge.latest();
             (
                 verge.enable_system_proxy.unwrap_or(false),
                 verge.enable_proxy_guard.unwrap_or(false),

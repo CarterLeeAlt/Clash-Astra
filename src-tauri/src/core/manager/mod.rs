@@ -122,11 +122,11 @@ impl CoreManager {
     }
 
     /// 检查订阅是否正确
-    pub fn check_config(&self) -> Result<()> {
-        let config_path = Config::generate_file(ConfigType::Check)?;
+    pub fn check_config(&self, snapshot: &ConfigSnapshot) -> Result<()> {
+        let config_path = snapshot.write_runtime(ConfigType::Check)?;
         let config_path = dirs::path_to_str(&config_path)?;
 
-        let clash_core = { Config::verge().latest().clash_core.clone() };
+        let clash_core = snapshot.verge.clash_core.clone();
         let clash_core = clash_core.unwrap_or_else(|| MIHOMO_CORE.into());
 
         let app_dir = dirs::app_home_dir()?;
@@ -151,22 +151,16 @@ impl CoreManager {
 
     /// 更新proxies那些
     /// 如果涉及端口和外部控制则需要重启
-    pub async fn update_config(&self) -> Result<()> {
+    pub async fn update_config(&self, snapshot: &ConfigSnapshot) -> Result<()> {
         log::debug!(target: "app", "try to update clash config");
 
-        // 更新订阅
-        Config::generate()?;
-
-        // 检查订阅是否正常
-        self.check_config()?;
-
         // 更新运行时订阅
-        let path = Config::generate_file(ConfigType::Run)?;
+        let path = snapshot.write_runtime(ConfigType::Run)?;
         let path = dirs::path_to_str(&path)?;
 
         // 发送请求 发送5次
         for i in 0..5 {
-            match clash_api::put_configs(path).await {
+            match clash_api::put_configs_for(snapshot.clash.get_client_info(), path).await {
                 Ok(_) => break,
                 Err(err) => {
                     if i < 4 {

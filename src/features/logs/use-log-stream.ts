@@ -12,6 +12,7 @@ import {
 } from "@/services/states";
 import { useWebsocket } from "@/hooks/use-websocket";
 import { buildControllerWsUrl } from "@/utils/controller";
+import { FallbackPoller } from "@/shared/async/fallback-poller";
 import {
   MAX_LOG_NUM,
   mergeLogBatch,
@@ -30,22 +31,21 @@ export const useLogStream = () => {
   const setLogConnState = useSetRecoilState(atomLogConnState);
 
   const historyReqIdRef = useRef(0);
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackPollerRef = useRef<FallbackPoller | null>(null);
+  const fallbackRunRef = useRef<(isCurrent: () => boolean) => Promise<void>>(
+    async () => {}
+  );
+  if (!fallbackPollerRef.current) {
+    fallbackPollerRef.current = new FallbackPoller(
+      (isCurrent) => fallbackRunRef.current(isCurrent),
+      FALLBACK_SYNC_INTERVAL
+    );
+  }
   const reconnectHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<ILogItem[]>([]);
-  const unmountedRef = useRef(false);
-
-  useEffect(() => {
-    // StrictMode 的开发模式会 mount -> unmount -> mount，挂载时需复位
-    unmountedRef.current = false;
-    return () => {
-      unmountedRef.current = true;
-    };
-  }, []);
-
   const wsUrl = useMemo(
     () =>
       buildControllerWsUrl(
@@ -57,9 +57,7 @@ export const useLogStream = () => {
   );
 
   const clearFallbackTimer = useCallback(() => {
-    if (!fallbackTimerRef.current) return;
-    clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = null;
+    fallbackPollerRef.current?.stop();
   }, []);
 
   const clearReconnectHintTimer = useCallback(() => {
@@ -141,7 +139,7 @@ export const useLogStream = () => {
         const data = JSON.parse(event.data) as ILogItem;
         mergeLogs([normalizeLogItem(data)]);
       } catch {
-        // ignore invalid event payload
+        // 单条无效消息不影响后续日志流。
       }
     },
     {
@@ -170,40 +168,26 @@ export const useLogStream = () => {
     }
   );
 
-  const scheduleFallbackSync = useCallback(() => {
-    if (!enableLog) return;
-    if (fallbackTimerRef.current) return;
-
-    fallbackTimerRef.current = setTimeout(async () => {
-      fallbackTimerRef.current = null;
-      await pullHistory("fallback");
-      // 探活：controller 不可达而 WS 仍处于 OPEN，说明是半开死链（本地回环下内核卡死），强制重建
-      try {
-        await getVersion();
-      } catch {
-        if (wsUrl && isOpen()) {
-          enterReconnectingState();
-          disconnect();
-          connect(wsUrl);
-        }
+  fallbackRunRef.current = async (isCurrent) => {
+    await pullHistory("fallback");
+    if (!isCurrent()) return;
+    // 探活：controller 不可达而 WS 仍处于 OPEN，说明是半开死链（本地回环下内核卡死），强制重建
+    try {
+      await getVersion();
+    } catch {
+      if (isCurrent() && wsUrl && isOpen()) {
+        enterReconnectingState();
+        disconnect();
+        connect(wsUrl);
       }
-      // WS 在等待期间已重连成功（onOpen 只能清掉已经为空的定时器），停止轮询
-      if (unmountedRef.current || isOpen()) return;
-      scheduleFallbackSyncRef.current();
-    }, FALLBACK_SYNC_INTERVAL);
-  }, [
-    connect,
-    disconnect,
-    enableLog,
-    enterReconnectingState,
-    isOpen,
-    pullHistory,
-    wsUrl,
-  ]);
+    }
+    // WS 在等待期间已重连成功（onOpen 只能清掉已经为空的定时器），停止轮询
+    if (isCurrent() && isOpen()) fallbackPollerRef.current?.stop();
+  };
 
-  // 递归调度需要引用自身，用 ref 避免自引用导致的闭包过期
-  const scheduleFallbackSyncRef = useRef(scheduleFallbackSync);
-  scheduleFallbackSyncRef.current = scheduleFallbackSync;
+  const scheduleFallbackSync = useCallback(() => {
+    if (enableLog) fallbackPollerRef.current?.start();
+  }, [enableLog]);
 
   // listen 是异步注册的：effect 在注册完成前就被清理时，必须在 resolve 后立即取消，
   // 否则旧监听永远留着，还会带着旧闭包（旧 wsUrl）把共享 WS 重连到旧地址。
@@ -211,6 +195,7 @@ export const useLogStream = () => {
     let disposed = false;
     let unlisten: null | (() => void) = null;
     listen<ILogItem>("verge://app-log", (event) => {
+      if (disposed) return;
       mergeLogs([normalizeLogItem(event.payload ?? {})]);
     })
       .then((fn) => {
@@ -228,36 +213,23 @@ export const useLogStream = () => {
   }, [mergeLogs]);
 
   useEffect(() => {
-    let disposed = false;
-    let unlisten: null | (() => void) = null;
-    listen("verge://refresh-clash-config", () => {
-      if (!enableLog) return;
-      enterReconnectingState();
-      void pullHistory("fallback");
-      if (wsUrl) {
-        disconnect();
-        connect(wsUrl);
-      }
-    })
-      .then((fn) => {
-        if (disposed) fn();
-        else unlisten = fn;
-      })
-      .catch((err) => {
-        console.warn("[log] subscribe refresh-clash-config failed", err);
-      });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
+    const invalidate = () => {
+      historyReqIdRef.current += 1;
+      clearFallbackTimer();
+      clearFlushTimer();
+      pendingRef.current = [];
+      disconnect();
+      if (enableLog) enterReconnectingState();
     };
+    window.addEventListener("astra://runtime-changed", invalidate);
+    return () =>
+      window.removeEventListener("astra://runtime-changed", invalidate);
   }, [
-    connect,
+    clearFallbackTimer,
+    clearFlushTimer,
     disconnect,
     enableLog,
     enterReconnectingState,
-    pullHistory,
-    wsUrl,
   ]);
 
   useEffect(() => {
@@ -268,22 +240,18 @@ export const useLogStream = () => {
       disconnect();
       setLogConnState("paused");
       setLogError("Log stream paused");
-      return;
-    }
-
-    if (!wsUrl) {
+    } else if (!wsUrl) {
       historyReqIdRef.current += 1;
       enterReconnectingState();
       disconnect();
       setLogError("Core not running or external-controller is not ready");
       void pullHistory("fallback");
       scheduleFallbackSync();
-      return;
+    } else {
+      setLogConnState("reconnecting");
+      connect(wsUrl);
+      void pullHistory("manual");
     }
-
-    setLogConnState("reconnecting");
-    connect(wsUrl);
-    void pullHistory("manual");
 
     return () => {
       historyReqIdRef.current += 1;
@@ -306,6 +274,8 @@ export const useLogStream = () => {
     setLogConnState,
     setLogError,
     wsUrl,
+    clashInfo?.runtime_revision,
+    clashInfo?.generation,
   ]);
 
   return { clearLogs };

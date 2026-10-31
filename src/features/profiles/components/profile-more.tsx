@@ -54,7 +54,7 @@ interface Props {
   fixedColor?: string;
 }
 
-// profile enhanced item
+// 展示脚本或合并增强项及其在增强链中的位置。
 export const ProfileMore = (props: Props) => {
   const {
     selected,

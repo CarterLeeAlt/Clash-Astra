@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appWindow } from "@tauri-apps/api/window";
 import { mutate } from "swr";
-import { getAxios } from "@/services/api";
 import {
   getAutoSiteTestResults,
   getWindowStyleConfig,
@@ -12,9 +11,13 @@ import {
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { queryKeys } from "@/shared/query/keys";
 import { invalidateClashRuntime } from "@/shared/query/invalidate";
+import { invalidateController } from "@/infrastructure/mihomo/client";
+import delayManager from "@/services/delay";
 import {
   setSiteTestResults,
   updateSiteTestResult,
+  acceptSiteTestVersion,
+  setSiteTestRuntime,
 } from "@/features/test/site-test-results";
 import getSystem from "@/utils/get-system";
 
@@ -60,17 +63,45 @@ export const useAppEvents = () => {
 
     const unlistenTasks: Promise<UnlistenFn>[] = [];
 
+    let revision = -1;
     unlistenTasks.push(
-      listen("verge://refresh-clash-config", async () => {
-        // the clash info may be updated
-        await getAxios(true);
-        invalidateClashRuntime();
+      listen<{
+        revision: number;
+        runtimeRevision: number;
+        generation: number;
+        runtimeChanged: boolean;
+        profilesChanged: boolean;
+        settingsChanged: boolean;
+      }>("astra://configuration-committed", ({ payload }) => {
+        if (!payload || payload.revision <= revision) return;
+        revision = payload.revision;
+        if (payload.settingsChanged) void mutate(queryKeys.vergeConfig);
+        if (payload.profilesChanged) {
+          void mutate(queryKeys.profiles);
+          void mutate(queryKeys.proxies);
+        }
+        if (payload.runtimeChanged) {
+          invalidateController();
+          delayManager.invalidate();
+          setSiteTestRuntime(payload);
+          void mutate(queryKeys.runtimeLogs);
+          invalidateClashRuntime();
+          window.dispatchEvent(new CustomEvent("astra://runtime-changed"));
+        }
       })
     );
 
     unlistenTasks.push(
-      listen("verge://refresh-verge-config", () =>
-        mutate(queryKeys.vergeConfig)
+      listen<{ runtimeRevision: number; generation: number }>(
+        "verge://refresh-clash-config",
+        ({ payload }) => {
+          // 内核独立重启不改变配置版本，但会使连接与测速缓存失效。
+          delayManager.invalidate();
+          setSiteTestRuntime(payload);
+          invalidateController();
+          invalidateClashRuntime();
+          window.dispatchEvent(new CustomEvent("astra://runtime-changed"));
+        }
       )
     );
 
@@ -93,28 +124,35 @@ export const useAppEvents = () => {
     // 站点检测结果放在全局：切页时页面卸载也不会丢，回来直接读缓存。
     // 先注册监听再拉快照，避免两者之间到达的结果被丢掉。
     unlistenTasks.push(
-      listen<{ url: string; result: ITestDelayResult }>(
-        "verge://auto-site-test-result",
-        ({ payload }) => {
-          if (payload?.url && payload.result) {
-            updateSiteTestResult(payload.url, payload.result);
-          }
+      listen<{
+        url: string;
+        result: ITestDelayResult;
+        runId: number;
+        sequence: number;
+        updatedAt: number;
+        runtimeRevision: number;
+        generation: number;
+      }>("verge://auto-site-test-result", ({ payload }) => {
+        if (payload?.url && payload.result && acceptSiteTestVersion(payload)) {
+          updateSiteTestResult(payload.url, payload.result, payload.updatedAt);
         }
-      )
+      })
     );
 
     unlistenTasks.push(
-      listen<Record<string, ITestDelayResult>>(
+      listen<import("@/services/cmds").ISiteTestSnapshot>(
         "verge://auto-site-test-results",
         ({ payload }) => {
-          setSiteTestResults(payload ?? {});
+          if (payload && acceptSiteTestVersion(payload))
+            setSiteTestResults(payload.results, payload.updatedAt);
         }
       )
     );
 
-    getAutoSiteTestResults()
+    Promise.all(unlistenTasks)
+      .then(() => getAutoSiteTestResults())
       .then((snapshot) => {
-        if (snapshot) {
+        if (snapshot && acceptSiteTestVersion(snapshot)) {
           setSiteTestResults(
             snapshot.results ?? {},
             snapshot.updatedAt || Date.now()

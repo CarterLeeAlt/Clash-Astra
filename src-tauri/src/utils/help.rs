@@ -10,12 +10,8 @@ use std::{
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{
-    api::shell::{open, Program},
-    Manager,
-};
 
-/// read data from yaml as struct T
+/// 读取 YAML 并反序列化为指定结构。
 pub fn read_yaml<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
     if !path.exists() {
         bail!("file not found \"{}\"", path.display());
@@ -32,7 +28,7 @@ pub fn read_yaml<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
     })
 }
 
-/// read mapping from yaml fix #165
+/// 读取 YAML 映射并应用合并键，拒绝非映射根节点。
 pub fn read_merge_mapping(path: &PathBuf) -> Result<Mapping> {
     let mut val: Value = read_yaml(path)?;
     val.apply_merge()
@@ -48,7 +44,7 @@ pub fn read_merge_mapping(path: &PathBuf) -> Result<Mapping> {
 }
 
 /// 保留损坏的配置文件，避免下一次保存直接覆盖，便于事后排查。
-pub fn quarantine_corrupt_file(path: &PathBuf) {
+pub fn quarantine_corrupt_file(path: &PathBuf) -> Result<()> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
@@ -58,22 +54,17 @@ pub fn quarantine_corrupt_file(path: &PathBuf) {
         .and_then(|name| name.to_str())
         .unwrap_or("config");
     let backup = path.with_file_name(format!("{file_name}.corrupt-{timestamp}"));
-    match fs::rename(path, &backup) {
-        Ok(()) => log::warn!(
-            target: "app",
-            "corrupt config preserved at {}",
-            backup.display()
-        ),
-        Err(err) => log::warn!(
-            target: "app",
-            "failed to preserve corrupt config {}: {err}",
+    fs::rename(path, &backup).with_context(|| {
+        format!(
+            "failed to preserve corrupt configuration {}",
             path.display()
-        ),
-    }
+        )
+    })?;
+    log::warn!(target: "app", "corrupt config preserved at {}", backup.display());
+    Ok(())
 }
 
-/// save the data to the file
-/// can set `prefix` string to add some comments
+/// 将结构序列化为 YAML 后原子写入；prefix 用于文件头说明。
 pub fn save_yaml<T: Serialize>(path: &PathBuf, data: &T, prefix: Option<&str>) -> Result<()> {
     let data_str = serde_yaml::to_string(data)?;
 
@@ -88,6 +79,12 @@ pub fn save_yaml<T: Serialize>(path: &PathBuf, data: &T, prefix: Option<&str>) -
 }
 
 pub fn write_file_atomic(path: &PathBuf, data: &[u8]) -> Result<()> {
+    if path.exists() && !path.is_file() {
+        bail!(
+            "refuse to replace a non-file configuration path: {}",
+            path.display()
+        );
+    }
     let parent = path
         .parent()
         .ok_or(anyhow!("failed to get parent dir for {}", path.display()))?;
@@ -105,7 +102,10 @@ pub fn write_file_atomic(path: &PathBuf, data: &[u8]) -> Result<()> {
     let tmp_path = parent.join(tmp_name);
 
     let write_result = (|| -> Result<()> {
-        let mut file = fs::File::create(&tmp_path)
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&tmp_path)
             .with_context(|| format!("failed to create temp file '{}'", tmp_path.display()))?;
         file.write_all(data)
             .with_context(|| format!("failed to write temp file '{}'", tmp_path.display()))?;
@@ -122,40 +122,8 @@ pub fn write_file_atomic(path: &PathBuf, data: &[u8]) -> Result<()> {
     match fs::rename(&tmp_path, path) {
         Ok(_) => Ok(()),
         Err(err) => {
-            #[cfg(target_os = "windows")]
-            {
-                if path.exists() {
-                    let backup_name = format!(".{}.{}.bak", nanoid!(6, &ALPHABET), nanos);
-                    let backup_path = parent.join(backup_name);
-
-                    fs::rename(path, &backup_path).with_context(|| {
-                        format!(
-                            "failed to move existing file '{}' to backup '{}'",
-                            path.display(),
-                            backup_path.display()
-                        )
-                    })?;
-
-                    match fs::rename(&tmp_path, path) {
-                        Ok(_) => {
-                            let _ = fs::remove_file(&backup_path);
-                            return Ok(());
-                        }
-                        Err(rename_err) => {
-                            let _ = fs::rename(&backup_path, path);
-                            let _ = fs::remove_file(&tmp_path);
-                            return Err(rename_err).with_context(|| {
-                                format!(
-                                    "failed to replace file '{}' with temp file '{}'",
-                                    path.display(),
-                                    tmp_path.display()
-                                )
-                            });
-                        }
-                    }
-                }
-            }
-
+            // 同目录替换失败时保留原文件，不能通过搬走原文件制造缺失窗口；
+            // 恢复记录自身也使用本方法，必须具备相同的完整性保证。
             let _ = fs::remove_file(&tmp_path);
             Err(err).with_context(|| {
                 format!(
@@ -174,14 +142,13 @@ const ALPHABET: [char; 62] = [
     'V', 'W', 'X', 'Y', 'Z',
 ];
 
-/// generate the uid
+/// 生成带类型前缀的条目标识。
 pub fn get_uid(prefix: &str) -> String {
     let id = nanoid!(11, &ALPHABET);
     format!("{prefix}{id}")
 }
 
-/// parse the string
-/// xxx=123123; => 123123
+/// 解析分号分隔的键值参数，例如 xxx=123123 中的数值。
 pub fn parse_str<T: FromStr>(target: &str, key: &str) -> Option<T> {
     target.split(';').map(str::trim).find_map(|s| {
         let mut parts = s.splitn(2, '=');
@@ -192,7 +159,7 @@ pub fn parse_str<T: FromStr>(target: &str, key: &str) -> Option<T> {
     })
 }
 
-/// get the last part of the url, if not found, return empty string
+/// 取 URL 最后的路径段并解码；缺少该段时返回 None。
 pub fn get_last_part_and_decode(url: &str) -> Option<String> {
     let path = url.split('?').next().unwrap_or(""); // Splits URL and takes the path part
     let segments: Vec<&str> = path.split('/').collect();
@@ -231,23 +198,6 @@ pub fn resolve_profile_path(file: &str) -> Result<PathBuf> {
     let base = dirs::app_profiles_dir()?;
     Ok(base.join(file))
 }
-/// open file
-/// use vscode by default
-pub fn open_file(app: tauri::AppHandle, path: PathBuf) -> Result<()> {
-    let code = "code";
-
-    let _ = match Program::from_str(code) {
-        Ok(code) => open(&app.shell_scope(), path.to_string_lossy(), Some(code)),
-        Err(err) => {
-            log::error!(target: "app", "Can't find VScode `{err}`");
-            // default open
-            open(&app.shell_scope(), path.to_string_lossy(), None)
-        }
-    };
-
-    Ok(())
-}
-
 #[macro_export]
 macro_rules! error {
     ($result: expr) => {
@@ -279,22 +229,22 @@ macro_rules! trace_err {
     }
 }
 
-/// wrap the anyhow error
-/// transform the error to String
+/// IPC 边界保留错误链及事务阶段，前端按结构化字段呈现错误。
 #[macro_export]
 macro_rules! wrap_err {
     ($stat: expr) => {
         match $stat {
             Ok(a) => Ok(a),
             Err(err) => {
-                log::error!(target: "app", "{}", err.to_string());
-                Err(format!("{}", err.to_string()))
+                let error = anyhow::Error::from(err);
+                log::error!(target: "app", "{error:#}");
+                Err(crate::commands::CommandError::from(error))
             }
         }
     };
 }
 
-/// return the string literal error
+/// 将字面错误转换为统一的 IPC 错误。
 #[macro_export]
 macro_rules! ret_err {
     ($str: expr) => {

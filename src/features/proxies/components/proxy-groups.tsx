@@ -1,0 +1,167 @@
+import { forwardRef, useRef } from "react";
+import { useLockFn } from "ahooks";
+import {
+  Virtuoso,
+  type ScrollerProps,
+  type VirtuosoHandle,
+} from "react-virtuoso";
+import { providerHealthCheck } from "@/services/api";
+import { useProfiles } from "@/hooks/use-profiles";
+import { useVerge } from "@/hooks/use-verge";
+import { BaseEmpty } from "@/components/base";
+import { useRenderList } from "./use-render-list";
+import { ProxyRender } from "./proxy-render";
+import delayManager from "@/services/delay";
+import { selectProxy } from "@/services/cmds";
+import { Notice, formatNoticeMessage } from "@/components/base";
+
+interface Props {
+  mode: string;
+}
+
+const VirtuosoHeader = () => <div style={{ height: 8 }} />;
+const VirtuosoFooter = () => <div style={{ height: 9 }} />;
+
+type ProxyGroupsScrollerProps = ScrollerProps & { className?: string };
+
+const ProxyGroupsScroller = forwardRef<
+  HTMLDivElement,
+  ProxyGroupsScrollerProps
+>(({ className, ...props }, ref) => (
+  <div
+    {...props}
+    ref={ref}
+    className={[className, "proxy-groups-virtuoso-scroller"]
+      .filter(Boolean)
+      .join(" ")}
+  />
+));
+
+ProxyGroupsScroller.displayName = "ProxyGroupsScroller";
+
+const virtuosoComponents = {
+  Header: VirtuosoHeader,
+  Footer: VirtuosoFooter,
+  Scroller: ProxyGroupsScroller,
+};
+
+export const ProxyGroups = (props: Props) => {
+  const { mode } = props;
+
+  const { renderList, onProxies, onHeadState } = useRenderList(mode);
+
+  const { verge } = useVerge();
+  const { current } = useProfiles();
+  const rawTimeout = Number(verge?.default_latency_timeout);
+  const timeout =
+    Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
+
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+
+  const handleChangeProxy = useLockFn(
+    async (group: IProxyGroupItem, proxy: IProxyItem) => {
+      if (group.type !== "Selector" && group.type !== "Fallback") return;
+
+      try {
+        if (!current) throw new Error("No current subscription");
+        await selectProxy(current.uid, group.name, proxy.name);
+        onProxies();
+        window.dispatchEvent(new CustomEvent("verge://connections-refresh"));
+      } catch (error) {
+        Notice.error(formatNoticeMessage(error));
+      }
+    }
+  );
+
+  const handleCheckAll = async (groupName: string) => {
+    const task = delayManager.startGroupCheck(groupName);
+    const proxies = renderList
+      .filter(
+        (e) => e.group?.name === groupName && (e.type === 2 || e.type === 4)
+      )
+      .flatMap((e) => e.proxyCol || e.proxy!)
+      .filter(Boolean);
+
+    const providers = new Set(proxies.map((p) => p!.provider!).filter(Boolean));
+
+    if (providers.size) {
+      const providerNames = proxies
+        .filter((p) => p!.provider)
+        .map((p) => p!.name);
+
+      delayManager.setGroupPending(providerNames, groupName, task);
+
+      Promise.allSettled(
+        [...providers].map((p) => providerHealthCheck(p))
+      ).then(() => {
+        if (delayManager.isCurrentGroupCheck(groupName, task)) {
+          delayManager.clearGroupDelay(providerNames, groupName, task);
+          onProxies();
+        }
+      });
+    }
+
+    const names = proxies.filter((p) => !p!.provider).map((p) => p!.name);
+    const isCurrent = await delayManager.checkListDelay(
+      names,
+      groupName,
+      timeout,
+      undefined,
+      task
+    );
+
+    if (isCurrent) onProxies();
+  };
+
+  const handleLocation = (group: IProxyGroupItem) => {
+    if (!group) return;
+    const { name, now } = group;
+
+    const index = renderList.findIndex(
+      (e) =>
+        e.group?.name === name &&
+        ((e.type === 2 && e.proxy?.name === now) ||
+          (e.type === 4 && e.proxyCol?.some((p) => p.name === now)))
+    );
+
+    if (index >= 0) {
+      virtuosoRef.current?.scrollToIndex?.({
+        index,
+        align: "center",
+        behavior: "smooth",
+      });
+    }
+  };
+
+  if (mode === "direct") {
+    return <BaseEmpty text="Direct Mode" />;
+  }
+
+  return (
+    <Virtuoso
+      ref={virtuosoRef}
+      className="proxy-groups-virtuoso"
+      style={{ height: "100%" }}
+      totalCount={renderList.length}
+      defaultItemHeight={64}
+      increaseViewportBy={256}
+      components={virtuosoComponents}
+      itemContent={(index) => {
+        // 列表缩短（收起分组、过滤、换订阅）时 Virtuoso 可能晚一帧仍按旧 index 渲染
+        const item = renderList[index];
+        if (!item) return null;
+        return (
+          <ProxyRender
+            key={item.key}
+            item={item}
+            indent={mode === "rule" || mode === "script"}
+            onLocation={handleLocation}
+            onCheckAll={handleCheckAll}
+            onHeadState={onHeadState}
+            onChangeProxy={handleChangeProxy}
+          />
+        );
+      }}
+    />
+  );
+};

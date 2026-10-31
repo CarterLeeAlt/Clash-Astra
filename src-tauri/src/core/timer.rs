@@ -3,9 +3,9 @@
 //! 每个开启了更新间隔的订阅都会在 [`crate::core::scheduler`] 中注册一个
 //! `profile.update:<uid>` 周期任务。配置变化时调用 [`sync`] 同步任务集合。
 
+use crate::application::profiles;
 use crate::config::Config;
 use crate::core::scheduler::{JobFuture, Schedule, Scheduler};
-use crate::feat;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +14,11 @@ const TASK_PREFIX: &str = "profile.update:";
 
 /// 按当前订阅配置注册、更新或移除任务。
 pub fn sync() -> Result<()> {
-    let desired = gen_map();
+    sync_with(&Config::snapshot().profiles)
+}
+
+pub fn sync_with(profiles: &crate::config::IProfiles) -> Result<()> {
+    let desired = gen_map(profiles);
     let scheduler = Scheduler::global();
 
     for key in scheduler.keys_with_prefix(TASK_PREFIX) {
@@ -35,7 +39,7 @@ pub fn sync() -> Result<()> {
                 let uid = uid.clone();
                 let future: JobFuture = Box::pin(async move {
                     log::info!(target: "app", "running scheduled task `profile.update` uid={uid}");
-                    feat::update_profile(uid, None).await
+                    profiles::update_profile(uid, None).await
                 });
                 future
             })
@@ -55,7 +59,6 @@ pub fn sync() -> Result<()> {
 pub fn catch_up() -> Result<()> {
     let cur_timestamp = chrono::Local::now().timestamp();
     let profiles = Config::profiles();
-    let profiles = profiles.latest();
 
     let Some(items) = profiles.get_items() else {
         return Ok(());
@@ -95,11 +98,8 @@ pub fn catch_up() -> Result<()> {
     Ok(())
 }
 
-fn gen_map() -> HashMap<String, u64> {
+fn gen_map(profiles: &crate::config::IProfiles) -> HashMap<String, u64> {
     let mut map = HashMap::new();
-
-    let profiles = Config::profiles();
-    let profiles = profiles.latest();
 
     let Some(items) = profiles.get_items() else {
         return map;

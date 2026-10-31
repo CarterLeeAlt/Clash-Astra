@@ -37,7 +37,7 @@ const SettingClash = ({ onError }: Props) => {
   const { t } = useTranslation();
 
   const { clash, version, mutateClash, patchClash } = useClash();
-  const { verge, mutateVerge, patchVerge } = useVerge();
+  const { verge, patchVerge } = useVerge();
 
   const { ipv6, "allow-lan": allowLan, "log-level": logLevel } = clash ?? {};
 
@@ -51,9 +51,6 @@ const SettingClash = ({ onError }: Props) => {
   const onChangeData = (patch: Partial<IConfigData>) => {
     mutateClash((old) => ({ ...(old! || {}), ...patch }), false);
   };
-  const onChangeVerge = (patch: Partial<IVergeConfig>) => {
-    mutateVerge({ ...verge, ...patch }, false);
-  };
   const onUpdateGeo = useLockFn(async () => {
     try {
       await updateGeoData();
@@ -63,18 +60,7 @@ const SettingClash = ({ onError }: Props) => {
     }
   });
   const onGuardAllowLan = useLockFn(async (enabled: boolean) => {
-    try {
-      await patchClash({ "allow-lan": enabled });
-    } catch (err) {
-      if (isWIN) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (/administrator approval|was denied|UAC/i.test(message)) {
-          throw new Error(t("LAN Firewall Admin Required"));
-        }
-        throw new Error(t("LAN Firewall Error"));
-      }
-      throw err;
-    }
+    await patchClash({ "allow-lan": enabled });
   });
 
   return (
@@ -135,10 +121,13 @@ const SettingClash = ({ onError }: Props) => {
             <IconButton
               color={enable_random_port ? "primary" : "inherit"}
               size="small"
-              onClick={() => {
-                Notice.success("Restart required to apply changes.");
-                onChangeVerge({ enable_random_port: !enable_random_port });
-                patchVerge({ enable_random_port: !enable_random_port });
+              onClick={async () => {
+                try {
+                  await patchVerge({ enable_random_port: !enable_random_port });
+                  Notice.success("Restart required to apply changes.");
+                } catch (error) {
+                  Notice.error(formatNoticeMessage(error));
+                }
               }}
             >
               <Shuffle

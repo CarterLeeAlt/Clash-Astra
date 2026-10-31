@@ -1,4 +1,3 @@
-use crate::core::handle::Handle;
 use serde_yaml::{Mapping, Value};
 
 macro_rules! revise {
@@ -8,7 +7,7 @@ macro_rules! revise {
     };
 }
 
-// if key not exists then append value
+// 只为缺失的键补默认值，保留订阅显式配置。
 macro_rules! append {
     ($map: expr, $key: expr, $val: expr) => {
         let ret_key = Value::String($key.into());
@@ -23,12 +22,13 @@ pub fn use_tun(
     enable: bool,
     source_has_tun: bool,
     default_tun: Mapping,
+    diagnostics: &mut Vec<String>,
 ) -> Mapping {
     let tun_key = Value::from("tun");
     let tun_val = config.get(&tun_key);
     let tun_existed = tun_val.is_some();
     log::info!(target: "app", "tun existed before sync: {tun_existed}, tun existed in source: {source_has_tun}, tun enabled by ui: {enable}");
-    Handle::emit_log("info", format!("[tun] sync start: existed_before={tun_existed}, existed_in_source={source_has_tun}, enabled_by_ui={enable}"));
+    diagnostics.push(format!("[tun] sync start: existed_before={tun_existed}, existed_in_source={source_has_tun}, enabled_by_ui={enable}"));
 
     if enable {
         let mut tun_val = tun_val
@@ -37,10 +37,7 @@ pub fn use_tun(
             .unwrap_or_else(|| default_tun.clone());
         revise!(tun_val, "enable", true);
         revise!(config, "tun", tun_val);
-        Handle::emit_log(
-            "info",
-            "[tun] action: inject/update tun and set enable=true",
-        );
+        diagnostics.push("[tun] action: inject/update tun and set enable=true".into());
     } else if tun_existed || source_has_tun {
         let mut tun_val = tun_val
             .and_then(Value::as_mapping)
@@ -48,10 +45,10 @@ pub fn use_tun(
             .unwrap_or_else(|| default_tun.clone());
         revise!(tun_val, "enable", false);
         revise!(config, "tun", tun_val);
-        Handle::emit_log("info", "[tun] action: keep tun and set enable=false");
+        diagnostics.push("[tun] action: keep tun and set enable=false".into());
     } else {
         config.remove(&tun_key);
-        Handle::emit_log("info", "[tun] action: leave tun absent");
+        diagnostics.push("[tun] action: leave tun absent".into());
         return config;
     }
 
@@ -61,7 +58,7 @@ pub fn use_tun(
         .and_then(|m| m.get("stack"))
         .and_then(Value::as_str)
         .unwrap_or("unknown");
-    Handle::emit_log("info", format!("[tun] stack={stack}"));
+    diagnostics.push(format!("[tun] stack={stack}"));
 
     if enable {
         use_dns_for_tun(config)

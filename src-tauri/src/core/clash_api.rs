@@ -27,8 +27,8 @@ pub enum CoreUpgradeStatus {
 
 /// PUT /configs
 /// path 是绝对路径
-pub async fn put_configs(path: &str) -> Result<()> {
-    let (url, headers) = clash_client_info()?;
+pub async fn put_configs_for(info: ClashInfo, path: &str) -> Result<()> {
+    let (url, headers) = build_clash_client_info(info)?;
     let url = format!("{url}/configs");
 
     let mut data = HashMap::new();
@@ -51,8 +51,8 @@ pub async fn put_configs(path: &str) -> Result<()> {
 }
 
 /// PATCH /configs
-pub async fn patch_configs(config: &Mapping) -> Result<()> {
-    let (url, headers) = clash_client_info()?;
+pub async fn patch_configs_for(info: ClashInfo, config: &Mapping) -> Result<()> {
+    let (url, headers) = build_clash_client_info(info)?;
     let url = format!("{url}/configs");
 
     let client = reqwest::ClientBuilder::new()
@@ -61,12 +61,11 @@ pub async fn patch_configs(config: &Mapping) -> Result<()> {
         .timeout(Duration::from_secs(8))
         .build()?;
     let builder = client.patch(&url).headers(headers.clone()).json(config);
-    builder.send().await?;
+    builder.send().await?.error_for_status()?;
     Ok(())
 }
 
-/// Ask the running Mihomo process to replace its executable using an explicit
-/// release channel. CoreManager coordinates the resulting process restart.
+/// 按指定发布通道请求内核更新；CoreManager 协调可执行文件替换后的重启与恢复。
 pub async fn upgrade_core(channel: &str) -> Result<CoreUpgradeStatus> {
     let (url, headers) = clash_client_info()?;
     let url = format!("{url}/upgrade");
@@ -96,6 +95,8 @@ pub async fn upgrade_core(channel: &str) -> Result<CoreUpgradeStatus> {
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct ProxyItemRes {
     pub name: String,
+    #[serde(default, rename = "type")]
+    pub proxy_type: String,
     #[serde(default)]
     pub all: Option<Vec<String>>,
     #[serde(default)]
@@ -171,7 +172,16 @@ pub async fn get_proxy_delay(
     test_url: Option<String>,
     timeout: i32,
 ) -> Result<DelayRes> {
-    let (base_url, headers) = clash_client_info()?;
+    get_proxy_delay_for(Config::clash().get_client_info(), name, test_url, timeout).await
+}
+
+pub async fn get_proxy_delay_for(
+    info: ClashInfo,
+    name: String,
+    test_url: Option<String>,
+    timeout: i32,
+) -> Result<DelayRes> {
+    let (base_url, headers) = build_clash_client_info(info)?;
     let encoded_name = utf8_percent_encode(&name, NON_ALPHANUMERIC).to_string();
     let url = format!("{base_url}/proxies/{encoded_name}/delay");
 
@@ -237,12 +247,59 @@ pub async fn get_proxy_delay(
 
 /// GET /proxies
 pub async fn get_proxies() -> Result<ProxiesRes> {
-    let (url, headers) = clash_client_info()?;
+    get_proxies_for(Config::clash().get_client_info()).await
+}
+
+pub async fn get_proxies_for(info: ClashInfo) -> Result<ProxiesRes> {
+    let (url, headers) = build_clash_client_info(info)?;
     let url = format!("{url}/proxies");
 
     let response = API_CLIENT.get(&url).headers(headers).send().await?;
 
-    Ok(response.json::<ProxiesRes>().await?)
+    Ok(response.error_for_status()?.json::<ProxiesRes>().await?)
+}
+
+pub async fn select_proxy_for(info: ClashInfo, group: &str, proxy: &str) -> Result<()> {
+    let (url, headers) = build_clash_client_info(info)?;
+    let group = utf8_percent_encode(group, NON_ALPHANUMERIC);
+    API_CLIENT
+        .put(format!("{url}/proxies/{group}"))
+        .headers(headers)
+        .json(&serde_json::json!({ "name": proxy }))
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
+}
+
+pub async fn close_connections_for_node(node: &str) -> Result<()> {
+    let (url, headers) = clash_client_info()?;
+    for connection in get_connections()
+        .await?
+        .connections
+        .into_iter()
+        .filter(|connection| connection.chains.iter().any(|name| name == node))
+    {
+        let id = utf8_percent_encode(&connection.id, NON_ALPHANUMERIC);
+        API_CLIENT
+            .delete(format!("{url}/connections/{id}"))
+            .headers(headers.clone())
+            .send()
+            .await?
+            .error_for_status()?;
+    }
+    Ok(())
+}
+
+pub async fn close_all_connections_for(info: ClashInfo) -> Result<()> {
+    let (url, headers) = build_clash_client_info(info)?;
+    API_CLIENT
+        .delete(format!("{url}/connections"))
+        .headers(headers)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
 }
 
 /// GET /connections
@@ -252,13 +309,14 @@ pub async fn get_connections() -> Result<ConnectionsRes> {
 
     let response = API_CLIENT.get(&url).headers(headers).send().await?;
 
-    Ok(response.json::<ConnectionsRes>().await?)
+    Ok(response
+        .error_for_status()?
+        .json::<ConnectionsRes>()
+        .await?)
 }
 
-/// Wait until the controller described by the latest config draft responds.
-/// This is used while restarting the core, before the draft is committed.
-pub async fn wait_for_core_ready(ready_timeout: Duration) -> Result<()> {
-    let client_info = { Config::clash().latest().get_client_info() };
+/// 使用本次操作的目标控制地址检查就绪，避免端口修改时误查旧地址。
+pub async fn wait_for_core_ready(client_info: ClashInfo, ready_timeout: Duration) -> Result<()> {
     let (url, headers) = build_clash_client_info(client_info)?;
     let url = format!("{url}/configs");
     let client = reqwest::ClientBuilder::new()
@@ -286,7 +344,7 @@ pub async fn wait_for_core_ready(ready_timeout: Duration) -> Result<()> {
 
 /// 根据clash info获取clash服务地址和请求头
 fn clash_client_info() -> Result<(String, HeaderMap)> {
-    let client = { Config::clash().data().get_client_info() };
+    let client = Config::clash().get_client_info();
 
     build_clash_client_info(client)
 }
@@ -305,7 +363,7 @@ fn build_clash_client_info(client: ClashInfo) -> Result<(String, HeaderMap)> {
     Ok((server, headers))
 }
 
-/// Extract a concise error message from Mihomo's config validation output.
+/// 从 Mihomo 配置校验输出中提取简洁的错误信息。
 ///
 /// 输出格式不受我们控制（截断、缺引号、字段顺序变化、多字节字符），切片一律用
 /// `get`：release 是 panic=abort，越界会直接结束整个进程。

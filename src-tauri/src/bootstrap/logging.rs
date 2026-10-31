@@ -51,11 +51,11 @@ impl encode::Encode for RedactingEncoder {
     }
 }
 
-/// initialize this instance's log file
+/// 初始化当前实例的文件日志。
 pub(crate) fn init_log() -> Result<()> {
     let log_dir = dirs::app_logs_dir()?;
 
-    let log_level = Config::verge().data().get_log_level();
+    let log_level = Config::verge().get_log_level();
     if log_level == LevelFilter::Off {
         return Ok(());
     }
@@ -121,7 +121,7 @@ pub(crate) fn init_log() -> Result<()> {
 
 /// 删除log文件
 pub fn delete_log() -> Result<()> {
-    let auto_log_clean = Config::verge().data().auto_log_clean.unwrap_or(1);
+    let auto_log_clean = Config::verge().auto_log_clean.unwrap_or(1);
 
     let day = match auto_log_clean {
         0 => return Ok(()),

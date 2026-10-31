@@ -20,6 +20,7 @@ import { TestBox } from "./test-box";
 import delayManager from "@/services/delay";
 import { cmdTestDelay } from "@/services/cmds";
 import type { ITestDelayResult } from "@/services/cmds";
+import { RequestEpoch } from "@/shared/async/request-epoch";
 import { utf8ToBase64 } from "@/utils/base64";
 
 interface Props {
@@ -30,7 +31,7 @@ interface Props {
   resetToken?: number;
   editable?: boolean;
   onEdit: () => void;
-  onDelete: (uid: string) => void;
+  onDelete: (uid: string) => void | Promise<void>;
   onTested?: () => void;
 }
 
@@ -69,19 +70,36 @@ export const TestItem = (props: Props) => {
   const proxyTextRef = useRef<HTMLSpanElement>(null);
   const [iconLoadFailed, setIconLoadFailed] = useState(false);
   const { uid, name, icon, url } = itemData;
+  const requests = useRef(new RequestEpoch());
+  useEffect(() => {
+    const invalidate = () => {
+      requests.current.invalidate();
+      setDelay(-1);
+      setProxy(undefined);
+    };
+    invalidate();
+    window.addEventListener("astra://runtime-changed", invalidate);
+    return () => {
+      requests.current.invalidate();
+      window.removeEventListener("astra://runtime-changed", invalidate);
+    };
+  }, [url]);
 
   const onDelay = useCallback(async () => {
+    const ticket = requests.current.next();
     setDelay(-2);
     setProxy(undefined);
     try {
       const result = await cmdTestDelay(url);
+      if (!requests.current.accepts(ticket)) return;
       setDelay(result.delay);
       setProxy(result.proxy);
     } catch {
+      if (!requests.current.accepts(ticket)) return;
       setDelay(10000);
       setProxy(undefined);
     } finally {
-      onTested?.();
+      if (requests.current.accepts(ticket)) onTested?.();
     }
   }, [url, onTested]);
 
@@ -103,7 +121,7 @@ export const TestItem = (props: Props) => {
     }
 
     try {
-      onDeleteItem(uid);
+      await onDeleteItem(uid);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
     }
@@ -143,6 +161,7 @@ export const TestItem = (props: Props) => {
   // Test All 运行中：每张卡片显示与代理延迟测试一致的等待动画
   useEffect(() => {
     if (!pending) return;
+    requests.current.invalidate();
     setDelay(-2);
     setProxy(undefined);
   }, [pending]);
@@ -150,6 +169,7 @@ export const TestItem = (props: Props) => {
   // 单个站点结果到达后显示；整页结果被清空时回到 Check
   useEffect(() => {
     if (pending) return;
+    requests.current.invalidate();
     if (autoResult) {
       setDelay(autoResult.delay);
       setProxy(autoResult.proxy);
@@ -162,6 +182,7 @@ export const TestItem = (props: Props) => {
   // 整页 2 分钟过期：清掉自动结果和手动 Check 的本地显示
   useEffect(() => {
     if (!resetToken) return;
+    requests.current.invalidate();
     setDelay(-1);
     setProxy(undefined);
   }, [resetToken]);

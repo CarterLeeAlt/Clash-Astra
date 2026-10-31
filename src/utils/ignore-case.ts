@@ -1,4 +1,4 @@
-// Deep copy and change all keys to lowercase
+// 深拷贝对象并将所有键转换为小写。
 type TData = Record<string, any>;
 
 export default function ignoreCase(data: TData): TData {

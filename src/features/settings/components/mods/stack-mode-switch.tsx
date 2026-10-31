@@ -15,7 +15,7 @@ export const StackModeSwitch = (props: Props) => {
   const { value, onChange } = props;
   const { verge } = useVerge();
   const { enable_service_mode } = verge ?? {};
-  // service mode
+  // 切换 TUN 协议栈。
   const { data: serviceStatus } = useServiceStatus(isWIN);
 
   const { t } = useTranslation();

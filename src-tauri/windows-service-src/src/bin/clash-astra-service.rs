@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tiny_http::{Method, Response, Server, StatusCode};
 use windows_service::service::{
     ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus, ServiceType,
@@ -20,25 +20,9 @@ use windows_service::service_control_handler::{self, ServiceControlHandlerResult
 use windows_service::{define_windows_service, service_dispatcher};
 
 use clash_astra_service_src::{
-    api_token_path, API_ADDR, API_GET_CLASH, API_HEALTH, API_START_CLASH, API_STOP_CLASH,
-    API_STOP_SERVICE, SERVICE_NAME,
+    api_token_path, ServiceReply as JsonResponse, StartClashRequest, API_ADDR, API_GET_CLASH,
+    API_HEALTH, API_START_CLASH, API_STOP_CLASH, API_STOP_SERVICE, SERVICE_NAME,
 };
-
-#[derive(Serialize)]
-struct JsonResponse<T> {
-    code: u64,
-    msg: String,
-    data: Option<T>,
-}
-
-#[derive(Deserialize)]
-struct StartClashRequest {
-    core_type: String,
-    bin_path: String,
-    config_dir: String,
-    config_file: String,
-    log_file: String,
-}
 
 struct ValidatedStartClashRequest {
     core_type: String,
@@ -313,10 +297,8 @@ fn paths_equal(left: &Path, right: &Path) -> bool {
         .eq_ignore_ascii_case(&right.to_string_lossy())
 }
 
-/// Mihomo joins files below its data directory with `/`. A verbatim Windows
-/// path such as `\\?\C:\data` therefore becomes the invalid mixed path
-/// `\\?\C:\data/file`. Keep canonical paths for validation, but pass their
-/// equivalent ordinary Win32 form to the child process.
+/// Mihomo 用正斜杠拼接数据文件，不能直接接收 Windows verbatim 路径。
+/// 校验使用规范化路径，传给子进程前转换为等价的普通 Win32 路径。
 fn win32_compatible_path(path: &Path) -> PathBuf {
     const VERBATIM_PREFIX: [u16; 4] = [b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
     const VERBATIM_UNC_PREFIX: [u16; 8] = [

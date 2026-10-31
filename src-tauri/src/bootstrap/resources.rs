@@ -2,8 +2,7 @@ use crate::utils::dirs;
 use anyhow::Result;
 use std::fs;
 
-/// initialize app resources
-/// after tauri setup
+/// Tauri 完成应用句柄初始化后，准备内核运行资源。
 pub fn init_resources() -> Result<()> {
     let app_dir = dirs::app_home_dir()?;
     let res_dir = dirs::app_resources_dir()?;
@@ -20,8 +19,7 @@ pub fn init_resources() -> Result<()> {
 
     let file_list = ["Country.mmdb", "geoip.dat", "geosite.dat"];
 
-    // copy the resource file
-    // if the source file is newer than the destination file, copy it over
+    // 仅在源资源比现有副本新时更新，保留用户运行目录中的有效资源。
     for file in file_list.iter() {
         let src_path = res_dir.join(file);
         let dest_path = app_dir.join(file);

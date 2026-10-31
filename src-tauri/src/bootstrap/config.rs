@@ -5,8 +5,7 @@ use crate::utils::{dirs, help};
 use anyhow::{Context, Result};
 use std::fs;
 
-/// Initialize all the config files
-/// before tauri setup
+/// Tauri setup 前恢复未完成事务，并准备缺失的默认配置文件。
 pub fn init_config() -> Result<()> {
     let app_dir = dirs::app_home_dir()?;
     fs::create_dir_all(&app_dir).with_context(|| {
@@ -23,6 +22,7 @@ pub fn init_config() -> Result<()> {
         )
     })?;
 
+    crate::infrastructure::config_repository::FileTransaction::recover(app_dir)?;
     init_log()?;
     init_panic_hook();
     let _ = delete_log();

@@ -1,7 +1,7 @@
-//! Some config file template
+//! 新建订阅与增强项使用的内容模板。
 
-/// template for new a profile item
-pub const ITEM_LOCAL: &str = "# Profile Template for Clash Astra
+/// 本地订阅模板。
+pub const ITEM_LOCAL: &str = "# Clash Astra 本地订阅模板
 
 proxies:
 
@@ -10,9 +10,9 @@ proxy-groups:
 rules:
 ";
 
-/// enhanced profile
-pub const ITEM_MERGE: &str = "# Merge Template for Clash Astra
-# The `Merge` format used to enhance profile
+/// 合并增强项模板。
+pub const ITEM_MERGE: &str = "# Clash Astra 合并增强模板
+# 使用 Merge 规则增强订阅内容
 
 prepend-rules:
 
@@ -35,18 +35,17 @@ append-proxy-providers:
 append-proxy-groups:
 ";
 
-/// enhanced profile
-pub const ITEM_SCRIPT: &str = "// Define the `main` function
+/// 用户脚本模板。
+pub const ITEM_SCRIPT: &str = "// 定义 main 函数，并返回修改后的配置对象。
 
 function main(params) {
   return params;
 }
 ";
 
-/// fixed global overwrite script template
-pub const ITEM_GLOBAL_SCRIPT: &str = r#"// Global Overwrite Script
-// Runs after subscription config is loaded.
-// Keep main() and return the config object.
+/// 固定全局脚本的初始模板。
+pub const ITEM_GLOBAL_SCRIPT: &str = r#"// 全局覆写脚本，在读取订阅后、用户增强链之前执行。
+// 保留 main 函数并返回配置对象；profileName 为当前订阅名称。
 
 function main(config, profileName) {
   const customRules = [

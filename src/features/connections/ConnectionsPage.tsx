@@ -6,7 +6,6 @@ import {
   Button,
   IconButton,
   MenuItem,
-  Paper,
   Select,
 } from "@mui/material";
 import { useRecoilState } from "recoil";

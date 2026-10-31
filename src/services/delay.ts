@@ -34,6 +34,7 @@ type DelayTaskState = {
 };
 
 class DelayManager {
+  private generation = 0;
   private cache = new Map<string, [number, number]>();
   private urlMap = new Map<string, string>();
   private groupTaskMap = new Map<string, DelayTaskState>();
@@ -184,6 +185,17 @@ class DelayManager {
     this.cache.clear();
   }
 
+  invalidate() {
+    this.generation += 1;
+    for (const group of this.groupTaskMap.keys()) this.cancelGroupCheck(group);
+    this.groupTaskMap.clear();
+    this.cache.clear();
+    this.proxies.clear();
+    this.listenerMap.forEach((listeners) =>
+      listeners.forEach((listener) => listener(DELAY_UNKNOWN))
+    );
+  }
+
   /// 分组显示其当前选中节点的延迟；叶子节点用自身缓存与 history
   getDelayFix(proxy: IProxyItem) {
     const sourceName = this.getDelaySource(proxy);
@@ -255,9 +267,9 @@ class DelayManager {
   }
 
   async checkDelay(name: string, group: string, timeout: number) {
+    const generation = this.generation;
     const delay = await this.requestDelay(name, group, timeout);
-
-    this.setDelay(name, group, delay);
+    if (generation === this.generation) this.setDelay(name, group, delay);
     return delay;
   }
 

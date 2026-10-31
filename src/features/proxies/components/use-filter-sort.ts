@@ -1,0 +1,97 @@
+import delayManager from "@/services/delay";
+
+// 支持默认顺序、延迟和名称排序。
+export type ProxySortType = 0 | 1 | 2;
+
+export function filterSort(
+  proxies: IProxyItem[],
+  groupName: string,
+  filterText: string,
+  sortType: ProxySortType
+) {
+  const fp = filterProxies(proxies, groupName, filterText);
+  const sp = sortProxies(fp, groupName, sortType);
+  return sp;
+}
+
+/**
+ * 可以通过延迟数/节点类型 过滤
+ */
+const regex1 = /delay([=<>])(\d+|timeout|error)/i;
+const regex2 = /type=(.*)/i;
+
+/**
+ * filter the proxy
+ * according to the regular conditions
+ */
+function filterProxies(
+  proxies: IProxyItem[],
+  groupName: string,
+  filterText: string
+) {
+  const proxyList = Array.isArray(proxies) ? proxies : [];
+  if (!filterText) return proxyList;
+
+  const res1 = regex1.exec(filterText);
+  if (res1) {
+    const symbol = res1[1];
+    const symbol2 = res1[2].toLowerCase();
+    const value =
+      symbol2 === "error" ? 1e5 : symbol2 === "timeout" ? 3000 : +symbol2;
+
+    return proxyList.filter((p) => {
+      const delay = delayManager.getDelayFix(p);
+
+      if (delay < 0) return false;
+      if (symbol === "=" && symbol2 === "error") return delay >= 1e5;
+      if (symbol === "=" && symbol2 === "timeout")
+        return delay < 1e5 && delay >= 3000;
+      if (symbol === "=") return delay == value;
+      if (symbol === "<") return delay <= value;
+      if (symbol === ">") return delay >= value;
+      return false;
+    });
+  }
+
+  const res2 = regex2.exec(filterText);
+  if (res2) {
+    const type = res2[1].toLowerCase();
+    return proxyList.filter((p) => p.type.toLowerCase().includes(type));
+  }
+
+  return proxyList.filter((p) => p.name.includes(filterText.trim()));
+}
+
+/**
+ * sort the proxy
+ */
+function sortProxies(
+  proxies: IProxyItem[],
+  groupName: string,
+  sortType: ProxySortType
+) {
+  if (!proxies) return [];
+  if (sortType === 0) return proxies;
+
+  const list = proxies.slice();
+
+  if (sortType === 1) {
+    list.sort((a, b) => {
+      const ad = delayManager.getDelayFix(a);
+      const bd = delayManager.getDelayFix(b);
+
+      // 未测、测速中以及非延迟状态一律排在后面
+      const aMissing = ad < 0;
+      const bMissing = bd < 0;
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+
+      return ad - bd;
+    });
+  } else {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return list;
+}

@@ -8,9 +8,11 @@ $masterDir = Join-Path $root 'assets\brand'
 $tauriIcons = Join-Path $root 'src-tauri\icons'
 $webImages = Join-Path $root 'src\assets\image'
 
-$appIconSizes = 16, 24, 32, 48, 64, 72, 96, 128, 256
-$watchdogIconSizes = 16, 32, 48, 64, 128, 256
-$faviconSizes = 16, 32, 48
+# 小图标以 16px、大图标以 32px 为基准，20/40px 覆盖 125% DPI，避免系统二次缩放。
+# ICO 保持自然尺寸顺序；运行时由 Win32 按目标像素选帧，不依赖首帧顺序。
+$appIconSizes = 16, 20, 24, 32, 40, 48, 64, 72, 96, 128, 256
+$watchdogIconSizes = $appIconSizes
+$faviconSizes = 16, 20, 24, 32, 40, 48, 64
 $brandIconSize = 56
 
 # 标准母版：应用与 Watchdog 1024x1024（覆盖到 256px 输出仍有 4 倍余量），托盘按母版原尺寸发布。

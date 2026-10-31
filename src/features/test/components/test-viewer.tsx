@@ -16,7 +16,7 @@ export interface TestViewerRef {
   edit: (item: IVergeTestItem) => void;
 }
 
-// create or edit the test item
+// 创建或编辑站点检测条目。
 export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -39,7 +39,7 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
       }
       return x;
     });
-    await patchVerge({ ...verge, test_list: newList });
+    await patchVerge({ test_list: newList });
   };
 
   useImperativeHandle(ref, () => ({
@@ -59,9 +59,7 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
       }
 
       if (item) {
-        Object.entries(item).forEach(([key, value]) => {
-          formIns.setValue(key as any, value);
-        });
+        formIns.reset(item);
       }
       setOpenType("edit");
       setOpen(true);
@@ -98,7 +96,6 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
         }
         setOpen(false);
         setLoading(false);
-        setTimeout(() => formIns.reset(), 500);
       } catch (err: any) {
         Notice.error(formatNoticeMessage(err));
         setLoading(false);
@@ -108,7 +105,6 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
 
   const handleClose = () => {
     setOpen(false);
-    setTimeout(() => formIns.reset(), 500);
   };
 
   const text = {

@@ -26,21 +26,40 @@ impl Handle {
     }
 
     pub fn get_window(&self) -> Option<Window> {
-        self.app_handle
-            .lock()
-            .as_ref()
-            .and_then(|a| a.get_window("main"))
+        let app = self.app_handle.lock().clone();
+        app.and_then(|app| app.get_window("main"))
     }
 
     pub fn refresh_clash() {
         if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://refresh-clash-config", "yes"));
+            log_err!(window.emit(
+                "verge://refresh-clash-config",
+                serde_json::json!({
+                    "runtimeRevision": crate::config::Config::snapshot().runtime_revision,
+                    "generation": crate::core::CoreManager::global().generation()
+                })
+            ));
         }
     }
 
-    pub fn refresh_verge() {
+    pub fn configuration_committed(
+        revision: u64,
+        runtime_changed: bool,
+        profiles_changed: bool,
+        settings_changed: bool,
+    ) {
         if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://refresh-verge-config", "yes"));
+            log_err!(window.emit(
+                "astra://configuration-committed",
+                serde_json::json!({
+                    "revision": revision,
+                    "runtimeRevision": crate::config::Config::snapshot().runtime_revision,
+                    "generation": crate::core::CoreManager::global().generation(),
+                    "runtimeChanged": runtime_changed,
+                    "profilesChanged": profiles_changed,
+                    "settingsChanged": settings_changed
+                })
+            ));
         }
     }
 
@@ -59,7 +78,7 @@ impl Handle {
 
     /// 一轮站点检测完成后推送结果（URL -> 延迟/出口代理）。
     pub fn notify_auto_site_test_results(
-        results: &std::collections::HashMap<String, crate::feat::TestDelayResult>,
+        results: &crate::application::diagnostics::SiteTestSnapshot,
     ) {
         if let Some(window) = Self::global().get_window() {
             log_err!(window.emit("verge://auto-site-test-results", results));
@@ -67,7 +86,9 @@ impl Handle {
     }
 
     /// 单个站点完成时推送，前端逐张卡片更新。
-    pub fn notify_auto_site_test_result(event: &crate::feat::SiteTestResultEvent) {
+    pub fn notify_auto_site_test_result(
+        event: &crate::application::diagnostics::SiteTestResultEvent,
+    ) {
         if let Some(window) = Self::global().get_window() {
             log_err!(window.emit("verge://auto-site-test-result", event));
         }
@@ -84,7 +105,7 @@ impl Handle {
     }
 
     pub fn update_systray() -> Result<()> {
-        let app_handle = Self::global().app_handle.lock();
+        let app_handle = Self::global().app_handle.lock().clone();
         if app_handle.is_none() {
             bail!("update_systray unhandled error");
         }
@@ -92,9 +113,9 @@ impl Handle {
         Ok(())
     }
 
-    /// update the system tray state
+    /// 复制应用句柄后释放锁，再调用可能等待主线程的托盘 API。
     pub fn update_systray_part() -> Result<()> {
-        let app_handle = Self::global().app_handle.lock();
+        let app_handle = Self::global().app_handle.lock().clone();
         if app_handle.is_none() {
             bail!("update_systray unhandled error");
         }

@@ -1,6 +1,4 @@
-use crate::{config::PrfItem, utils::help};
 use serde_yaml::Mapping;
-use std::fs;
 
 #[derive(Debug, Clone)]
 pub struct ChainItem {
@@ -16,36 +14,8 @@ pub enum ChainType {
 
 #[derive(Debug, Clone)]
 pub enum ChainSupport {
-    Clash,
     Mihomo,
     MihomoAlpha,
-    All,
-}
-
-impl From<&PrfItem> for Option<ChainItem> {
-    fn from(item: &PrfItem) -> Self {
-        let itype = item.itype.as_ref()?.as_str();
-        let file = item.file.clone()?;
-        let uid = item.uid.clone().unwrap_or("".into());
-        // 与其他 profile 读写路径保持一致：拒绝绝对路径与含分隔符的文件名
-        let path = help::resolve_profile_path(&file).ok()?;
-
-        if !path.exists() {
-            return None;
-        }
-
-        match itype {
-            "script" => Some(ChainItem {
-                uid,
-                data: ChainType::Script(fs::read_to_string(path).ok()?),
-            }),
-            "merge" => Some(ChainItem {
-                uid,
-                data: ChainType::Merge(help::read_merge_mapping(&path).ok()?),
-            }),
-            _ => None,
-        }
-    }
 }
 
 impl ChainItem {
@@ -87,8 +57,6 @@ impl ChainSupport {
     pub fn is_support(&self, core: Option<&String>) -> bool {
         match core {
             Some(core) => match (self, core.as_str()) {
-                (ChainSupport::All, _) => true,
-                (ChainSupport::Clash, "clash") => true,
                 (ChainSupport::Mihomo, "mihomo") => true,
                 (ChainSupport::MihomoAlpha, "mihomo-alpha") => true,
                 _ => false,

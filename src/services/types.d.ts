@@ -131,8 +131,8 @@ interface IConnectionsItem {
   chains: string[];
   rule: string;
   rulePayload: string;
-  curUpload?: number; // upload speed, calculate at runtime
-  curDownload?: number; // download speed, calculate at runtime
+  curUpload?: number; // 根据快照差值计算的上传速率。
+  curDownload?: number; // 根据快照差值计算的下载速率。
 }
 
 interface IConnections {
@@ -146,11 +146,12 @@ interface IConnections {
  */
 
 interface IClashInfo {
-  // status: string;
-  mixed_port?: number; // clash mixed port
-  socks_port?: number; // clash socks port
-  port?: number; // clash http port
-  server?: string; // external-controller
+  runtime_revision: number;
+  generation: number;
+  mixed_port?: number; // 混合代理端口。
+  socks_port?: number; // SOCKS 代理端口。
+  port?: number; // HTTP 代理端口。
+  server?: string; // 外部控制接口地址。
   secret?: string;
 }
 
@@ -254,13 +255,13 @@ interface IVergeConfig {
 type IClashConfigValue = any;
 
 interface IProfileMerge {
-  // clash config fields (default supports)
+  // 内核默认支持的配置字段。
   rules?: IClashConfigValue;
   proxies?: IClashConfigValue;
   "proxy-groups"?: IClashConfigValue;
   "proxy-providers"?: IClashConfigValue;
   "rule-providers"?: IClashConfigValue;
-  // clash config fields (use flag)
+  // 需要启用对应功能的内核配置字段。
   tun?: IClashConfigValue;
   dns?: IClashConfigValue;
   hosts?: IClashConfigValue;
@@ -269,7 +270,7 @@ interface IProfileMerge {
   payload?: IClashConfigValue;
   "interface-name"?: IClashConfigValue;
   "routing-mark"?: IClashConfigValue;
-  // functional fields
+  // 功能相关字段。
   use?: string[];
   "prepend-rules"?: any[];
   "append-rules"?: any[];
@@ -277,7 +278,7 @@ interface IProfileMerge {
   "append-proxies"?: any[];
   "prepend-proxy-groups"?: any[];
   "append-proxy-groups"?: any[];
-  // fix
+  // 内核配置覆盖字段。
   ebpf?: any;
   experimental?: any;
   iptables?: any;
@@ -293,7 +294,7 @@ interface IProfileMerge {
   "tcp-concurrent"?: any;
 }
 
-// partial of the clash config
+// 内核配置的局部视图。
 type IProfileData = Partial<{
   rules: any[];
   proxies: any[];

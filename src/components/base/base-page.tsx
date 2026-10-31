@@ -1,11 +1,11 @@
 import React, { ReactNode } from "react";
-import { Typography, alpha } from "@mui/material";
+import { Typography } from "@mui/material";
 import { BaseErrorBoundary } from "./base-error-boundary";
 import { useCustomTheme } from "@/components/layout/use-custom-theme";
 
 interface Props {
-  title?: React.ReactNode; // the page title
-  header?: React.ReactNode; // something behind title
+  title?: React.ReactNode; // 页面标题。
+  header?: React.ReactNode; // 标题旁的操作区域。
   contentStyle?: React.CSSProperties;
   children?: ReactNode;
   full?: boolean;
@@ -21,10 +21,7 @@ export const BasePage: React.FC<Props> = (props) => {
     <BaseErrorBoundary>
       <div className="base-page">
         <header data-windrag style={{ userSelect: "none" }}>
-          <Typography
-            sx={{ fontSize: "20px", fontWeight: 600 }}
-            data-windrag
-          >
+          <Typography sx={{ fontSize: "20px", fontWeight: 600 }} data-windrag>
             {title}
           </Typography>
 

@@ -1,11 +1,14 @@
 use super::show::show_existing_window;
 use super::state::*;
-use crate::config::{Config, IVerge};
+use crate::config::Config;
 use crate::core::scheduler::{JobFn, JobFuture, OneShotScheduler};
+use crate::domain::window_geometry::{
+    valid_saved_geometry, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, MIN_WINDOW_HEIGHT,
+    MIN_WINDOW_WIDTH,
+};
 use crate::trace_err;
 use crate::utils::dirs;
 use anyhow::Result;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
@@ -25,8 +28,8 @@ fn schedule_create_window_show_fallback(
         let app_handle = app_handle.clone();
         let future: JobFuture = Box::pin(async move {
             log::debug!(target: "app", "create_window show fallback task fired");
-            let ready_handled = FRONTEND_READY_HANDLED.load(Ordering::SeqCst);
-            let current_show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
+            let ready_handled = frontend_ready();
+            let current_show_request_id = latest_show_request_id();
             let should_show = show_when_ready || current_show_request_id > 0;
 
             if !should_show {
@@ -108,17 +111,6 @@ fn env_flag_enabled(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn valid_window_size_position(size_pos: &[f64]) -> bool {
-    size_pos.len() == 4
-        && size_pos.iter().all(|value| value.is_finite())
-        && size_pos[0] >= 1060.0
-        && size_pos[1] >= 680.0
-        && size_pos[0] <= 20_000.0
-        && size_pos[1] <= 20_000.0
-        && size_pos[2].abs() <= 100_000.0
-        && size_pos[3].abs() <= 100_000.0
-}
-
 #[cfg(target_os = "windows")]
 fn windows_webview2_args(reliable_mode: bool, fallback_mode: bool) -> Option<String> {
     let mut args = Vec::new();
@@ -153,10 +145,10 @@ fn windows_webview2_args(reliable_mode: bool, fallback_mode: bool) -> Option<Str
     }
 }
 
-/// create main window
+/// 按生命周期状态创建主窗口，并在必要时采用可靠窗口模式。
 pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
     if show_when_ready {
-        FRONTEND_SHOW_WHEN_READY.store(true, Ordering::SeqCst);
+        lifecycle().desired_visible = true;
     }
 
     let now = current_time_millis();
@@ -169,13 +161,12 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         WindowBuildMode::NormalConfigured
     };
     let reliable_mode = effective_reliable_mode(build_mode);
-    MAIN_WINDOW_LAST_CREATE_ATTEMPT_MS.store(now, Ordering::SeqCst);
 
     log::trace!(
         "create_window called, show_when_ready={}, existing={}, show_request_id={}",
         show_when_ready,
         app_handle.get_window("main").is_some(),
-        MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst)
+        latest_show_request_id()
     );
     if reliable_mode {
         log::info!(
@@ -194,8 +185,8 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
     }
 
     if let Some(window) = app_handle.get_window("main") {
-        MAIN_WINDOW_STATE.store(MAIN_WINDOW_STATE_ALIVE, Ordering::SeqCst);
-        let show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
+        set_window_alive();
+        let show_request_id = latest_show_request_id();
         if show_when_ready || show_request_id > 0 {
             log::trace!(
                 "create_window found existing main window, show/focus it, show_request_id={}",
@@ -211,7 +202,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
     let Some(_creating_guard) = MainWindowCreatingGuard::try_lock() else {
         return;
     };
-    FRONTEND_READY_HANDLED.store(false, Ordering::SeqCst);
+    lifecycle().frontend_ready = false;
     log::trace!("create_window reset frontend ready handled for new main window");
 
     let webview_data_dir = match dirs::webview_data_dir() {
@@ -226,11 +217,11 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         return;
     }
 
-    let window_size_locked = Config::verge().latest().window_size_locked.unwrap_or(false);
-    let configured_size_pos = Config::verge().latest().window_size_position.clone();
+    let window_size_locked = Config::verge().window_size_locked.unwrap_or(false);
+    let configured_size_pos = Config::verge().window_size_position;
     let size_pos_is_valid = configured_size_pos
         .as_ref()
-        .map(|size_pos| valid_window_size_position(size_pos))
+        .map(|size_pos| valid_saved_geometry(size_pos))
         .unwrap_or(false);
     if let Some(size_pos) = configured_size_pos.as_ref() {
         if !size_pos_is_valid {
@@ -239,20 +230,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
                 "create_window ignoring abnormal window_size_position={:?}; safe centered defaults will be used and saved value will be cleared",
                 size_pos
             );
-            Config::verge().data().patch_config(IVerge {
-                window_size_position: None,
-                ..IVerge::default()
-            });
-            match Config::save_verge_snapshot() {
-                Ok(_) => log::info!(
-                    target: "app",
-                    "create_window cleared abnormal saved window_size_position"
-                ),
-                Err(err) => log::warn!(
-                    target: "app",
-                    "create_window failed to clear abnormal saved window_size_position: {err}"
-                ),
-            }
+            crate::application::configuration::clear_window_position();
         } else {
             log::info!(
                 target: "app",
@@ -276,20 +254,22 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         .data_directory(webview_data_dir.clone())
         .visible(false)
         .fullscreen(false)
-        .min_inner_size(1060.0, 680.0)
+        .inner_size(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         .resizable(!window_size_locked)
         .maximizable(!window_size_locked);
 
         if use_saved_size_pos {
             if let Some(size_pos) = configured_size_pos.as_ref() {
-                let w = size_pos[0].clamp(1060.0, 20_000.0);
-                let h = size_pos[1].clamp(680.0, 20_000.0);
-                builder = builder.inner_size(w, h).position(size_pos[2], size_pos[3]);
+                // 历史数据已经通过共享约束校验，直接恢复有效的普通窗口尺寸。
+                builder = builder
+                    .inner_size(size_pos[0], size_pos[1])
+                    .position(size_pos[2], size_pos[3]);
             }
         } else {
             #[cfg(target_os = "windows")]
             {
-                builder = builder.inner_size(1060.0, 680.0).center();
+                builder = builder.center();
             }
         }
 
@@ -328,7 +308,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         target: "app",
         "create_window primary build start before WindowBuilder::build, show_when_ready={}, show_request_id={}, reliable_mode={}, saved_size_pos={}, fallback_mode=false, window_size_locked={}",
         show_when_ready,
-        MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst),
+        latest_show_request_id(),
         reliable_mode,
         use_saved_size_pos,
         window_size_locked
@@ -342,7 +322,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         if window.is_ok() { "ok" } else { "err" },
         build_start.elapsed().as_millis(),
         show_when_ready,
-        MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst)
+        latest_show_request_id()
     );
 
     #[cfg(target_os = "windows")]
@@ -353,26 +333,13 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
             "create_window primary build Err: {err}; retrying with reliable decorated WebView2 fallback, disabled GPU/hardware acceleration, and centered safe size"
         );
         if configured_size_pos.is_some() && size_pos_is_valid {
-            Config::verge().data().patch_config(IVerge {
-                window_size_position: None,
-                ..IVerge::default()
-            });
-            match Config::save_verge_snapshot() {
-                Ok(_) => log::info!(
-                    target: "app",
-                    "create_window cleared saved window_size_position before fallback retry"
-                ),
-                Err(err) => log::warn!(
-                    target: "app",
-                    "create_window failed to clear saved window_size_position before fallback retry: {err}"
-                ),
-            }
+            crate::application::configuration::clear_window_position();
         }
         log::info!(
             target: "app",
             "create_window fallback build start before WindowBuilder::build, show_when_ready={}, show_request_id={}, reliable_mode=true, saved_size_pos=false, fallback_mode=true",
             show_when_ready,
-            MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst)
+            latest_show_request_id()
         );
         window = build_window(true, false);
         used_window_fallback = window.is_ok();
@@ -382,13 +349,15 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
             if window.is_ok() { "ok" } else { "err" },
             retry_start.elapsed().as_millis(),
             show_when_ready,
-            MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst)
+            latest_show_request_id()
         );
     }
 
     match window {
         Ok(win) => {
-            MAIN_WINDOW_STATE.store(MAIN_WINDOW_STATE_ALIVE, Ordering::SeqCst);
+            set_window_alive();
+            #[cfg(target_os = "windows")]
+            super::icons::install(&win);
             #[cfg(target_os = "windows")]
             super::webview_recovery::install(&win);
             trace_err!(win.set_resizable(!window_size_locked), "set win resizable");
@@ -396,11 +365,8 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
                 win.set_maximizable(!window_size_locked),
                 "set win maximizable"
             );
-            let is_maximized = !window_size_locked
-                && Config::verge()
-                    .latest()
-                    .window_is_maximized
-                    .unwrap_or(false);
+            let is_maximized =
+                !window_size_locked && Config::verge().window_is_maximized.unwrap_or(false);
             log::trace!("try to calculate the monitor size");
             let center = (|| -> Result<bool> {
                 let mut center = false;
@@ -438,7 +404,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
                 trace_err!(win.maximize(), "set win maximize");
             }
 
-            let show_request_id = MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst);
+            let show_request_id = latest_show_request_id();
             if show_when_ready || show_request_id > 0 {
                 schedule_create_window_show_fallback(
                     app_handle.clone(),
@@ -452,12 +418,12 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
             }
         }
         Err(err) => {
-            MAIN_WINDOW_STATE.store(MAIN_WINDOW_STATE_MISSING, Ordering::SeqCst);
+            set_window_missing();
             log::error!(
                 target: "app",
                 "failed to create window: {err}, show_when_ready={}, show_request_id={}",
                 show_when_ready,
-                MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst)
+                latest_show_request_id()
             );
             return;
         }
@@ -466,6 +432,6 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
     log::trace!(
         "create_window finished, show_when_ready={}, show_request_id={}",
         show_when_ready,
-        MAIN_WINDOW_SHOW_REQUEST_ID.load(Ordering::SeqCst)
+        latest_show_request_id()
     );
 }

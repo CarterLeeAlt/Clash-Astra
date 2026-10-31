@@ -8,93 +8,90 @@ pub const MIHOMO_CORE: &str = "mihomo";
 pub const MIHOMO_ALPHA_CORE: &str = "mihomo-alpha";
 pub const VALID_MIHOMO_CORES: [&str; 2] = [MIHOMO_CORE, MIHOMO_ALPHA_CORE];
 
-/// ### `verge.yaml` schema
+/// 应用设置的持久化字段；保留既有 YAML 字段名以兼容用户配置。
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct IVerge {
-    /// app listening port for app singleton
+    /// 单实例唤起服务的监听端口。
     pub app_singleton_port: Option<u16>,
 
-    /// app log level
-    /// silent | error | warn | info | debug | trace
+    /// 应用日志等级：silent、error、warn、info、debug、trace。
     pub app_log_level: Option<String>,
 
-    // i18n
+    // 界面语言。
     pub language: Option<String>,
 
-    /// `light` or `dark` or `system`
+    /// 主题模式：light、dark 或 system。
     pub theme_mode: Option<String>,
 
-    /// tray click event
+    /// 托盘单击执行的操作。
     pub tray_event: Option<String>,
 
-    /// copy env type
+    /// 复制代理环境变量时使用的终端语法。
     pub env_type: Option<String>,
 
-    /// start page
+    /// 启动后显示的页面。
     pub start_page: Option<String>,
-    /// startup script path
+    /// 用户启动脚本路径。
     pub startup_script: Option<String>,
 
-    /// enable traffic graph default is true
+    /// 是否显示流量图，默认开启。
     pub traffic_graph: Option<bool>,
 
-    /// show memory info (only for Mihomo)
+    /// 是否显示 Mihomo 内存用量。
     pub enable_memory_usage: Option<bool>,
 
-    /// enable group icon
+    /// 是否显示代理组图标。
     pub enable_group_icon: Option<bool>,
 
-    /// common tray icon
+    /// 是否使用自定义普通托盘图标。
     pub common_tray_icon: Option<bool>,
 
-    /// sysproxy tray icon
+    /// 是否使用自定义系统代理托盘图标。
     pub sysproxy_tray_icon: Option<bool>,
 
-    /// tun tray icon
+    /// 是否使用自定义 TUN 托盘图标。
     pub tun_tray_icon: Option<bool>,
 
-    /// clash tun mode
+    /// 是否启用 TUN。
     pub enable_tun_mode: Option<bool>,
 
-    /// windows service mode
+    /// 是否由 Windows 服务管理内核。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_service_mode: Option<bool>,
 
-    /// can the app auto startup
+    /// 是否随系统自动启动。
     pub enable_auto_launch: Option<bool>,
 
-    /// not show the window on launch
+    /// 启动时是否隐藏窗口。
     pub enable_silent_start: Option<bool>,
 
-    /// Use the legacy transparent frameless Windows WebView window.
-    /// Disabled by default on Windows because reliable decorated windows avoid WebView2 hangs.
+    /// 是否使用透明无边框窗口；默认使用带系统边框的窗口以降低 WebView2 挂起风险。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_custom_frameless_window: Option<bool>,
 
-    /// set system proxy
+    /// 是否接管系统代理。
     pub enable_system_proxy: Option<bool>,
 
-    /// enable proxy guard
+    /// 是否启用用户配置的代理守卫。
     pub enable_proxy_guard: Option<bool>,
 
-    /// set system proxy bypass
+    /// 系统代理绕过列表。
     pub system_proxy_bypass: Option<String>,
 
-    /// proxy guard duration
+    /// 代理守卫检查间隔，单位为秒。
     pub proxy_guard_duration: Option<u64>,
 
-    /// theme setting
+    /// 用户主题配置。
     pub theme_setting: Option<IVergeTheme>,
 
-    /// web ui list
+    /// 外部 Web 控制界面列表。
     pub web_ui_list: Option<Vec<String>>,
 
-    /// Mihomo core identifier
+    /// 使用的 Mihomo 内核标识。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clash_core: Option<String>,
 
-    /// hotkey map
-    /// format: {func},{key}
+    /// 快捷键列表，格式为「操作名,快捷键」。
     pub hotkeys: Option<Vec<String>>,
 
     /// 切换代理时自动关闭连接
@@ -119,22 +116,22 @@ pub struct IVerge {
     /// 0: 不清理; 1: 7天; 2: 30天; 3: 90天
     pub auto_log_clean: Option<i32>,
 
-    /// window size and position
+    /// 窗口逻辑尺寸与位置：宽、高、横坐标、纵坐标。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_size_position: Option<Vec<f64>>,
 
-    /// window maximized state
+    /// 窗口是否最大化。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_is_maximized: Option<bool>,
 
-    /// window size lock state
+    /// 是否锁定窗口尺寸。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_size_locked: Option<bool>,
 
     /// 是否启用随机端口
     pub enable_random_port: Option<bool>,
 
-    /// verge mixed port 用于覆盖 clash 的 mixed port
+    /// 持久化的混合代理端口，与内核端口在同一次操作中提交。
     pub verge_mixed_port: Option<u16>,
 
     pub verge_socks_port: Option<u16>,
@@ -188,7 +185,11 @@ impl IVerge {
             Err(err) => {
                 log::error!(target: "app", "{err}");
                 if path.exists() {
-                    help::quarantine_corrupt_file(&path);
+                    if let Err(error) = help::quarantine_corrupt_file(&path) {
+                        crate::infrastructure::config_repository::block_writes(format!(
+                            "{error:#}"
+                        ));
+                    }
                 }
                 Self::template()
             }
@@ -254,13 +255,12 @@ impl IVerge {
         false
     }
 
-    /// Save IVerge App Config
+    /// 启动迁移时保存设置；运行中的修改统一经应用协调器提交。
     pub fn save_file(&self) -> Result<()> {
         help::save_yaml(&dirs::verge_path()?, &self, Some("# Clash Astra Config"))
     }
 
-    /// patch verge config
-    /// only save to file
+    /// 将请求中的已指定字段合入候选设置；此方法不执行 I/O。
     pub fn patch_config(&mut self, patch: IVerge) {
         macro_rules! patch {
             ($key: tt) => {

@@ -18,41 +18,40 @@ pub const GLOBAL_SCRIPT_DESC: &str = "Global Script";
 pub struct PrfItem {
     pub uid: Option<String>,
 
-    /// profile item type
-    /// enum value: remote | local | script | merge
+    /// 条目类型：remote、local、script 或 merge。
     #[serde(rename = "type")]
     pub itype: Option<String>,
 
-    /// profile name
+    /// 显示名称。
     pub name: Option<String>,
 
-    /// profile file
+    /// 配置目录内的相对文件名。
     pub file: Option<String>,
 
-    /// profile description
+    /// 用户备注。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 
-    /// source url
+    /// 远程订阅来源地址。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 
-    /// selected information
+    /// 各代理组的持久化节点选择。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected: Option<Vec<PrfSelected>>,
 
-    /// subscription user info
+    /// 订阅返回的流量和到期信息。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<PrfExtra>,
 
-    /// updated time
+    /// 最近更新时间，Unix 秒。
     pub updated: Option<usize>,
 
-    /// some options of the item
+    /// 下载与自动更新选项。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub option: Option<PrfOption>,
 
-    /// the file data
+    /// 尚未落盘的文件内容，不写入订阅索引。
     #[serde(skip)]
     pub file_data: Option<String>,
 }
@@ -73,27 +72,22 @@ pub struct PrfExtra {
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrfOption {
-    /// for `remote` profile's http request
-    /// see issue #13
+    /// 远程订阅请求的 User-Agent。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
 
-    /// for `remote` profile
-    /// use system proxy
+    /// 下载远程订阅时使用当前系统代理。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub with_proxy: Option<bool>,
 
-    /// for `remote` profile
-    /// use self proxy
+    /// 下载远程订阅时使用本程序混合代理端口。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub self_proxy: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_interval: Option<u64>,
 
-    /// for `remote` profile
-    /// disable certificate validation
-    /// default is `false`
+    /// 是否跳过远程订阅的证书校验，默认关闭。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub danger_accept_invalid_certs: Option<bool>,
 }
@@ -117,8 +111,7 @@ impl PrfOption {
 }
 
 impl PrfItem {
-    /// From partial item
-    /// must contain `itype`
+    /// 根据创建请求生成条目；请求必须指定条目类型。
     pub async fn from(item: PrfItem, file_data: Option<String>) -> Result<PrfItem> {
         if item.itype.is_none() {
             bail!("type should not be null");
@@ -137,7 +130,9 @@ impl PrfItem {
             "local" => {
                 let name = item.name.unwrap_or("Local File".into());
                 let desc = item.desc.unwrap_or("".into());
-                PrfItem::from_local(name, desc, file_data)
+                let mut created = PrfItem::from_local(name, desc, file_data)?;
+                created.option = item.option;
+                Ok(created)
             }
             "merge" => {
                 let name = item.name.unwrap_or("Merge".into());
@@ -153,8 +148,7 @@ impl PrfItem {
         }
     }
 
-    /// ## Local type
-    /// create a new item from name/desc
+    /// 构造本地订阅，文件内容由后续事务写入。
     pub fn from_local(name: String, desc: String, file_data: Option<String>) -> Result<PrfItem> {
         let uid = help::get_uid("l");
         let file = format!("{uid}.yaml");
@@ -174,14 +168,14 @@ impl PrfItem {
         })
     }
 
-    /// ## Remote type
-    /// create a new item from url
+    /// 下载并校验远程订阅，返回尚未落盘的内容和元数据。
     pub async fn from_url(
         url: &str,
         name: Option<String>,
         desc: Option<String>,
         option: Option<PrfOption>,
     ) -> Result<PrfItem> {
+        let requested_option = option.clone();
         let opt_ref = option.as_ref();
         let with_proxy = opt_ref.map_or(false, |o| o.with_proxy.unwrap_or(false));
         let self_proxy = opt_ref.map_or(false, |o| o.self_proxy.unwrap_or(false));
@@ -199,9 +193,8 @@ impl PrfItem {
         // 使用软件自己的代理
         if self_proxy {
             let port = Config::verge()
-                .latest()
                 .verge_mixed_port
-                .unwrap_or(Config::clash().data().get_mixed_port());
+                .unwrap_or(Config::clash().get_mixed_port());
 
             let proxy_scheme = format!("http://127.0.0.1:{port}");
 
@@ -254,7 +247,7 @@ impl PrfItem {
 
         let header = resp.headers();
 
-        // parse the Subscription UserInfo
+        // 解析订阅响应中的流量与到期信息。
         let extra = match header.get("Subscription-Userinfo") {
             Some(value) => {
                 let sub_info = value.to_str().unwrap_or("");
@@ -268,7 +261,7 @@ impl PrfItem {
             None => None,
         };
 
-        // parse the Content-Disposition
+        // 按标准扩展参数优先的顺序解析响应文件名。
         let filename = match header.get("Content-Disposition") {
             Some(value) => {
                 let filename = format!("{value:?}");
@@ -309,6 +302,7 @@ impl PrfItem {
             },
         };
 
+        let option = PrfOption::merge(option, requested_option);
         let uid = help::get_uid("r");
         let file = format!("{uid}.yaml");
         let name = name.unwrap_or(filename.unwrap_or("Remote File".into()));
@@ -317,10 +311,10 @@ impl PrfItem {
             .await
             .context("failed to download the profile body within the 20s total limit; check the network or proxy")?;
 
-        // process the charset "UTF-8 with BOM"
+        // 去除 UTF-8 BOM，再交给 YAML 解析器。
         let data = data.trim_start_matches('\u{feff}');
 
-        // check the data whether the valid yaml format
+        // 下载阶段先检查结构，激活时再由 Mihomo 执行完整配置校验。
         let yaml = serde_yaml::from_str::<Mapping>(data)
             .context("the remote profile data is invalid yaml")?;
 
@@ -343,8 +337,7 @@ impl PrfItem {
         })
     }
 
-    /// ## Merge type (enhance)
-    /// create the enhanced item by using `merge` rule
+    /// 构造合并增强项。
     pub fn from_merge(name: String, desc: String) -> Result<PrfItem> {
         let uid = help::get_uid("m");
         let file = format!("{uid}.yaml");
@@ -364,8 +357,7 @@ impl PrfItem {
         })
     }
 
-    /// ## Global Script type (enhance)
-    /// create the fixed global script item
+    /// 构造身份固定的全局脚本条目。
     pub fn global_script() -> PrfItem {
         PrfItem {
             uid: Some(GLOBAL_SCRIPT_UID.into()),
@@ -386,8 +378,7 @@ impl PrfItem {
         self.uid.as_deref() == Some(GLOBAL_SCRIPT_UID) && self.itype.as_deref() == Some("script")
     }
 
-    /// ## Script type (enhance)
-    /// create the enhanced item by using javascript quick.js
+    /// 构造由 QuickJS 执行的脚本增强项。
     pub fn from_script(name: String, desc: String) -> Result<PrfItem> {
         let uid = help::get_uid("s");
         let file = format!("{uid}.js"); // js ext
@@ -407,7 +398,7 @@ impl PrfItem {
         })
     }
 
-    /// get the file data
+    /// 读取条目关联文件，文件名必须位于订阅目录内。
     pub fn read_file(&self) -> Result<String> {
         if self.file.is_none() {
             bail!("could not find the file");
@@ -416,17 +407,6 @@ impl PrfItem {
         let file = self.file.clone().unwrap();
         let path = help::resolve_profile_path(&file)?;
         fs::read_to_string(path).context("failed to read the file")
-    }
-
-    /// save the file data
-    pub fn save_file(&self, data: String) -> Result<()> {
-        if self.file.is_none() {
-            bail!("could not find the file");
-        }
-
-        let file = self.file.clone().unwrap();
-        let path = help::resolve_profile_path(&file)?;
-        help::write_file_atomic(&path, data.as_bytes()).context("failed to save the file")
     }
 }
 

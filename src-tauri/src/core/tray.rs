@@ -1,7 +1,7 @@
 use crate::{
-    cmds,
+    application::{actions as feat, diagnostics},
+    commands as cmds,
     config::Config,
-    feat,
     utils::{dirs, resolve},
 };
 use anyhow::Result;
@@ -19,7 +19,7 @@ pub struct Tray {}
 
 impl Tray {
     pub fn tray_menu(app_handle: &AppHandle) -> SystemTrayMenu {
-        let zh = { Config::verge().latest().language == Some("zh".into()) };
+        let zh = Config::verge().language == Some("zh".into());
 
         let version = app_handle.package_info().version.to_string();
 
@@ -109,7 +109,7 @@ impl Tray {
     }
 
     pub fn update_part(app_handle: &AppHandle) -> Result<()> {
-        let zh = { Config::verge().latest().language == Some("zh".into()) };
+        let zh = Config::verge().language == Some("zh".into());
 
         let version = app_handle.package_info().version.to_string();
 
@@ -125,7 +125,6 @@ impl Tray {
 
         let mode = {
             Config::clash()
-                .latest()
                 .0
                 .get("mode")
                 .map(|val| val.as_str().unwrap_or("rule"))
@@ -140,7 +139,6 @@ impl Tray {
         let _ = tray.get_item("direct_mode").set_selected(mode == "direct");
 
         let verge = Config::verge();
-        let verge = verge.latest();
         let system_proxy = verge.enable_system_proxy.as_ref().unwrap_or(&false);
         let tun_mode = verge.enable_tun_mode.as_ref().unwrap_or(&false);
         let common_tray_icon = verge.common_tray_icon.as_ref().unwrap_or(&false);
@@ -279,7 +277,7 @@ impl Tray {
                     }
                     "system_proxy" => feat::toggle_system_proxy(),
                     "tun_mode" => feat::toggle_tun_mode(),
-                    "copy_env" => feat::copy_clash_env(app_handle),
+                    "copy_env" => diagnostics::copy_clash_env(app_handle),
                     "open_app_dir" => {
                         tauri::async_runtime::spawn(async {
                             let _ = cmds::open_app_dir().await;

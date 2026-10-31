@@ -6,6 +6,8 @@ import { useVisibility } from "@/hooks/use-visibility";
 import { useWebsocket } from "@/hooks/use-websocket";
 import { buildControllerWsUrl } from "@/utils/controller";
 import { initConn, mergeConnectionSnapshot } from "./model";
+import { FallbackPoller } from "@/shared/async/fallback-poller";
+import { RequestEpoch } from "@/shared/async/request-epoch";
 
 const FALLBACK_POLL_INTERVAL = 3000;
 
@@ -21,12 +23,15 @@ export const useConnectionsStream = () => {
   pageVisibleRef.current = pageVisible;
 
   const [connData, setConnData] = useState<IConnections>(initConn);
+  const epoch = useRef(new RequestEpoch());
   const [wsState, setWsState] = useState<"connected" | "reconnecting">(
     "reconnecting"
   );
 
-  const syncConnections = useLockFn(async () => {
+  const syncConnections = useLockFn(async (isCurrent = () => true) => {
+    const ticket = epoch.current.next();
     const snapshot = await getConnections();
+    if (!isCurrent() || !epoch.current.accepts(ticket)) return;
     const incoming = snapshot?.connections ?? [];
     setConnData((old) => ({
       ...snapshot,
@@ -34,39 +39,23 @@ export const useConnectionsStream = () => {
     }));
   });
 
-  // useLockFn 的返回值每次渲染都会变；用 ref 固定，避免递归调度捕获旧闭包。
+  // 轮询通过 ref 读取当前回调，避免捕获已过期的页面设置。
   const syncConnectionsRef = useRef(syncConnections);
   syncConnectionsRef.current = syncConnections;
 
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const unmountedRef = useRef(false);
-
-  useEffect(() => {
-    // StrictMode 的开发模式会 mount -> unmount -> mount，挂载时需复位。
-    unmountedRef.current = false;
-    return () => {
-      unmountedRef.current = true;
-    };
-  }, []);
-
+  const pollerRef = useRef<FallbackPoller | null>(null);
+  if (!pollerRef.current) {
+    pollerRef.current = new FallbackPoller(async (isCurrent) => {
+      await syncConnectionsRef.current(isCurrent).catch(() => undefined);
+    }, FALLBACK_POLL_INTERVAL);
+  }
   const clearFallbackTimer = useCallback(() => {
-    if (!fallbackTimerRef.current) return;
-    clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = null;
+    pollerRef.current?.stop();
   }, []);
 
   const scheduleFallbackPolling = useCallback(() => {
-    if (fallbackTimerRef.current) return;
-    fallbackTimerRef.current = setTimeout(async () => {
-      fallbackTimerRef.current = null;
-      await syncConnectionsRef.current().catch(() => undefined);
-      if (unmountedRef.current || !pageVisibleRef.current) return;
-      scheduleFallbackPollingRef.current();
-    }, FALLBACK_POLL_INTERVAL);
+    pollerRef.current?.start();
   }, []);
-
-  const scheduleFallbackPollingRef = useRef(scheduleFallbackPolling);
-  scheduleFallbackPollingRef.current = scheduleFallbackPolling;
 
   const { connect, disconnect } = useWebsocket(
     (event) => {
@@ -78,6 +67,7 @@ export const useConnectionsStream = () => {
       }
       // meta v1.15.0 出现 data.connections 为 null 的情况。
       const incoming = data.connections ?? [];
+      epoch.current.invalidate();
       setConnData((old) => ({
         ...data,
         connections: mergeConnectionSnapshot(old.connections, incoming),
@@ -91,6 +81,7 @@ export const useConnectionsStream = () => {
       // 内核每秒推送一次；连接数很大时推送可能变慢，阈值太短会反复重连并全量拉快照。
       heartbeatTimeout: 15000,
       onOpen: () => {
+        epoch.current.invalidate();
         setWsState("connected");
         clearFallbackTimer();
         void syncConnections().catch(() => undefined);
@@ -122,10 +113,32 @@ export const useConnectionsStream = () => {
     connect(wsUrl);
 
     return () => {
+      epoch.current.invalidate();
       clearFallbackTimer();
       disconnect();
     };
-  }, [wsUrl, pageVisible, connect, disconnect, clearFallbackTimer]);
+  }, [
+    wsUrl,
+    pageVisible,
+    clashInfo?.runtime_revision,
+    clashInfo?.generation,
+    connect,
+    disconnect,
+    clearFallbackTimer,
+  ]);
+
+  useEffect(() => {
+    const invalidate = () => {
+      epoch.current.invalidate();
+      clearFallbackTimer();
+      disconnect();
+      setConnData(initConn);
+      setWsState("reconnecting");
+    };
+    window.addEventListener("astra://runtime-changed", invalidate);
+    return () =>
+      window.removeEventListener("astra://runtime-changed", invalidate);
+  }, [disconnect, clearFallbackTimer]);
 
   useEffect(() => {
     const onRefresh = () => {
@@ -136,7 +149,10 @@ export const useConnectionsStream = () => {
       window.removeEventListener("verge://connections-refresh", onRefresh);
   }, []);
 
-  const resetConnections = useCallback(() => setConnData(initConn), []);
+  const resetConnections = useCallback(() => {
+    epoch.current.invalidate();
+    setConnData(initConn);
+  }, []);
 
   return {
     connData,

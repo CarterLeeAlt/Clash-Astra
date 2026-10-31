@@ -1,12 +1,13 @@
-use crate::{config::Config, feat, log_err};
+use crate::domain::hotkeys::{self, HotkeyMap};
+use crate::{application::actions as feat, config::Config};
 use anyhow::{bail, Result};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tauri::{AppHandle, GlobalShortcutManager};
 
 pub struct Hotkey {
-    current: Arc<Mutex<Vec<String>>>, // 保存当前的热键设置
+    current: Arc<Mutex<HotkeyMap>>, // 记录实际注册成功的快捷键，便于部分失败后补偿。
 
     app_handle: Arc<Mutex<Option<AppHandle>>>,
 }
@@ -16,7 +17,7 @@ impl Hotkey {
         static HOTKEY: OnceCell<Hotkey> = OnceCell::new();
 
         HOTKEY.get_or_init(|| Hotkey {
-            current: Arc::new(Mutex::new(Vec::new())),
+            current: Arc::new(Mutex::new(HotkeyMap::new())),
             app_handle: Arc::new(Mutex::new(None)),
         })
     }
@@ -24,33 +25,11 @@ impl Hotkey {
     pub fn init(&self, app_handle: AppHandle) -> Result<()> {
         *self.app_handle.lock() = Some(app_handle);
 
-        let verge = Config::verge();
-
-        if let Some(hotkeys) = verge.latest().hotkeys.as_ref() {
-            for hotkey in hotkeys.iter() {
-                let mut iter = hotkey.split(',');
-                let func = iter.next();
-                let key = iter.next();
-
-                match (key, func) {
-                    (Some(key), Some(func)) => {
-                        log_err!(self.register(key, func));
-                    }
-                    _ => {
-                        let key = key.unwrap_or("None");
-                        let func = func.unwrap_or("None");
-                        log::error!(target: "app", "invalid hotkey `{key}`:`{func}`");
-                    }
-                }
-            }
-            *self.current.lock() = hotkeys.clone();
-        }
-
-        Ok(())
+        self.update(Config::verge().hotkeys.unwrap_or_default())
     }
 
     fn get_manager(&self) -> Result<impl GlobalShortcutManager> {
-        let app_handle = self.app_handle.lock();
+        let app_handle = self.app_handle.lock().clone();
         if app_handle.is_none() {
             bail!("failed to get the hotkey manager");
         }
@@ -59,10 +38,6 @@ impl Hotkey {
 
     fn register(&self, hotkey: &str, func: &str) -> Result<()> {
         let mut manager = self.get_manager()?;
-
-        if manager.is_registered(hotkey)? {
-            manager.unregister(hotkey)?;
-        }
 
         let f = match func.trim() {
             "open_or_close_dashboard" => feat::open_or_close_dashboard,
@@ -87,67 +62,25 @@ impl Hotkey {
     }
 
     pub fn update(&self, new_hotkeys: Vec<String>) -> Result<()> {
+        let desired = hotkeys::parse(&new_hotkeys)?;
         let mut current = self.current.lock();
-        let old_map = Self::get_map_from_vec(&current);
-        let new_map = Self::get_map_from_vec(&new_hotkeys);
-
-        let (del, add) = Self::get_diff(old_map, new_map);
-
-        del.iter().for_each(|key| {
-            let _ = self.unregister(key);
-        });
-
-        add.iter().for_each(|(key, func)| {
-            log_err!(self.register(key, func));
-        });
-
-        *current = new_hotkeys;
+        let removed: Vec<_> = current
+            .iter()
+            .filter(|(key, action)| desired.get(*key) != Some(*action))
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in removed {
+            self.unregister(&key)?;
+            current.remove(&key);
+        }
+        for (key, action) in desired {
+            if current.get(&key) == Some(&action) {
+                continue;
+            }
+            self.register(&key, &action)?;
+            current.insert(key, action);
+        }
         Ok(())
-    }
-
-    fn get_map_from_vec(hotkeys: &Vec<String>) -> HashMap<&str, &str> {
-        let mut map = HashMap::new();
-
-        hotkeys.iter().for_each(|hotkey| {
-            let mut iter = hotkey.split(',');
-            let func = iter.next();
-            let key = iter.next();
-
-            if func.is_some() && key.is_some() {
-                let func = func.unwrap().trim();
-                let key = key.unwrap().trim();
-                map.insert(key, func);
-            }
-        });
-        map
-    }
-
-    fn get_diff<'a>(
-        old_map: HashMap<&'a str, &'a str>,
-        new_map: HashMap<&'a str, &'a str>,
-    ) -> (Vec<&'a str>, Vec<(&'a str, &'a str)>) {
-        let mut del_list = vec![];
-        let mut add_list = vec![];
-
-        old_map.iter().for_each(|(&key, func)| {
-            match new_map.get(key) {
-                Some(new_func) => {
-                    if new_func != func {
-                        del_list.push(key);
-                        add_list.push((key, *new_func));
-                    }
-                }
-                None => del_list.push(key),
-            };
-        });
-
-        new_map.iter().for_each(|(&key, &func)| {
-            if old_map.get(key).is_none() {
-                add_list.push((key, func));
-            }
-        });
-
-        (del_list, add_list)
     }
 }
 

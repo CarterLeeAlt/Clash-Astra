@@ -33,15 +33,21 @@ let notices: NoticeItem[] = [];
 const subscribers = new Set<NoticeSubscriber>();
 
 export function formatNoticeMessage(message: unknown): string {
+  const recovery =
+    message && typeof message === "object" && "recoveryError" in message
+      ? message.recoveryError
+      : undefined;
   const raw =
     message instanceof Error
       ? message.message
       : typeof message === "string"
-        ? message
-        : String(message ?? "");
+      ? message
+      : String(message ?? "");
 
   const normalized = raw.trim().replace(/\s+/g, " ");
-  const fallback = normalized || "Unknown error.";
+  const fallback = recovery
+    ? `Recovery incomplete: ${recovery}. ${normalized}`
+    : normalized || "Unknown error.";
   const truncated =
     fallback.length > 180 ? `${fallback.slice(0, 177)}...` : fallback;
 

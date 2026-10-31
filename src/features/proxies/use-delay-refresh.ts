@@ -5,6 +5,7 @@ import { getProxies } from "@/services/api";
 import { getAutoDelayResults } from "@/services/cmds";
 import delayManager from "@/services/delay";
 import { queryKeys } from "@/shared/query/keys";
+import { RequestEpoch } from "@/shared/async/request-epoch";
 
 /**
  * 手动与自动测速共用同一套延迟状态：
@@ -15,17 +16,20 @@ import { queryKeys } from "@/shared/query/keys";
 export const useDelayRefresh = () => {
   useEffect(() => {
     let disposed = false;
+    const epoch = new RequestEpoch();
 
     const refresh = async () => {
+      const ticket = epoch.next();
       try {
         const snapshot = await getProxies();
-        if (disposed) return;
+        if (disposed || !epoch.accepts(ticket)) return;
 
         delayManager.clearAll();
 
         try {
-          const results = await getAutoDelayResults();
-          if (!disposed && results) {
+          const resultSnapshot = await getAutoDelayResults();
+          const results = resultSnapshot.results;
+          if (!disposed && epoch.accepts(ticket) && results) {
             const groups = [snapshot.global, ...snapshot.groups];
             for (const group of groups) {
               for (const proxy of group.all ?? []) {
@@ -40,7 +44,7 @@ export const useDelayRefresh = () => {
           // 后端快照不可用时退回 history 展示
         }
 
-        if (!disposed) {
+        if (!disposed && epoch.accepts(ticket)) {
           mutate(queryKeys.proxies, snapshot, false);
         }
       } catch {
@@ -60,8 +64,15 @@ export const useDelayRefresh = () => {
     ];
 
     document.addEventListener("visibilitychange", onVisibilityChange);
+    const runtimeChanged = () => {
+      epoch.invalidate();
+      void refresh();
+    };
+    window.addEventListener("astra://runtime-changed", runtimeChanged);
     return () => {
       disposed = true;
+      epoch.invalidate();
+      window.removeEventListener("astra://runtime-changed", runtimeChanged);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       unlistenTasks.forEach((task) => {
         task.then((unlisten) => unlisten()).catch(() => undefined);
