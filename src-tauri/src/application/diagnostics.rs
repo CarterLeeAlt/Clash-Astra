@@ -825,17 +825,44 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires a running mihomo mixed port on 7897"]
-    async fn manual_connect_probe() {
+    async fn connect_probe_through_running_proxy() {
+        // 默认执行真实外网探测；四站全部记录后统一断言，不因首站失败跳过后续站点。
+        // 隔离测试入口显式传入临时端口，普通 cargo test 仍使用本机 7897。
+        let mixed_port = match std::env::var("ASTRA_TEST_MIXED_PORT") {
+            Ok(port) => port
+                .parse::<u16>()
+                .expect("ASTRA_TEST_MIXED_PORT must be a valid port"),
+            Err(std::env::VarError::NotPresent) => 7897,
+            Err(error) => panic!("invalid ASTRA_TEST_MIXED_PORT: {error}"),
+        };
+        assert!(
+            mixed_port >= 1000,
+            "ASTRA_TEST_MIXED_PORT must be between 1000 and 65535"
+        );
+        let mut failures = Vec::new();
         for url in [
             "https://www.google.com",
             "https://www.youtube.com",
             "https://chatgpt.com",
             "https://github.com",
         ] {
-            let result = test_delay_with(url.to_string(), 7897, false).await.unwrap();
-            println!("{url} -> {result:?}");
-            assert!(result.delay < 10000);
+            match test_delay_with(url.to_string(), mixed_port, false).await {
+                Ok(result) => {
+                    println!("connect probe {url}: delay={} ms", result.delay);
+                    if result.delay >= 10000 {
+                        failures.push(format!("{url}: probe failed or timed out"));
+                    }
+                }
+                Err(error) => {
+                    println!("connect probe {url}: error={error:#}");
+                    failures.push(format!("{url}: {error:#}"));
+                }
+            }
         }
+        assert!(
+            failures.is_empty(),
+            "proxy CONNECT probes failed:\n{}",
+            failures.join("\n")
+        );
     }
 }

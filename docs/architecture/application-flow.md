@@ -89,6 +89,10 @@ node scripts/pnpm.mjs exec cargo check --manifest-path src-tauri/windows-service
 node scripts/check-workspace-hygiene.mjs
 ```
 
-真实内核集成测试默认忽略；通过进程级 `ASTRA_TEST_SUBSCRIPTION_FILE` 指定工作区内订阅文件后，可单独执行 `subscription_compile_reload_and_http_rejection` 测试。它使用独立目录和临时监听端口，不更改 Windows 系统代理或服务。测试订阅与结果配置不进入版本控制。
+普通后端测试默认执行两项真实环境测试，不使用忽略标记。`connect_probe_through_running_proxy` 默认通过本机 `127.0.0.1:7897` 代理依次探测 Google、YouTube、ChatGPT 和 GitHub，汇总四站的 TLS 首字节响应结果后统一断言；可由测试入口通过 `ASTRA_TEST_MIXED_PORT` 显式传入隔离端口，不切换节点或改运行实例配置。代理未运行、外网不可达或探测超时均导致测试失败，不跳过或降级为通过。
+
+`subscription_compile_reload_and_http_rejection` 默认使用仓库内无凭据的 `src-tauri/tests/fixtures/mihomo-control.yaml`，启动独立 Mihomo 并验证配置加载、鉴权拒绝、重载和失败回滚；不依赖外部订阅地址，不修改 Windows 系统代理或服务。可通过进程级 `ASTRA_TEST_SUBSCRIPTION_FILE` 显式指定工作区内的其他测试配置；指定文件缺失或内容无效时直接失败。独立内核使用临时监听端口，测试下载、结果配置和进程日志不进入版本控制。
+
+本机和 CI 可共用 `test:backend` 入口，在 `.tmp/backend-tests/` 下生成无订阅代理配置，启动与宿主架构匹配的 Mihomo，检查控制器和混合端口配置就绪后执行全部测试；`ASTRA_TEST_CORE_BINARY`、`ASTRA_TEST_REPORT_DIR` 分别显式传入内核路径和工作区内报告位置。CI 使用 `MATCH,DIRECT`；本机可通过显式参数选择临时端口及上游 HTTP 代理，不做自动出口回退。入口设置整体 20 分钟预算并输出进度；失败、完成或可处理的中断后只清理本次创建的进程，保留日志和结果。CI 无论测试成败都归档该目录内日志及汇总 JSON，保留 7 天，不上传配置文件。
 
 变更业务状态时应同步维护 [业务行为与验收](business-contracts.md)，并添加能验证失败、并发或生命周期边界的回归场景。

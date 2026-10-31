@@ -31,6 +31,7 @@
     "check:naming": "node scripts/verify/check-naming.mjs",
     "check:workspace": "node scripts/check-workspace-hygiene.mjs",
     "test:frontend": "node --test tests/frontend/*.test.mjs",
+    "test:backend": "node scripts/verify/test-backend.mjs",
     "check:architecture": "node scripts/verify/check-architecture.mjs",
     "prepare:runtime": "node scripts/sidecars/prepare-runtime.mjs",
     "portable": "node scripts/release/portable.mjs",

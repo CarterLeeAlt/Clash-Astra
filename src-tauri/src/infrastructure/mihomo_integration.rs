@@ -72,22 +72,37 @@ impl TransactionDriver for ReloadOperation {
 }
 
 #[tokio::test]
-#[ignore = "requires ASTRA_TEST_SUBSCRIPTION_FILE; uses a workspace-local Mihomo process"]
 async fn subscription_compile_reload_and_http_rejection() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .to_path_buf();
-    let input = PathBuf::from(
-        std::env::var_os("ASTRA_TEST_SUBSCRIPTION_FILE")
-            .expect("subscription fixture path is required"),
+    // 普通测试直接使用无凭据的当前格式夹具；显式指定的输入不可用时必须失败。
+    let source = match std::env::var_os("ASTRA_TEST_SUBSCRIPTION_FILE") {
+        Some(input) => {
+            println!("isolated Mihomo integration input: explicit subscription fixture");
+            fs::read_to_string(input).expect("read isolated subscription fixture")
+        }
+        None => {
+            println!("isolated Mihomo integration input: embedded current-format fixture");
+            include_str!("../../tests/fixtures/mihomo-control.yaml").to_string()
+        }
+    };
+    let reports = std::env::var_os("ASTRA_TEST_REPORT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| workspace.join(".tmp/refactor-integration"));
+    assert!(
+        reports.starts_with(workspace.join(".tmp"))
+            && !reports
+                .components()
+                .any(|component| component == std::path::Component::ParentDir),
+        "test reports must stay inside workspace .tmp"
     );
-    let source = fs::read_to_string(input).expect("read isolated subscription fixture");
-    let root = workspace
-        .join(".tmp/refactor-integration")
-        .join(nanoid::nanoid!());
+    let root = reports.join(nanoid::nanoid!());
     fs::create_dir_all(&root).unwrap();
-    let binary = workspace.join("src-tauri/sidecar/mihomo-x86_64-pc-windows-msvc.exe");
+    let binary = std::env::var_os("ASTRA_TEST_CORE_BINARY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| workspace.join("src-tauri/sidecar/mihomo-x86_64-pc-windows-msvc.exe"));
     assert!(binary.is_file());
 
     let listeners: Vec<_> = (0..4)

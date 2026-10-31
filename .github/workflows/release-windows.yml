@@ -227,10 +227,32 @@ jobs:
           pnpm prepare:runtime ${{ matrix.target }}
           pnpm check:architecture
           pnpm test:frontend
-          cargo test --manifest-path src-tauri/Cargo.toml --bin clash-astra
-          if ($LASTEXITCODE -ne 0) { throw "business regression tests failed" }
           cargo test --manifest-path src-tauri/windows-service-src/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw "Windows service regression tests failed" }
+
+      - name: Complete backend tests with isolated Mihomo
+        id: backend_tests
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          # 本机与 CI 共用完整测试入口；CI 使用无订阅的 DIRECT 出口，不跳过外网探测。
+          pnpm test:backend
+          if ($LASTEXITCODE -ne 0) { throw "complete backend regression tests failed" }
+
+      - name: Upload backend test evidence
+        if: always() && steps.backend_tests.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-tests-${{ matrix.target }}-${{ github.run_attempt }}
+          # 只上传无凭据日志与结果；不收集测试配置或其他用户数据。
+          path: |
+            .tmp/backend-tests/**/*.log
+            .tmp/backend-tests/**/summary.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Detect signing availability
         id: sign_mode

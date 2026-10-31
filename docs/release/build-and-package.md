@@ -61,7 +61,26 @@ Rust 检查按 `AGENTS.md` 设置工作区环境后执行：
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo check --manifest-path src-tauri/Cargo.toml
+
+# 完整后端测试，包含当前代理外网探测和独立真实内核集成
+cargo test --manifest-path src-tauri/Cargo.toml --locked -- --nocapture
+
+# 本机与 CI 共用的隔离环境入口；自动启动无订阅 Mihomo 再运行全部后端测试
+node scripts/pnpm.mjs run test:backend
+
+# 本机已有 7897 代理、直连外网受限时，显式选择临时端口和上游
+node scripts/pnpm.mjs run test:backend --mixed-port 0 --upstream-proxy http://127.0.0.1:20081
 ```
+
+直接运行 `cargo test` 时，后端测试默认实际执行，不跳过环境依赖项；须确保本机 `127.0.0.1:7897` 有可用的 Mihomo 混合代理，并已准备工作区 `src-tauri/sidecar/mihomo-x86_64-pc-windows-msvc.exe`。外网探测会通过运行实例的当前路由访问 Google、YouTube、ChatGPT 和 GitHub，仅测到 TLS 首字节响应，不完成网页请求，也不修改节点或系统代理。每站连接探测上限 10 秒；四站全部记录后统一断言，任一失败会使测试失败。使用 `test:backend` 入口时由脚本准备独立代理，无需用户提前启动代理。
+
+独立内核集成默认使用 `src-tauri/tests/fixtures/mihomo-control.yaml`，无需设置环境变量；该无凭据夹具只用于控制接口、配置重载和事务回滚验证，不代表远程节点可用。需要其他输入时，可在进程级设置 `ASTRA_TEST_SUBSCRIPTION_FILE` 指向工作区内的测试配置。缺少内核、代理或指定输入，或网络与断言不满足时，必须报告失败，不能视为跳过或通过。
+
+`test:backend` 默认使用无订阅的 `MATCH,DIRECT` 配置，监听 `7897`，控制器另选临时端口；已有进程占用目标端口时明确失败，不接管或终止它。`--mixed-port 0` 由系统选择临时空闲端口，`--upstream-proxy` 只接受无认证信息的 HTTP 代理端点。端口、宿主架构内核路径和报告目录由入口显式传入同一套测试，不添加测试过滤或忽略开关。
+
+发布 CI 调用 `pnpm test:backend`，自动准备上述无订阅运行环境，仍使用全部测试与相同断言；不传本机上游参数，四站探测使用 GitHub runner 自身网络。Mihomo 配置校验、控制器就绪、测试、超时和收尾均由入口负责。单轮整体预算 20 分钟、就绪上限 15 秒；定期输出运行状态，失败或正常完成均清理自建进程。工作流另设 25 分钟步骤预算，并无论测试成败归档 `.tmp/backend-tests/` 中的日志和汇总 JSON，保留 7 天，不上传配置或用户数据。
+
+本机与 CI 的测试用例和断言相同，但网络出口不同；真实外网波动或 runner 出口不可达会导致 CI 失败，不能通过过滤、忽略或自动回退规避。本机显式上游验证通过不代表 GitHub DIRECT 出口已经验证，真实订阅和节点质量另在本机验证。
 
 Watchdog 黑盒回归：
 

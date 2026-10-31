@@ -17,5 +17,6 @@
 | [archive/taskbar-icons-1.8.2-verification.md](archive/taskbar-icons-1.8.2-verification.md)                           | Windows 图标加载、DPI 回读及修复包验证       |
 | [archive/window-size-1150x720-verification.md](archive/window-size-1150x720-verification.md)                         | 窗口默认及最小尺寸调整、回归和便携包验证     |
 | [archive/current-version-cleanup-1100x700-verification.md](archive/current-version-cleanup-1100x700-verification.md) | 当前版本清理、1100×700、回归和便携包校验     |
+| [archive/default-backend-tests-verification.md](archive/default-backend-tests-verification.md)                       | 后端测试默认执行、无订阅 CI 环境和实测记录   |
 
 新增文档时：当前操作说明放 `architecture/`、`reference/` 或 `release/`；只保留验证证据的历史内容放 `archive/`，并在开头注明对应版本与日期。

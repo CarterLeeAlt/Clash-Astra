@@ -1,0 +1,15 @@
+# 无凭据的当前格式夹具，仅验证内核控制接口，不验证远程节点连通性。
+mode: rule
+proxies:
+  - name: Isolated Control Test
+    type: socks5
+    server: 127.0.0.1
+    port: 9
+proxy-groups:
+  - name: Isolated Selector
+    type: select
+    proxies:
+      - DIRECT
+      - Isolated Control Test
+rules:
+  - MATCH,DIRECT
