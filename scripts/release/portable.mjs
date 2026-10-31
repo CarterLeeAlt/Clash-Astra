@@ -3,6 +3,8 @@ import path from "path";
 import AdmZip from "adm-zip";
 import { createRequire } from "module";
 import { getOctokit, context } from "@actions/github";
+import { mihomoLock, verifyMihomo } from "../lib/mihomo-lock.mjs";
+import { sourceIdentity } from "../lib/source-identity.mjs";
 
 const target = process.argv.slice(2)[0];
 // 同版本的本地修复包用标签区分，不覆盖用户已经下载或正在使用的旧包。
@@ -101,10 +103,7 @@ async function resolvePortable() {
     throw new Error(`File not found: ${mihomoPath}`);
   }
 
-  const mihomoAlphaPath = path.join(releaseDir, "mihomo-alpha.exe");
-  if (!(await fs.pathExists(mihomoAlphaPath))) {
-    throw new Error(`File not found: ${mihomoAlphaPath}`);
-  }
+  verifyMihomo(mihomoPath);
 
   const resourcesPath = path.join(releaseDir, "resources");
   if (!(await fs.pathExists(resourcesPath))) {
@@ -134,7 +133,22 @@ async function resolvePortable() {
   zip.addFile(portableExeName, await fs.readFile(exePath));
   zip.addLocalFile(watchdogPath);
   zip.addLocalFile(mihomoPath);
-  zip.addLocalFile(mihomoAlphaPath);
+  zip.addFile(
+    "mihomo.lock.json",
+    Buffer.from(JSON.stringify(mihomoLock, null, 2) + "\n")
+  );
+  const buildInfo = {
+    contract: mihomoLock.contract,
+    mihomo: mihomoLock,
+    applicationSource: sourceIdentity(process.cwd()),
+    generatorSource: process.env.SUBLINK_SOURCE_DIR
+      ? sourceIdentity(path.resolve(process.env.SUBLINK_SOURCE_DIR))
+      : null,
+  };
+  zip.addFile(
+    "build-info.json",
+    Buffer.from(JSON.stringify(buildInfo, null, 2) + "\n")
+  );
   zip.addLocalFolder(resourcesPath, "resources");
 
   const unsignedSuffix = process.env.UNSIGNED_BUILD === "1" ? "_unsigned" : "";
@@ -174,13 +188,8 @@ async function resolvePortable() {
   ) {
     throw new Error("portable.zip missing mihomo.exe");
   }
-  if (
-    !zipExeEntries.some(
-      (name) => path.basename(name).toLowerCase() === "mihomo-alpha.exe"
-    )
-  ) {
-    throw new Error("portable.zip missing mihomo-alpha.exe");
-  }
+  if (zipCheck.some((name) => /alpha/i.test(name)))
+    throw new Error("Unverified Alpha core in package");
   if (!zipEntriesLower.some((name) => name.startsWith("resources/"))) {
     throw new Error("portable.zip missing resources/ directory");
   }

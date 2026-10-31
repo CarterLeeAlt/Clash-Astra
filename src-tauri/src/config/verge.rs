@@ -4,8 +4,7 @@ use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 
 pub const MIHOMO_CORE: &str = "mihomo";
-pub const MIHOMO_ALPHA_CORE: &str = "mihomo-alpha";
-pub const VALID_MIHOMO_CORES: [&str; 2] = [MIHOMO_CORE, MIHOMO_ALPHA_CORE];
+pub const VALID_MIHOMO_CORES: [&str; 1] = [MIHOMO_CORE];
 
 /// 当前应用设置的持久化字段，运行中的修改统一经应用协调器提交。
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]

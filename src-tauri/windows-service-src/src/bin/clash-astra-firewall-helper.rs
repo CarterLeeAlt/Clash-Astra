@@ -14,7 +14,7 @@ use windows::Win32::System::Com::{
 
 const RULE_PREFIX: &str = "Clash Astra LAN";
 const RULE_GROUP: &str = "Clash Astra";
-const CORE_BINARIES: [&str; 2] = ["mihomo.exe", "mihomo-alpha.exe"];
+const CORE_BINARIES: [&str; 1] = ["mihomo.exe"];
 
 struct ComGuard;
 
@@ -187,9 +187,6 @@ mod tests {
     #[test]
     fn uses_stable_distinct_rule_names() {
         assert_eq!(rule_name(CORE_BINARIES[0]), "Clash Astra LAN - mihomo.exe");
-        assert_eq!(
-            rule_name(CORE_BINARIES[1]),
-            "Clash Astra LAN - mihomo-alpha.exe"
-        );
+        assert_eq!(CORE_BINARIES.len(), 1);
     }
 }

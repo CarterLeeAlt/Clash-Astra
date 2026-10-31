@@ -26,6 +26,8 @@ node scripts/pnpm.mjs run prepare:runtime
 
 `prepare:runtime` 不是代码检查；已有资源会被复用，只有缺失或传 `--force` 时才重新下载。
 
+内核由 `src-tauri/mihomo.lock.json` 固定为 `v1.19.33`，不查询 `latest`。存在的内核也必须匹配版本和 SHA-256，否则失败；`--force` 不能绕过身份检查。构建前的 `check-mihomo.mjs`、打包和运行前均核对同一文件。版本、常用字段和三方联合验收见 [适配契约](../reference/mihomo-contract.md)。
+
 ## 构建
 
 ```powershell
@@ -108,7 +110,7 @@ node scripts/pnpm.mjs run portable x86_64-pc-windows-msvc
 artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 ```
 
-未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 `Clash Astra.exe`、`Clash Astra Watchdog.exe`、`mihomo.exe`、`mihomo-alpha.exe` 和 `resources/`。
+未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 `Clash Astra.exe`、`Clash Astra Watchdog.exe`、唯一的 `mihomo.exe`、`mihomo.lock.json`、`build-info.json` 和 `resources/`。`build-info.json` 记录内核身份、应用源码基线/修改状态/指纹；本地联合交付可在进程级设置 `SUBLINK_SOURCE_DIR` 记录实际生成器身份。不得把修改前的提交称为修复后的源码版本。
 
 ## 产物边界
 

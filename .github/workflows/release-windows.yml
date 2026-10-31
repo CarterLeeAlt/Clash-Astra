@@ -316,9 +316,7 @@ jobs:
           if (-not $signtool) { throw "signtool.exe not found" }
           $files = @(
             "src-tauri/target/${{ matrix.target }}/release/Clash Astra.exe",
-            "src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe",
-            "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
-            "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
+            "src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe"
           )
           foreach ($f in $files) {
             if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing artifact: $f" }
@@ -365,9 +363,7 @@ jobs:
           $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           $files = @(
             "src-tauri/target/${{ matrix.target }}/release/Clash Astra.exe",
-            "src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe",
-            "src-tauri/target/${{ matrix.target }}/release/mihomo.exe",
-            "src-tauri/target/${{ matrix.target }}/release/mihomo-alpha.exe"
+            "src-tauri/target/${{ matrix.target }}/release/Clash Astra Watchdog.exe"
           )
           foreach ($f in $files) {
             if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "missing artifact: $f" }

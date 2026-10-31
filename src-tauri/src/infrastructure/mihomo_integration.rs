@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-struct CoreProcess(Child);
+pub(super) struct CoreProcess(pub(super) Child);
 impl Drop for CoreProcess {
     fn drop(&mut self) {
         let _ = self.0.kill();
@@ -104,6 +104,7 @@ async fn subscription_compile_reload_and_http_rejection() {
         .map(PathBuf::from)
         .unwrap_or_else(|| workspace.join("src-tauri/sidecar/mihomo-x86_64-pc-windows-msvc.exe"));
     assert!(binary.is_file());
+    crate::core::mihomo::verify(&binary).unwrap();
 
     let listeners: Vec<_> = (0..4)
         .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())

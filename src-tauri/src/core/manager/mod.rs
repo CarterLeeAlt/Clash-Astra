@@ -15,7 +15,6 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::time::sleep;
 
 mod process;
-mod update;
 
 #[derive(Debug)]
 pub struct CoreManager {
@@ -58,7 +57,7 @@ impl CoreManager {
             .and_then(|pid| {
                 let app_dir = dirs::app_home_dir()?;
                 let exe_dir = dirs::executable_dir()?;
-                let expected: Vec<_> = [MIHOMO_CORE, MIHOMO_ALPHA_CORE]
+                let expected: Vec<_> = [MIHOMO_CORE]
                     .iter()
                     .filter_map(|name| dunce::canonicalize(exe_dir.join(format!("{name}.exe"))).ok())
                     .collect();
@@ -123,6 +122,7 @@ impl CoreManager {
 
     /// 检查订阅是否正确
     pub fn check_config(&self, snapshot: &ConfigSnapshot) -> Result<()> {
+        crate::core::mihomo::verify_bundled()?;
         let config_path = snapshot.write_runtime(ConfigType::Check)?;
         let config_path = dirs::path_to_str(&config_path)?;
 
@@ -137,12 +137,13 @@ impl CoreManager {
             .output()?;
 
         if !output.status.success() {
-            let error = clash_api::parse_check_output(output.stdout.clone());
+            let combined = format!("{}\n{}", output.stdout, output.stderr);
+            let error = clash_api::parse_check_output(combined.clone());
             let error = match !error.is_empty() {
                 true => error,
-                false => output.stdout.clone(),
+                false => combined.clone(),
             };
-            Logger::global().set_log(output.stdout);
+            Logger::global().set_log(combined);
             bail!("{error}");
         }
 

@@ -120,9 +120,7 @@
   "Restart": "Перезапуск",
   "Lock Window Size": "Заблокировать размер окна",
   "Unlock Window Size": "Разблокировать размер окна",
-  "Upgrade": "Обновлять",
-  "Core Upgrade Success": "Ядро Mihomo успешно обновлено",
-  "Core Up To Date": "Ядро Mihomo уже обновлено",
+  "Pinned Core Description": "Приложение содержит проверенную фиксированную версию ядра.",
 
   "Back": "Назад",
   "Save": "Сохранить",

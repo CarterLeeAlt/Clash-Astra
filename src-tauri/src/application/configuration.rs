@@ -232,6 +232,9 @@ impl TransactionDriver for Driver {
                 .await?
             }
         }
+        if matches!(self.action, RuntimeAction::Reload | RuntimeAction::Restart) {
+            clash_api::wait_subscription_ready(next).await?;
+        }
         if self.change.restore_selection {
             self.selection_attempted = true;
             super::profiles::restore_selected(next).await?;

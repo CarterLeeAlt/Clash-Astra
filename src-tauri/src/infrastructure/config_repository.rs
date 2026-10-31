@@ -81,6 +81,9 @@ pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate:
         None => (Mapping::new(), String::new()),
     };
     crate::domain::network::validate_subscription(&current)?;
+    if profiles.current.is_some() {
+        crate::domain::network::validate_sources(&current)?;
+    }
     let global_script = profiles
         .items
         .as_ref()
@@ -101,8 +104,12 @@ pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate:
         global_script,
         chain,
     });
+    anyhow::ensure!(!runtime.chain_logs.values().flatten().any(|(level, _)| level == "exception"), "subscription enhancement script failed; candidate was not accepted (see script diagnostics)");
     if let Some(config) = &runtime.config {
         crate::domain::network::validate_subscription(config)?;
+        if profiles.current.is_some() {
+            crate::domain::network::validate_sources(config)?;
+        }
     }
     Ok(runtime)
 }

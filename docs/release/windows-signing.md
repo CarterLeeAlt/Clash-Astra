@@ -77,6 +77,8 @@ Get-AuthenticodeSignature <file>
 
 ## SmartScreen reputation vs signature presence
 
+The pinned third-party `mihomo.exe` is not re-signed. Its exact upstream SHA-256 is required by `src-tauri/mihomo.lock.json`; signing it would change its identity. Sign and verify the application's own GUI and Watchdog executables separately from the pinned core verification.
+
 - **Signature presence**: determines whether Publisher can be identified.
 - **SmartScreen reputation**: may still warn for newly signed binaries with low reputation.
 

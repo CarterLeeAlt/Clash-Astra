@@ -2,7 +2,6 @@ use crate::utils::{help, resolve::VERSION, tmpl};
 use anyhow::{bail, Context, Result};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_yaml::Mapping;
 use std::fs;
 use std::time::Duration;
 use sysproxy::Sysproxy;
@@ -179,6 +178,10 @@ impl PrfItem {
         let opt_ref = option.as_ref();
         let with_proxy = opt_ref.map_or(false, |o| o.with_proxy.unwrap_or(false));
         let self_proxy = opt_ref.map_or(false, |o| o.self_proxy.unwrap_or(false));
+        anyhow::ensure!(
+            !(with_proxy && self_proxy),
+            "choose either application proxy or system proxy, not both"
+        );
         let accept_invalid_certs =
             opt_ref.map_or(false, |o| o.danger_accept_invalid_certs.unwrap_or(false));
         let user_agent = opt_ref.and_then(|o| o.user_agent.clone());
@@ -222,22 +225,32 @@ impl PrfItem {
                 if let Ok(proxy) = reqwest::Proxy::all(&proxy_scheme) {
                     builder = builder.proxy(proxy);
                 }
+            } else {
+                bail!("system proxy download was requested, but the system proxy is unavailable or disabled");
             }
         }
 
         let version = match VERSION.get() {
-            Some(v) => format!("clash-astra/v{}", v),
-            None => "clash-astra/unknown".to_string(),
+            Some(v) => format!(
+                "clash-astra/v{} mihomo/{}",
+                v,
+                crate::core::mihomo::lock().version
+            ),
+            None => format!(
+                "clash-astra/unknown mihomo/{}",
+                crate::core::mihomo::lock().version
+            ),
         };
 
         builder = builder.danger_accept_invalid_certs(accept_invalid_certs);
         builder = builder.user_agent(user_agent.unwrap_or(version));
 
-        let resp = builder
+        let mut resp = builder
             .build()?
             .get(url)
             .send()
             .await
+            .map_err(|error| error.without_url())
             .context("failed to fetch remote profile within 20s (connect limit 8s); check the network or proxy")?;
 
         let status_code = resp.status();
@@ -246,6 +259,18 @@ impl PrfItem {
         }
 
         let header = resp.headers();
+        if let Some(version) = header.get("x-mihomo-version") {
+            anyhow::ensure!(
+                version.to_str().ok() == Some(crate::core::mihomo::lock().version.as_str()),
+                "subscription response targets a different Mihomo version"
+            );
+        }
+        if let Some(contract) = header.get("x-sublink-contract") {
+            anyhow::ensure!(
+                contract.to_str().ok() == Some(crate::core::mihomo::lock().contract.as_str()),
+                "subscription response uses a different generation contract"
+            );
+        }
 
         // 解析订阅响应中的流量与到期信息。
         let extra = match header.get("Subscription-Userinfo") {
@@ -293,7 +318,10 @@ impl PrfItem {
             None => match header.get("profile-update-interval") {
                 Some(value) => match value.to_str().unwrap_or("").parse::<u64>() {
                     Ok(val) => Some(PrfOption {
-                        update_interval: Some(val * 60), // hour -> min
+                        update_interval: Some(
+                            val.checked_mul(60)
+                                .context("subscription update interval overflow")?,
+                        ), // 小时转换为分钟。
                         ..PrfOption::default()
                     }),
                     Err(_) => None,
@@ -306,21 +334,31 @@ impl PrfItem {
         let uid = help::get_uid("r");
         let file = format!("{uid}.yaml");
         let name = name.unwrap_or(filename.unwrap_or("Remote File".into()));
-        let data = resp
-            .text_with_charset("utf-8")
+        const MAX_PROFILE_BYTES: usize = 16 * 1024 * 1024;
+        anyhow::ensure!(
+            resp.content_length().unwrap_or(0) <= MAX_PROFILE_BYTES as u64,
+            "subscription exceeds 16 MiB"
+        );
+        let mut bytes = Vec::new();
+        while let Some(chunk) = resp
+            .chunk()
             .await
-            .context("failed to download the profile body within the 20s total limit; check the network or proxy")?;
+            .map_err(|error| error.without_url())
+            .context("failed to download subscription body within 20s")?
+        {
+            anyhow::ensure!(
+                bytes.len() + chunk.len() <= MAX_PROFILE_BYTES,
+                "subscription exceeds 16 MiB"
+            );
+            bytes.extend_from_slice(&chunk);
+        }
+        let data = String::from_utf8(bytes).context("subscription must be UTF-8")?;
 
         // 去除 UTF-8 BOM，再交给 YAML 解析器。
         let data = data.trim_start_matches('\u{feff}');
 
         // 下载阶段先检查结构，激活时再由 Mihomo 执行完整配置校验。
-        let yaml = serde_yaml::from_str::<Mapping>(data)
-            .context("the remote profile data is invalid yaml")?;
-
-        if !yaml.contains_key("proxies") && !yaml.contains_key("proxy-providers") {
-            bail!("profile does not contain `proxies` or `proxy-providers`");
-        }
+        crate::domain::network::parse_remote_profile(data)?;
 
         Ok(PrfItem {
             uid: Some(uid),

@@ -1,6 +1,7 @@
 pub mod clash_api;
 pub mod handle;
 pub mod hotkey;
+pub mod mihomo;
 pub use crate::logging::buffer as logger;
 mod manager;
 pub mod scheduler;

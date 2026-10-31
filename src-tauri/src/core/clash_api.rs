@@ -19,12 +19,6 @@ static API_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         .expect("failed to build Clash API client")
 });
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CoreUpgradeStatus {
-    Updated,
-    AlreadyCurrent,
-}
-
 /// PUT /configs
 /// path 是绝对路径
 pub async fn put_configs_for(info: ClashInfo, path: &str) -> Result<()> {
@@ -63,33 +57,6 @@ pub async fn patch_configs_for(info: ClashInfo, config: &Mapping) -> Result<()> 
     let builder = client.patch(&url).headers(headers.clone()).json(config);
     builder.send().await?.error_for_status()?;
     Ok(())
-}
-
-/// 按指定发布通道请求内核更新；CoreManager 协调可执行文件替换后的重启与恢复。
-pub async fn upgrade_core(channel: &str) -> Result<CoreUpgradeStatus> {
-    let (url, headers) = clash_client_info()?;
-    let url = format!("{url}/upgrade");
-    let client = reqwest::ClientBuilder::new()
-        .no_proxy()
-        .timeout(Duration::from_secs(120))
-        .build()?;
-    let response = client
-        .post(&url)
-        .headers(headers)
-        .query(&[("channel", channel)])
-        .send()
-        .await?;
-    let status = response.status();
-    let body = response.text().await?;
-
-    if status.is_success() {
-        return Ok(CoreUpgradeStatus::Updated);
-    }
-    if body.contains("already using latest version") {
-        return Ok(CoreUpgradeStatus::AlreadyCurrent);
-    }
-
-    bail!("Mihomo core upgrade failed with HTTP {status}: {body}")
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -257,6 +224,88 @@ pub async fn get_proxies_for(info: ClashInfo) -> Result<ProxiesRes> {
     let response = API_CLIENT.get(&url).headers(headers).send().await?;
 
     Ok(response.error_for_status()?.json::<ProxiesRes>().await?)
+}
+
+/// 控制器可访问不代表 provider 已成功下载；所有被引用的集合都须实际加载。
+pub async fn check_subscription_ready(snapshot: &crate::config::ConfigSnapshot) -> Result<()> {
+    if snapshot.profiles.current.is_none() {
+        return Ok(());
+    }
+    let config = snapshot
+        .runtime
+        .config
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("runtime configuration is missing"))?;
+    let (url, headers) = build_clash_client_info(snapshot.clash.get_client_info())?;
+    for (field, endpoint, proxy_provider) in [
+        ("proxy-providers", "providers/proxies", true),
+        ("rule-providers", "providers/rules", false),
+    ] {
+        let Some(expected) = config
+            .get(field)
+            .and_then(serde_yaml::Value::as_mapping)
+            .filter(|providers| !providers.is_empty())
+        else {
+            continue;
+        };
+        let response = API_CLIENT
+            .get(format!("{url}/{endpoint}"))
+            .headers(headers.clone())
+            .timeout(Duration::from_secs(3))
+            .send()
+            .await?
+            .error_for_status()?;
+        let data: serde_json::Value = response.json().await?;
+        for name in expected.keys().filter_map(serde_yaml::Value::as_str) {
+            let actual = &data["providers"][name];
+            validate_loaded_provider(actual, proxy_provider)?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn wait_subscription_ready(snapshot: &crate::config::ConfigSnapshot) -> Result<()> {
+    let check = async {
+        let deadline = Instant::now() + Duration::from_secs(12);
+        loop {
+            match check_subscription_ready(snapshot).await {
+                Ok(()) => return Ok(()),
+                Err(error) if Instant::now() >= deadline => return Err(error),
+                Err(_) => tokio::time::sleep(Duration::from_millis(300)).await,
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(15), check)
+        .await
+        .map_err(|_| anyhow::anyhow!("subscription providers did not become ready within 15s"))?
+}
+
+fn validate_loaded_provider(actual: &serde_json::Value, proxy_provider: bool) -> Result<()> {
+    anyhow::ensure!(actual.is_object(), "subscription provider is not loaded");
+    if proxy_provider {
+        anyhow::ensure!(
+            actual["proxies"]
+                .as_array()
+                .is_some_and(|nodes| !nodes.is_empty()),
+            "subscription proxy-provider has no loaded nodes"
+        );
+    } else {
+        anyhow::ensure!(
+            actual["ruleCount"].as_u64().is_some_and(|count| count > 0),
+            "subscription rule-provider has no loaded rules"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn provider_readiness_does_not_accept_missing_or_empty_content() {
+    use serde_json::json;
+    assert!(validate_loaded_provider(&json!(null), true).is_err());
+    assert!(validate_loaded_provider(&json!({"proxies": []}), true).is_err());
+    assert!(validate_loaded_provider(&json!({"ruleCount": 0}), false).is_err());
+    assert!(validate_loaded_provider(&json!({"proxies": [{"name": "synthetic"}]}), true).is_ok());
+    assert!(validate_loaded_provider(&json!({"ruleCount": 1}), false).is_ok());
 }
 
 pub async fn select_proxy_for(info: ClashInfo, group: &str, proxy: &str) -> Result<()> {

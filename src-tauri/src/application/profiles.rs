@@ -208,6 +208,23 @@ pub async fn update_profile(uid: String, option: Option<PrfOption>) -> Result<()
             .context("subscription file name is missing")?;
         item.extra = downloaded.extra;
         item.updated = downloaded.updated;
+        // 更新响应可首次提供间隔；一次性的下载代理选项不能改写已保存偏好。
+        if item
+            .option
+            .as_ref()
+            .and_then(|option| option.update_interval)
+            .is_none()
+        {
+            if let Some(interval) = downloaded
+                .option
+                .as_ref()
+                .and_then(|option| option.update_interval)
+            {
+                item.option
+                    .get_or_insert_with(PrfOption::default)
+                    .update_interval = Some(interval);
+            }
+        }
         if let Some(data) = downloaded.file_data {
             change.files.insert(file, Some(data));
         }

@@ -55,6 +55,7 @@ impl CoreManager {
     }
 
     pub(super) async fn start_core_locked(&self, snapshot: &ConfigSnapshot) -> Result<()> {
+        crate::core::mihomo::verify_bundled()?;
         let config_path = snapshot.write_runtime(ConfigType::Run)?;
 
         self.core_ready.store(false, Ordering::SeqCst);
@@ -195,10 +196,14 @@ impl CoreManager {
             }
         });
 
-        if let Err(err) = clash_api::wait_for_core_ready(
-            snapshot.clash.get_client_info(),
-            Duration::from_secs(12),
-        )
+        if let Err(err) = async {
+            clash_api::wait_for_core_ready(
+                snapshot.clash.get_client_info(),
+                Duration::from_secs(12),
+            )
+            .await?;
+            clash_api::wait_subscription_ready(snapshot).await
+        }
         .await
         {
             if self

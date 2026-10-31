@@ -494,7 +494,8 @@ pub(super) async fn run_core_by_service(
             format!(
                 "service started Mihomo core (pid {core_pid:?}) but its configured controller is not ready"
             )
-        })
+        })?;
+    clash_api::wait_subscription_ready(snapshot).await
 }
 
 pub async fn stop_core_by_service() -> Result<()> {

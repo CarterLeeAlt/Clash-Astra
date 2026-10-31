@@ -54,16 +54,8 @@ export async function patchPorts(ports: {
   return invoke<void>("patch_ports", { ports });
 }
 
-export async function changeClashCore(clashCore: string) {
-  return invoke<any>("change_clash_core", { clashCore });
-}
-
 export async function restartSidecar() {
   return invoke<void>("restart_sidecar");
-}
-
-export async function upgradeCore() {
-  return invoke<boolean>("upgrade_core");
 }
 
 export async function cmdGetProxyDelay(

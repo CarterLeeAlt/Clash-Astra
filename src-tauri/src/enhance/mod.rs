@@ -10,7 +10,7 @@ use self::merge::*;
 use self::script::*;
 use self::tun::*;
 use crate::config::IRuntime;
-use serde_yaml::{Mapping, Value};
+use serde_yaml::Mapping;
 use std::collections::HashMap;
 
 /// 编译所需的输入快照；订阅文件由基础设施层读取后传入。
@@ -80,7 +80,9 @@ pub fn compile(input: CompileInput) -> IRuntime {
 
     // 合并默认的config（tun 由 use_tun 统一处理，避免来源混淆）
     for (key, value) in clash_config.into_iter() {
-        if key.as_str() != Some("tun") {
+        if key.as_str().is_some_and(|name| {
+            self::field::HANDLE_FIELDS.contains(&name) || name == "find-process-mode"
+        }) {
             config.insert(key, value);
         }
     }
@@ -93,7 +95,6 @@ pub fn compile(input: CompileInput) -> IRuntime {
         clash_tun_default,
         &mut diagnostics,
     );
-    config = apply_ipv6_to_dns(config);
     config = use_sort(config);
 
     IRuntime {
@@ -126,21 +127,24 @@ mod tests {
         let config = output.config.unwrap();
         assert_eq!(config.get("marker").unwrap().as_str(), Some("global-user"));
         assert_eq!(config.get("mode").unwrap().as_str(), Some("rule"));
-        assert_eq!(
-            config.get("dns").unwrap().get("ipv6").unwrap().as_bool(),
-            Some(false)
-        );
+        assert!(config.get("dns").is_none());
     }
-}
 
-fn apply_ipv6_to_dns(mut config: Mapping) -> Mapping {
-    let ipv6_enabled = config
-        .get("ipv6")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let dns = config.get("dns").and_then(|v| v.as_mapping()).cloned();
-    let mut dns = dns.unwrap_or_default();
-    dns.insert("ipv6".into(), Value::Bool(ipv6_enabled));
-    config.insert("dns".into(), Value::Mapping(dns));
-    config
+    #[test]
+    fn subscriber_dns_and_native_node_fields_survive_application_overrides() {
+        let source: Mapping = serde_yaml::from_str("dns: {enable: true, ipv6: true, nameserver: ['https://1.1.1.1/dns-query']}\nproxies: [{name: v, type: vless, server: example.invalid, alpn: [h2], xhttp-opts: {path: /test}}]\nmode: global").unwrap();
+        let output = compile(CompileInput {
+            clash_config: crate::config::IClashTemp::template().0,
+            enable_tun: false,
+            current: source.clone(),
+            global_script: None,
+            chain: vec![],
+            profile_name: "test".into(),
+        })
+        .config
+        .unwrap();
+        assert_eq!(output.get("dns"), source.get("dns"));
+        assert_eq!(output.get("proxies"), source.get("proxies"));
+        assert_eq!(output.get("mode").unwrap().as_str(), Some("rule"));
+    }
 }

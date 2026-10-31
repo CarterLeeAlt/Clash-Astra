@@ -7,7 +7,7 @@
     "distDir": "../dist",
     "devPath": "http://localhost:3000/",
     "beforeDevCommand": "node scripts/build/build-watchdog.mjs --debug && pnpm run web:dev",
-    "beforeBuildCommand": "pnpm run web:build"
+    "beforeBuildCommand": "node scripts/verify/check-mihomo.mjs && pnpm run web:build"
   },
   "tauri": {
     "bundle": {
@@ -20,7 +20,7 @@
         "icons/icon.ico"
       ],
       "resources": ["resources"],
-      "externalBin": ["sidecar/mihomo", "sidecar/mihomo-alpha"],
+      "externalBin": ["sidecar/mihomo"],
       "copyright": "© 2026 Clash Astra",
       "category": "DeveloperTool",
       "shortDescription": "Clash Astra",

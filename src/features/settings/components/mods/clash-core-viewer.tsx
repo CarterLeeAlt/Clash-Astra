@@ -1,4 +1,3 @@
-import { mutate } from "swr";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import {
   BaseDialog,
@@ -7,48 +6,21 @@ import {
   Notice,
 } from "@/components/base";
 import { useTranslation } from "react-i18next";
-import { useVerge } from "@/hooks/use-verge";
 import { useLockFn } from "ahooks";
-import { LoadingButton } from "@mui/lab";
-import { SwitchAccessShortcut, RestartAlt } from "@mui/icons-material";
-import { Box, Button, List, ListItemButton, ListItemText } from "@mui/material";
-import { changeClashCore, restartSidecar, upgradeCore } from "@/services/cmds";
-
-const VALID_CORE = [
-  { name: "Mihomo", core: "mihomo" },
-  { name: "Mihomo Alpha", core: "mihomo-alpha" },
-];
+import { RestartAlt } from "@mui/icons-material";
+import { Box, Button, Typography } from "@mui/material";
+import { restartSidecar } from "@/services/cmds";
+import coreLock from "@root/src-tauri/mihomo.lock.json";
 
 export const ClashCoreViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
-  const { verge, mutateVerge } = useVerge();
-
   const [open, setOpen] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
 
   useImperativeHandle(ref, () => ({
     open: () => setOpen(true),
     close: () => setOpen(false),
   }));
-
-  const { clash_core = "mihomo" } = verge ?? {};
-
-  const onCoreChange = useLockFn(async (core: string) => {
-    if (core === clash_core) return;
-
-    try {
-      await changeClashCore(core);
-      await Promise.all([
-        mutateVerge(),
-        mutate("getClashConfig"),
-        mutate("getVersion"),
-      ]);
-      Notice.success(`Switched to ${core}.`);
-    } catch (err: any) {
-      Notice.error(formatNoticeMessage(err));
-    }
-  });
 
   const onRestart = useLockFn(async () => {
     try {
@@ -59,19 +31,6 @@ export const ClashCoreViewer = forwardRef<DialogRef>((_props, ref) => {
     }
   });
 
-  const onUpgrade = useLockFn(async () => {
-    try {
-      setUpgrading(true);
-      const updated = await upgradeCore();
-      await Promise.all([mutate("getVersion"), mutate("getClashConfig")]);
-      Notice.success(t(updated ? "Core Upgrade Success" : "Core Up To Date"));
-    } catch (err: any) {
-      Notice.error(formatNoticeMessage(err?.response?.data?.message || err));
-    } finally {
-      setUpgrading(false);
-    }
-  });
-
   return (
     <BaseDialog
       open={open}
@@ -79,21 +38,9 @@ export const ClashCoreViewer = forwardRef<DialogRef>((_props, ref) => {
         <Box display="flex" justifyContent="space-between">
           {t("Mihomo Core")}
           <Box>
-            <LoadingButton
-              variant="contained"
-              size="small"
-              startIcon={<SwitchAccessShortcut />}
-              loadingPosition="start"
-              loading={upgrading}
-              sx={{ marginRight: "8px" }}
-              onClick={onUpgrade}
-            >
-              {t("Upgrade")}
-            </LoadingButton>
             <Button
               variant="contained"
               size="small"
-              disabled={upgrading}
               onClick={onRestart}
               startIcon={<RestartAlt />}
             >
@@ -105,7 +52,6 @@ export const ClashCoreViewer = forwardRef<DialogRef>((_props, ref) => {
       contentSx={{
         pb: 0,
         width: 400,
-        height: 180,
         overflowY: "auto",
         userSelect: "text",
         marginTop: "-8px",
@@ -115,18 +61,10 @@ export const ClashCoreViewer = forwardRef<DialogRef>((_props, ref) => {
       onClose={() => setOpen(false)}
       onCancel={() => setOpen(false)}
     >
-      <List component="nav">
-        {VALID_CORE.map((each) => (
-          <ListItemButton
-            key={each.core}
-            selected={each.core === clash_core}
-            disabled={upgrading}
-            onClick={() => onCoreChange(each.core)}
-          >
-            <ListItemText primary={each.name} secondary={`/${each.core}`} />
-          </ListItemButton>
-        ))}
-      </List>
+      <Typography sx={{ py: 2 }}>Mihomo {coreLock.version}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ pb: 2 }}>
+        {t("Pinned Core Description")}
+      </Typography>
     </BaseDialog>
   );
 });

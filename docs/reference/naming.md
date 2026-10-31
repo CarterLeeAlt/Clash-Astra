@@ -39,7 +39,7 @@
 | TUN 设备           | `clash-astra`                       |
 | GitHub 仓库        | `CarterLeeAlt/Clash-Astra`          |
 
-`resources/` 下的服务程序只由主程序调用，用户不会直接运行，因此保持技术标识；主程序与 Watchdog 位于发布包根目录，使用用户面名称。`enableLoopback.exe`、`mihomo.exe`、`mihomo-alpha.exe` 以及 GeoIP/GeoSite 数据文件属于上游第三方资源，保持原名。
+`resources/` 下的服务程序只由主程序调用，用户不会直接运行，因此保持技术标识；主程序与 Watchdog 位于发布包根目录，使用用户面名称。`enableLoopback.exe`、锁定的 `mihomo.exe` 以及 GeoIP/GeoSite 数据文件属于上游第三方资源，保持原名。
 
 ## 文件名与代码
 
@@ -61,7 +61,7 @@ clash-astra_<version>_<arch>_<kind>
 - `kind`：`portable` 或 `source`。
 - 未签名构建在 `kind` 后加 `_unsigned`。
 - 压缩包根目录的主程序为 `Clash Astra.exe`，Watchdog 为 `Clash Astra Watchdog.exe`。
-- 上游内核保持原名：`mihomo.exe`、`mihomo-alpha.exe`。
+- 上游内核保持原名：`mihomo.exe`，交付身份由 `mihomo.lock.json` 约束。
 
 示例：
 

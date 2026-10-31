@@ -304,7 +304,7 @@ export const ProfileItem = (props: Props) => {
                   ? `${parseTraffic(upload + download)} / ${parseTraffic(
                       total
                     )}`
-                  : ""}
+                  : t(itemData.validation_status || "Stored, not activated")}
               </Typography>
 
               <Typography

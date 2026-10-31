@@ -15,6 +15,8 @@ for (const file of files(path.join(repoRoot, "src-tauri/src")).filter((file) =>
 )) {
   const relative = path.relative(repoRoot, file).replaceAll("\\", "/");
   const source = fs.readFileSync(file, "utf8");
+  if (/upgrade_core|CoreUpgradeStatus|MIHOMO_ALPHA_CORE/.test(source))
+    failures.push(`${relative}: unpinned core upgrade or Alpha is forbidden`);
   if (/\.draft\(\)|\.discard\(\)/.test(source))
     failures.push(`${relative}: shared draft API is forbidden`);
   if (/enable_builtin_enhanced|ChainSupport|ChainItem::builtin/.test(source))
@@ -47,6 +49,8 @@ for (const file of files(path.join(repoRoot, "src")).filter((file) =>
 )) {
   const relative = path.relative(repoRoot, file).replaceAll("\\", "/");
   const source = fs.readFileSync(file, "utf8");
+  if (/upgradeCore|changeClashCore|mihomo-alpha/.test(source))
+    failures.push(`${relative}: only the pinned bundled core is supported`);
   if (
     /enable_builtin_enhanced|normalizeTestList|versionData\?\.premium/.test(
       source

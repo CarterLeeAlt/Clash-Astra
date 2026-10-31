@@ -5,6 +5,7 @@ import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { mihomoLock, verifyMihomo } from "../lib/mihomo-lock.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const args = process.argv.slice(2);
@@ -276,6 +277,9 @@ try {
   save();
   if (!fs.existsSync(binary))
     throw new Error(`Missing test-host Mihomo binary: ${binary}`);
+  if (hostTarget !== mihomoLock.target)
+    throw new Error("No pinned core for this host");
+  verifyMihomo(binary);
   mixedPort = await reserve(mixedPort);
   const controllerPort = await reserve(0);
   const secret = randomUUID();

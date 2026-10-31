@@ -329,7 +329,6 @@ fn win32_compatible_path(path: &Path) -> PathBuf {
 fn validate_start_request(payload: StartClashRequest) -> Result<ValidatedStartClashRequest> {
     let expected_binary_name = match payload.core_type.as_str() {
         "mihomo" => "mihomo.exe",
-        "mihomo-alpha" => "mihomo-alpha.exe",
         other => bail!("unsupported core_type: {other}"),
     };
 

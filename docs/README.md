@@ -20,3 +20,7 @@
 | [archive/default-backend-tests-verification.md](archive/default-backend-tests-verification.md)                       | 后端测试默认执行、无订阅 CI 环境和实测记录   |
 
 新增文档时：当前操作说明放 `architecture/`、`reference/` 或 `release/`；只保留验证证据的历史内容放 `archive/`，并在开头注明对应版本与日期。
+
+订阅与固定内核的当前接口见 [Mihomo 适配契约](reference/mihomo-contract.md)。
+
+本轮三方版本对应、真实订阅与回归结果见 [固定版本订阅适配验收](archive/mihomo-v1.19.33-subscription-verification.md)。

@@ -156,6 +156,7 @@ interface IClashInfo {
 }
 
 interface IProfileItem {
+  validation_status?: string;
   uid: string;
   type?: "local" | "remote" | "merge" | "script";
   name?: string;

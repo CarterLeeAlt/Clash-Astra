@@ -1,0 +1,10 @@
+{
+  "contract": "mihomo-v1.19.33-common",
+  "version": "v1.19.33",
+  "commit": "3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+  "target": "x86_64-pc-windows-msvc",
+  "asset": "mihomo-windows-amd64-v2-v1.19.33.zip",
+  "url": "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-windows-amd64-v2-v1.19.33.zip",
+  "archiveSha256": "e997417c2d50c45c314448e4749c52b912323f493f2580e475af7f9bda3dbf64",
+  "binarySha256": "0b4c7353057a78de8a09db445351aadec7d72a4f48adc7d99691f3c5ff74d3da"
+}
