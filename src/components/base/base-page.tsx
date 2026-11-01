@@ -18,7 +18,7 @@ export const BasePage: React.FC<Props> = (props) => {
       <div className="base-page">
         <header data-windrag style={{ userSelect: "none" }}>
           <Typography
-            sx={{ fontSize: textSizes.title, fontWeight: 600 }}
+            sx={{ fontSize: textSizes.sectionTitle, fontWeight: 600 }}
             data-windrag
           >
             {title}
