@@ -69,9 +69,11 @@ fn firewall_rules() -> Result<INetFwRules> {
 }
 
 fn remove_rule_if_present(rules: &INetFwRules, name: &str) -> Result<()> {
+    clash_astra_service_src::process_control::check_helper_deadline()?;
     let name = BSTR::from(name);
     unsafe {
         while rules.Item(&name).is_ok() {
+            clash_astra_service_src::process_control::check_helper_deadline()?;
             rules
                 .Remove(&name)
                 .context("failed to remove a managed Windows Firewall rule")?;
@@ -81,6 +83,7 @@ fn remove_rule_if_present(rules: &INetFwRules, name: &str) -> Result<()> {
 }
 
 fn add_rule(rules: &INetFwRules, name: &str, program: &Path) -> Result<()> {
+    clash_astra_service_src::process_control::check_helper_deadline()?;
     let program = program.to_string_lossy().into_owned();
     let expected_name = BSTR::from(name);
     let expected_program = BSTR::from(program.as_str());
@@ -160,6 +163,7 @@ fn enable_rules(rules: &INetFwRules) -> Result<()> {
 }
 
 fn run() -> Result<()> {
+    clash_astra_service_src::process_control::check_helper_deadline()?;
     let operation = std::env::args()
         .nth(1)
         .context("missing operation; expected --enable-lan or --disable-lan")?;

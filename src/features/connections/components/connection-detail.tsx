@@ -5,6 +5,7 @@ import { Box, Button, Snackbar } from "@mui/material";
 import { deleteConnection } from "@/services/api";
 import { truncateStr } from "@/utils/truncate-str";
 import parseTraffic from "@/utils/parse-traffic";
+import { Notice, formatNoticeMessage } from "@/components/base";
 
 export interface ConnectionDetailRef {
   open: (detail: IConnectionsItem) => void;
@@ -77,7 +78,14 @@ const InnerConnectionDetail = ({ data, onClose }: InnerProps) => {
     { label: "Type", value: `${metadata.type}(${metadata.network})` },
   ];
 
-  const onDelete = useLockFn(async () => deleteConnection(data.id));
+  const onDelete = useLockFn(async () => {
+    try {
+      await deleteConnection(data.id);
+      onClose?.();
+    } catch (error) {
+      Notice.error(formatNoticeMessage(error));
+    }
+  });
 
   return (
     <Box sx={{ userSelect: "text" }}>
@@ -88,14 +96,7 @@ const InnerConnectionDetail = ({ data, onClose }: InnerProps) => {
       ))}
 
       <Box sx={{ textAlign: "right" }}>
-        <Button
-          variant="contained"
-          title="Close Connection"
-          onClick={() => {
-            onDelete();
-            onClose?.();
-          }}
-        >
+        <Button variant="contained" title="Close Connection" onClick={onDelete}>
           Close
         </Button>
       </Box>

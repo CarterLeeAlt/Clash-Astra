@@ -4,6 +4,7 @@ use windows_service::service::{ServiceAccess, ServiceState};
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 fn remove_one(manager: &ServiceManager, name: &str) -> Result<()> {
+    clash_astra_service_src::process_control::check_helper_deadline()?;
     let Ok(service) = manager.open_service(
         name,
         ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
@@ -18,12 +19,14 @@ fn remove_one(manager: &ServiceManager, name: &str) -> Result<()> {
         }
     }
 
+    clash_astra_service_src::process_control::check_helper_deadline()?;
     service.delete()?;
     eprintln!("service '{}' deleted", name);
     Ok(())
 }
 
 fn main() -> Result<()> {
+    clash_astra_service_src::process_control::check_helper_deadline()?;
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
     remove_one(&manager, SERVICE_NAME)?;
     if let Some(path) = api_token_path() {

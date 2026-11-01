@@ -198,6 +198,20 @@ fn restore_raw_value_if_unchanged(
     Ok(true)
 }
 
+fn verify_proxy_readback(mut read: impl FnMut() -> Result<()>) -> Result<()> {
+    let mut last_error = None;
+    for attempt in 0..3 {
+        match read() {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = Some(error),
+        }
+        if attempt < 2 {
+            std::thread::sleep(std::time::Duration::from_millis(100 * (attempt + 1)));
+        }
+    }
+    Err(last_error.unwrap())
+}
+
 fn write_snapshot_value(
     key: &RegKey,
     name: &str,
@@ -535,11 +549,13 @@ impl WindowsProxySnapshot {
         }
 
         notify_proxy_settings_changed()?;
-        let restored = Self::capture()?;
-        if &restored != self {
-            log::warn!("restored Windows proxy registry differs from the saved snapshot after system refresh");
-        }
-        Ok(())
+        verify_proxy_readback(|| {
+            let restored = Self::capture()?;
+            if &restored != self {
+                return Err(Error::RecoveryJournal("restored Windows proxy registry differs from the saved snapshot after system refresh".into()));
+            }
+            Ok(())
+        })
     }
 
     /// Restore only values that still match the state written by this app.
@@ -612,7 +628,71 @@ impl WindowsProxySnapshot {
             }
         }
 
-        notify_proxy_settings_changed()
+        notify_proxy_settings_changed()?;
+        // Only fields still owned at the start of this restore must match the original.
+        // Concurrent external edits are never overwritten to force a full-snapshot match.
+        verify_proxy_readback(|| self.verify_restored_fields(owned, &current, &Self::capture()?))
+    }
+
+    fn verify_restored_fields(&self, owned: &Self, before: &Self, after: &Self) -> Result<()> {
+        for (name, original, owned, before, after) in [
+            (
+                "ProxyEnable",
+                &self.proxy_enable,
+                &owned.proxy_enable,
+                &before.proxy_enable,
+                &after.proxy_enable,
+            ),
+            (
+                "ProxyServer",
+                &self.proxy_server,
+                &owned.proxy_server,
+                &before.proxy_server,
+                &after.proxy_server,
+            ),
+            (
+                "ProxyOverride",
+                &self.proxy_override,
+                &owned.proxy_override,
+                &before.proxy_override,
+                &after.proxy_override,
+            ),
+            (
+                "AutoConfigURL",
+                &self.auto_config_url,
+                &owned.auto_config_url,
+                &before.auto_config_url,
+                &after.auto_config_url,
+            ),
+            (
+                "AutoDetect",
+                &self.auto_detect,
+                &owned.auto_detect,
+                &before.auto_detect,
+                &after.auto_detect,
+            ),
+            (
+                "DefaultConnectionSettings",
+                &self.default_connection_settings,
+                &owned.default_connection_settings,
+                &before.default_connection_settings,
+                &after.default_connection_settings,
+            ),
+            (
+                "SavedLegacySettings",
+                &self.saved_legacy_settings,
+                &owned.saved_legacy_settings,
+                &before.saved_legacy_settings,
+                &after.saved_legacy_settings,
+            ),
+        ] {
+            if before == owned && after != original {
+                return Err(Error::RecoveryJournal(format!(
+                    "Windows proxy restoration readback mismatch: {name}"
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// Refresh only values that WinINet writes while guarding the app proxy.
@@ -780,11 +860,101 @@ mod tests {
     use super::{parse_proxy_server, resolve_proxy_endpoint};
 
     #[test]
+    fn restoration_readback_has_finite_retries_for_convergence() {
+        let mut calls = 0;
+        super::verify_proxy_readback(|| {
+            calls += 1;
+            if calls < 3 {
+                Err(super::Error::RecoveryJournal("not ready".into()))
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap();
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
+    fn restoration_checks_owned_fields_and_preserves_external_changes() {
+        use super::{RawRegistryValue, WindowsProxySnapshot};
+        let original = WindowsProxySnapshot {
+            connections_existed: false,
+            proxy_enable: None,
+            proxy_server: None,
+            proxy_override: None,
+            auto_config_url: None,
+            auto_detect: None,
+            default_connection_settings: None,
+            saved_legacy_settings: None,
+        };
+        let mut owned = original.clone();
+        owned.proxy_enable = Some(RawRegistryValue {
+            bytes: vec![1, 0, 0, 0],
+            vtype: winreg::enums::REG_DWORD,
+        });
+        assert!(original
+            .verify_restored_fields(&owned, &owned, &original)
+            .is_ok());
+        assert!(original
+            .verify_restored_fields(&owned, &owned, &owned)
+            .is_err());
+        let mut externally_changed = owned.clone();
+        externally_changed.auto_config_url = Some(RawRegistryValue {
+            bytes: vec![65, 0, 0, 0],
+            vtype: winreg::enums::REG_SZ,
+        });
+        let mut restored = original.clone();
+        restored.auto_config_url = externally_changed.auto_config_url.clone();
+        assert!(original
+            .verify_restored_fields(&owned, &externally_changed, &restored)
+            .is_ok());
+    }
+
+    #[test]
     fn accepts_empty_proxy_while_disabled() {
         assert_eq!(
             resolve_proxy_endpoint(false, "").unwrap(),
             (String::new(), 0)
         );
+    }
+
+    #[test]
+    fn disabled_proxy_ignores_stale_or_malformed_endpoints() {
+        for server in [
+            "127.0.0.1:9090",
+            "http=localhost:7897;https=localhost:7898",
+            "invalid-stale-value",
+            "",
+        ] {
+            assert_eq!(
+                resolve_proxy_endpoint(false, server).unwrap(),
+                (String::new(), 0)
+            );
+        }
+    }
+
+    #[test]
+    fn restoration_readback_never_accepts_persistent_mismatch_or_query_failure() {
+        let mut calls = 0;
+        let result = super::verify_proxy_readback(|| {
+            calls += 1;
+            Err(super::Error::RecoveryJournal(
+                "injected readback mismatch".into(),
+            ))
+        });
+        assert!(result.is_err());
+        assert_eq!(calls, 3);
+        let mut calls = 0;
+        let result = super::verify_proxy_readback(|| {
+            calls += 1;
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "injected read failure",
+            )
+            .into())
+        });
+        assert!(result.is_err());
+        assert_eq!(calls, 3);
     }
 
     #[test]

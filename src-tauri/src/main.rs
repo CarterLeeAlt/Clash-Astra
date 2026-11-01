@@ -94,6 +94,7 @@ fn main() -> std::io::Result<()> {
             cmds::patch_ports,
             cmds::refresh_provider,
             cmds::refresh_geo_data,
+            cmds::close_connections_verified,
             cmds::get_runtime_config,
             cmds::get_runtime_yaml,
             cmds::get_runtime_logs,

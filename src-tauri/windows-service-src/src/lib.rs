@@ -20,3 +20,5 @@ pub fn remove_token_file_and_empty_parent(path: &std::path::Path) -> std::io::Re
     }
     Ok(())
 }
+#[path = "../../src/infrastructure/process_control.rs"]
+pub mod process_control;

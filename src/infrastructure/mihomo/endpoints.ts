@@ -2,6 +2,7 @@ import { getAxios } from "./client";
 import {
   applyProviderUpdate,
   applyGeoUpdate,
+  closeConnectionsVerified,
 } from "@/infrastructure/ipc/clash";
 
 /// 读取内核版本。
@@ -162,12 +163,10 @@ export const getConnections = async () => {
 
 // 关闭指定连接。
 export const deleteConnection = async (id: string) => {
-  const instance = await getAxios();
-  await instance.delete<any, any>(`/connections/${encodeURIComponent(id)}`);
+  await closeConnectionsVerified(id);
 };
 
 // 关闭全部连接。
 export const closeAllConnections = async () => {
-  const instance = await getAxios();
-  await instance.delete<any, any>(`/connections`);
+  await closeConnectionsVerified();
 };

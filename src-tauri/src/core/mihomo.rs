@@ -21,6 +21,13 @@ pub fn verify_bundled() -> Result<()> {
     verify(&crate::utils::dirs::executable_dir()?.join("mihomo.exe"))
 }
 
+pub fn binary_path() -> Result<std::path::PathBuf> {
+    #[cfg(test)]
+    return Ok(test_binary());
+    #[cfg(not(test))]
+    Ok(crate::utils::dirs::executable_dir()?.join("mihomo.exe"))
+}
+
 pub fn command(name: String) -> Result<tauri::api::process::Command> {
     #[cfg(test)]
     {

@@ -55,7 +55,10 @@ impl Sysopt {
             true => auto_launch.enable()?,
             false => auto_launch.disable()?,
         };
-
+        anyhow::ensure!(
+            auto_launch.is_enabled()? == enable,
+            "auto-launch state did not match the requested value"
+        );
         Ok(())
     }
 }

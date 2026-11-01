@@ -80,6 +80,7 @@ where
         .await
         {
             Ok(Ok(value)) => return Ok(value),
+            Ok(Err(error)) if super::budget::permanent(&error) => return Err(error),
             result => {
                 let wait = retry_delay(attempt);
                 if Instant::now() + wait >= deadline {
@@ -103,10 +104,32 @@ pub async fn cleanup_or_recover(
     deadline: Instant,
     recover: impl Future<Output = Result<()>>,
 ) -> Result<()> {
-    if cleanup.finish(info, deadline).await.is_err() {
+    if let Err(error) = cleanup.finish(info, deadline).await {
+        if super::budget::permanent(&error) {
+            return Err(error);
+        }
         recover.await?;
     }
     Ok(())
+}
+
+pub async fn close_connections(id: Option<String>) -> Result<()> {
+    super::dispatch(async move {
+        let _operation = super::operation().await?;
+        let info = crate::config::Config::snapshot().clash.get_client_info();
+        let deadline = Instant::now() + super::budget::remaining(Duration::from_secs(7))?;
+        let mut before = retry_until(deadline, || {
+            crate::core::clash_api::get_connections_for(info.clone())
+        })
+        .await?;
+        if let Some(id) = id {
+            before.connections.retain(|connection| connection.id == id);
+        }
+        crate::core::clash_api::ConnectionCleanup::capture(&before, None)
+            .finish(info, deadline)
+            .await
+    })
+    .await
 }
 
 /// Do not cancel an accepted file transaction: its worker retains the operation gate
@@ -115,7 +138,7 @@ pub async fn dispatch_switch<T: Send + 'static>(
     budget: SwitchBudget,
     work: impl Future<Output = Result<T>> + Send + 'static,
 ) -> Result<T> {
-    let worker = tokio::spawn(work);
+    let worker = tokio::spawn(Box::pin(work));
     budget
         .run(async { worker.await.context("switch worker failed")? })
         .await

@@ -1,12 +1,12 @@
 #![cfg(target_os = "windows")]
 
 use super::clash_api;
+use crate::application::budget;
 use crate::config::MIHOMO_CORE;
 use crate::service_protocol::*;
 use crate::utils::dirs;
 use anyhow::{bail, Context, Result};
 use deelevate::{PrivilegeLevel, Token};
-use runas::Command as RunasCommand;
 use serde::{Deserialize, Serialize};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -36,11 +36,13 @@ fn service_api_token() -> Result<String> {
 }
 
 fn current_user_sid() -> Result<String> {
-    let output = StdCommand::new("whoami.exe")
-        .args(["/user", "/fo", "csv", "/nh"])
-        .creation_flags(0x08000000)
-        .output()
-        .context("failed to query current Windows user SID")?;
+    let output = crate::infrastructure::process_control::output(
+        StdCommand::new("whoami.exe")
+            .args(["/user", "/fo", "csv", "/nh"])
+            .creation_flags(0x08000000),
+        budget::remaining(Duration::from_secs(3))?,
+    )
+    .context("failed to query current Windows user SID")?;
     if !output.status.success() {
         bail!("whoami.exe failed while querying the current user SID");
     }
@@ -64,19 +66,17 @@ struct ScResult {
 }
 
 fn sc(args: &[&str]) -> Result<ScResult> {
-    let output = StdCommand::new("sc.exe")
-        .args(args)
-        .creation_flags(0x08000000)
-        .output()?;
+    let output = crate::infrastructure::process_control::output(
+        StdCommand::new("sc.exe")
+            .args(args)
+            .creation_flags(0x08000000),
+        budget::remaining(Duration::from_secs(3))?,
+    )?;
     Ok(ScResult {
         code: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
     })
-}
-
-fn service_exists(name: &str) -> bool {
-    service_exists_detailed(name).ok().unwrap_or(false)
 }
 
 fn output_indicates_service_not_found(stdout: &str, stderr: &str, code: i32) -> bool {
@@ -104,7 +104,12 @@ fn service_exists_detailed(name: &str) -> Result<bool> {
     if result.code == 0 {
         return Ok(true);
     }
-    Ok(false)
+    bail!(
+        "could not query Windows service: exit {}, {} {}",
+        result.code,
+        result.stdout,
+        result.stderr
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -121,18 +126,11 @@ fn run_uninstall_helper_sync(uninstall_path: &Path) -> Result<UninstallHelperRes
     let token = Token::with_current_process()?;
     let level = token.privilege_level()?;
     let elevated = !matches!(level, PrivilegeLevel::NotPrivileged);
-    let output = match level {
-        PrivilegeLevel::NotPrivileged => {
-            let status = RunasCommand::new(uninstall_path).show(false).status()?;
-            std::process::Output {
-                status,
-                stdout: Vec::new(),
-                stderr: Vec::new(),
-            }
-        }
-        _ => StdCommand::new(uninstall_path)
-            .creation_flags(0x08000000)
-            .output()?,
+    let status = crate::infrastructure::privileged_process::run(uninstall_path, &[], elevated)?;
+    let output = std::process::Output {
+        status,
+        stdout: Vec::new(),
+        stderr: Vec::new(),
     };
     let exit_code = output.status.code();
     let status_text = format!("{}", output.status);
@@ -182,7 +180,14 @@ enum ServiceStateHint {
 fn query_service_state() -> Result<ServiceStateHint> {
     let r = sc(&["query", SERVICE_NAME])?;
     if r.code != 0 {
-        return Ok(ServiceStateHint::Other);
+        if output_indicates_service_not_found(&r.stdout, &r.stderr, r.code) {
+            return Ok(ServiceStateHint::Other);
+        }
+        bail!(
+            "could not read Windows service state: {} {}",
+            r.stdout,
+            r.stderr
+        );
     }
     let out = r.stdout.to_ascii_uppercase();
     if out.contains("RUNNING") {
@@ -228,12 +233,13 @@ async fn get_service_health() -> Result<HealthResponse> {
     let token = service_api_token()?;
     reqwest::ClientBuilder::new()
         .no_proxy()
-        .timeout(Duration::from_millis(1200))
+        .timeout(budget::remaining(Duration::from_millis(1200))?)
         .build()?
         .get(service_url(API_HEALTH))
         .bearer_auth(token)
         .send()
         .await?
+        .error_for_status()?
         .json::<HealthResponse>()
         .await
         .context("failed to parse the clash-astra-service health response")
@@ -243,12 +249,13 @@ async fn get_service_clash_state() -> Result<JsonResponse> {
     let token = service_api_token()?;
     reqwest::ClientBuilder::new()
         .no_proxy()
-        .timeout(Duration::from_millis(1200))
+        .timeout(budget::remaining(Duration::from_millis(1200))?)
         .build()?
         .get(service_url(API_GET_CLASH))
         .bearer_auth(token)
         .send()
         .await?
+        .error_for_status()?
         .json::<JsonResponse>()
         .await
         .context("failed to parse the clash-astra-service response")
@@ -258,6 +265,7 @@ pub async fn is_service_core_running() -> bool {
     get_service_clash_state()
         .await
         .ok()
+        .filter(|response| response.code == 0)
         .and_then(|response| response.data)
         .map(|state| state.running.unwrap_or(false) && state.pid.is_some())
         .unwrap_or(false)
@@ -272,24 +280,33 @@ pub fn install_service() -> Result<()> {
     let token = Token::with_current_process()?;
     let level = token.privilege_level()?;
     let user_sid = current_user_sid()?;
-    let status = match level {
-        PrivilegeLevel::NotPrivileged => RunasCommand::new(install_path)
-            .arg("--user-sid")
-            .arg(&user_sid)
-            .show(false)
-            .status()?,
-        _ => StdCommand::new(install_path)
-            .arg("--user-sid")
-            .arg(&user_sid)
-            .creation_flags(0x08000000)
-            .status()?,
-    };
+    let status = crate::infrastructure::privileged_process::run(
+        &install_path,
+        &["--user-sid", &user_sid],
+        !matches!(level, PrivilegeLevel::NotPrivileged),
+    )?;
     if !status.success() {
         bail!(
             "failed to install service with status {}",
             status.code().unwrap_or(-1)
         );
     }
+    anyhow::ensure!(
+        service_exists_detailed(SERVICE_NAME)?,
+        "installer exited successfully but service is missing"
+    );
+    let service = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(
+        format!("SYSTEM\\CurrentControlSet\\Services\\{SERVICE_NAME}"),
+    )?;
+    let image: String = service.get_value("ImagePath")?;
+    let actual = dunce::canonicalize(image.trim().trim_matches('"'))?;
+    let expected = dunce::canonicalize(&binary_path)?;
+    anyhow::ensure!(
+        actual
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&expected.to_string_lossy()),
+        "installed service binary path does not match this application"
+    );
     Ok(())
 }
 
@@ -306,10 +323,13 @@ pub async fn uninstall_service() -> Result<()> {
     }
 
     log::info!(target: "app", "uninstall_service: helper_path={}", uninstall_path.display());
-    let helper_result =
-        tokio::task::spawn_blocking(move || run_uninstall_helper_sync(&uninstall_path))
-            .await
-            .context("service uninstall worker failed")??;
+    let operation_budget = budget::Budget::current();
+    let helper_result = tokio::task::spawn_blocking(move || {
+        let work = || run_uninstall_helper_sync(&uninstall_path);
+        operation_budget.map_or_else(work, |budget| budget.blocking(work))
+    })
+    .await
+    .context("service uninstall worker failed")??;
     log::info!(
         target: "app",
         "uninstall_service: helper elevated={}, success={}, exit_code={:?}, status={}, stdout={}, stderr={}",
@@ -345,9 +365,8 @@ pub async fn uninstall_service() -> Result<()> {
 }
 
 pub async fn check_service() -> Result<ServiceStatus> {
-    let installed = service_exists(SERVICE_NAME);
-    let running = installed
-        && query_service_state().unwrap_or(ServiceStateHint::Other) == ServiceStateHint::Running;
+    let installed = service_exists_detailed(SERVICE_NAME)?;
+    let running = installed && query_service_state()? == ServiceStateHint::Running;
     let health = get_service_health().await.ok();
     let api_ready = health.as_ref().map(|h| h.code == 0).unwrap_or(false);
     let clash = if api_ready {
@@ -357,7 +376,9 @@ pub async fn check_service() -> Result<ServiceStatus> {
     };
     let core_pid = clash
         .as_ref()
+        .filter(|s| s.code == 0)
         .and_then(|s| s.data.as_ref())
+        .filter(|data| data.running == Some(true))
         .and_then(|d| d.pid);
     let core_managed = core_pid.is_some();
     let message = if !installed {
@@ -400,6 +421,7 @@ pub async fn ensure_service_ready() -> Result<()> {
     let started = std::time::Instant::now();
 
     loop {
+        budget::check()?;
         if query_service_state().unwrap_or(ServiceStateHint::Other) == ServiceStateHint::Running
             && get_service_health()
                 .await
@@ -457,7 +479,7 @@ pub(super) async fn run_core_by_service(
     let res = reqwest::ClientBuilder::new()
         .no_proxy()
         .connect_timeout(Duration::from_secs(2))
-        .timeout(Duration::from_secs(10))
+        .timeout(budget::remaining(Duration::from_secs(10))?)
         .build()?
         .post(service_url(API_START_CLASH))
         .bearer_auth(token)
@@ -474,6 +496,7 @@ pub(super) async fn run_core_by_service(
     log::info!(target: "app", "waiting for /get_clash pid");
     let mut core_pid = None;
     for _ in 0..20 {
+        budget::check()?;
         if let Ok(state) = get_service_clash_state().await {
             let pid = state.data.as_ref().and_then(|d| d.pid);
             if pid.is_some() {
@@ -499,38 +522,76 @@ pub(super) async fn run_core_by_service(
 }
 
 pub async fn stop_core_by_service() -> Result<()> {
+    let before = get_service_clash_state().await?;
+    anyhow::ensure!(
+        before.code == 0,
+        "could not read service core state before stop"
+    );
+    let old_pid = before.data.as_ref().and_then(|data| data.pid);
     let token = service_api_token()?;
-    let res = reqwest::ClientBuilder::new()
+    let response = reqwest::ClientBuilder::new()
         .no_proxy()
-        .timeout(Duration::from_millis(1500))
+        .timeout(budget::remaining(Duration::from_millis(1500))?)
         .build()?
         .post(service_url(API_STOP_CLASH))
         .bearer_auth(token)
         .send()
-        .await?
-        .json::<JsonResponse>()
-        .await
-        .context("failed to connect to the clash-astra-service")?;
-    if res.code != 0 {
-        bail!(res.msg);
+        .await;
+    if let Ok(response) = response {
+        let response = response.error_for_status()?;
+        let result = response.json::<JsonResponse>().await?;
+        if result.code != 0 {
+            bail!(result.msg);
+        }
     }
-    Ok(())
+    budget::step(Duration::from_secs(3), async {
+        loop {
+            let state = match get_service_clash_state().await {
+                Ok(state) => state,
+                Err(error) => {
+                    log::debug!(target: "app", "waiting for service stop readback: {error:#}");
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+            };
+            let stopped = state.code == 0
+                && state
+                    .data
+                    .as_ref()
+                    .is_none_or(|data| data.running == Some(false) && data.pid.is_none());
+            let old_exited = old_pid.is_none_or(|pid| {
+                let mut system = sysinfo::System::new();
+                !system.refresh_process(sysinfo::Pid::from_u32(pid))
+            });
+            if stopped && old_exited {
+                return Ok(());
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .context("service did not confirm owned Mihomo process exit")
 }
 
 pub async fn stop_service_if_idle() -> Result<()> {
     if !service_exists_detailed(SERVICE_NAME)?
-        || query_service_state().unwrap_or(ServiceStateHint::Other) != ServiceStateHint::Running
+        || query_service_state()? != ServiceStateHint::Running
     {
         return Ok(());
     }
-    if is_service_core_running().await {
+    let state = get_service_clash_state().await?;
+    anyhow::ensure!(state.code == 0, "cannot verify whether service is idle");
+    if state
+        .data
+        .is_some_and(|data| data.running != Some(false) || data.pid.is_some())
+    {
         bail!("refuse to stop clash-astra-service while it is managing Mihomo");
     }
 
     let token = service_api_token()?;
     let res = reqwest::ClientBuilder::new()
         .no_proxy()
-        .timeout(Duration::from_millis(1500))
+        .timeout(budget::remaining(Duration::from_millis(1500))?)
         .build()?
         .post(service_url(API_STOP_SERVICE))
         .bearer_auth(token)
@@ -544,7 +605,7 @@ pub async fn stop_service_if_idle() -> Result<()> {
     }
 
     for _ in 0..20 {
-        if query_service_state().unwrap_or(ServiceStateHint::Other) != ServiceStateHint::Running {
+        if query_service_state()? != ServiceStateHint::Running {
             return Ok(());
         }
         sleep(Duration::from_millis(150)).await;

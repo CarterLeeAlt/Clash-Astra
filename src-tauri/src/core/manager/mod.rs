@@ -126,18 +126,25 @@ impl CoreManager {
         let config_path = snapshot.write_runtime(ConfigType::Check)?;
         let config_path = dirs::path_to_str(&config_path)?;
 
-        let clash_core = snapshot.clash_settings.clash_core.clone();
-        let clash_core = clash_core.unwrap_or_else(|| MIHOMO_CORE.into());
-
         let app_dir = dirs::app_home_dir()?;
         let app_dir = dirs::path_to_str(&app_dir)?;
 
-        let output = crate::core::mihomo::command(clash_core)?
-            .args(["-t", "-d", app_dir, "-f", config_path])
-            .output()?;
+        let mut command = std::process::Command::new(crate::core::mihomo::binary_path()?);
+        use std::os::windows::process::CommandExt;
+        command
+            .creation_flags(0x08000000)
+            .args(["-t", "-d", app_dir, "-f", config_path]);
+        let output = crate::infrastructure::process_control::output(
+            &mut command,
+            crate::application::budget::remaining(Duration::from_secs(10))?,
+        )?;
 
         if !output.status.success() {
-            let combined = format!("{}\n{}", output.stdout, output.stderr);
+            let combined = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
             let error = clash_api::parse_check_output(combined.clone());
             let error = match !error.is_empty() {
                 true => error,
@@ -161,9 +168,20 @@ impl CoreManager {
 
         // 发送请求 发送5次
         for i in 0..5 {
+            crate::application::budget::check()?;
             match clash_api::put_configs_for(snapshot.clash.get_client_info(), path).await {
                 Ok(_) => break,
                 Err(err) => {
+                    // An ambiguous response may have followed a successful reload.
+                    if crate::application::budget::retryable(&err)
+                        && clash_api::verify_runtime(snapshot).await.is_ok()
+                        && clash_api::verify_structure(snapshot).await.is_ok()
+                    {
+                        break;
+                    }
+                    if !crate::application::budget::retryable(&err) {
+                        return Err(err);
+                    }
                     if i < 4 {
                         log::info!(target: "app", "{err}");
                     } else {

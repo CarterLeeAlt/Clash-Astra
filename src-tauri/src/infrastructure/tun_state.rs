@@ -5,6 +5,22 @@ use std::time::Duration;
 
 /// Read Windows adapter/route state; never modify host networking as a readiness probe.
 pub async fn verify(tun: &Value, ipv6: bool) -> Result<()> {
+    crate::application::budget::step(Duration::from_secs(5), async {
+        loop {
+            match query_once(tun, ipv6).await {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    log::debug!(target: "app", "waiting for TUN adapter/routes: {error:#}");
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            }
+        }
+    })
+    .await
+    .context("TUN adapter/routes did not reach the requested state")
+}
+
+async fn query_once(tun: &Value, ipv6: bool) -> Result<()> {
     let device = tun
         .get("device")
         .and_then(Value::as_str)

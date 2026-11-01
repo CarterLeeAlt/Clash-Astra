@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 /// 编译所需的输入快照；订阅文件由基础设施层读取后传入。
 pub struct CompileInput {
+    pub deadline: std::time::Instant,
     pub clash_config: Mapping,
     pub enable_tun: bool,
     pub current: Mapping,
@@ -26,6 +27,7 @@ pub struct CompileInput {
 /// 按固定顺序编译显式输入，返回运行时配置与脚本诊断；不读取全局配置、不写文件。
 pub fn compile(input: CompileInput) -> IRuntime {
     let CompileInput {
+        deadline,
         clash_config,
         enable_tun,
         current: mut config,
@@ -40,7 +42,7 @@ pub fn compile(input: CompileInput) -> IRuntime {
     if let Some(item) = global_script {
         if let ChainType::Script(script) = item.data {
             let mut logs = vec![];
-            match use_script(script, config.to_owned(), &profile_name) {
+            match use_script_until(script, config.to_owned(), &profile_name, deadline) {
                 Ok((res_config, res_logs)) => {
                     config = res_config;
                     logs.extend(res_logs);
@@ -59,7 +61,7 @@ pub fn compile(input: CompileInput) -> IRuntime {
         ChainType::Script(script) => {
             let mut logs = vec![];
 
-            match use_script(script, config.to_owned(), &profile_name) {
+            match use_script_until(script, config.to_owned(), &profile_name, deadline) {
                 Ok((res_config, res_logs)) => {
                     config = res_config;
                     logs.extend(res_logs);
@@ -111,6 +113,7 @@ mod tests {
     #[test]
     fn compiler_preserves_script_chain_and_application_override_order() {
         let output = compile(CompileInput {
+            deadline: std::time::Instant::now() + std::time::Duration::from_secs(10),
             clash_config: serde_yaml::from_str("mode: rule\nipv6: false").unwrap(),
             enable_tun: false,
             current: serde_yaml::from_str("mode: global\nmarker: source").unwrap(),
@@ -134,6 +137,7 @@ mod tests {
     fn subscriber_dns_and_native_node_fields_survive_application_overrides() {
         let source: Mapping = serde_yaml::from_str("dns: {enable: true, ipv6: true, nameserver: ['https://1.1.1.1/dns-query']}\nproxies: [{name: v, type: vless, server: example.invalid, alpn: [h2], xhttp-opts: {path: /test}}]\nmode: global").unwrap();
         let output = compile(CompileInput {
+            deadline: std::time::Instant::now() + std::time::Duration::from_secs(10),
             clash_config: crate::config::IClashTemp::template().0,
             enable_tun: false,
             current: source.clone(),

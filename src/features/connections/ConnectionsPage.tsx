@@ -14,7 +14,12 @@ import { useTranslation } from "react-i18next";
 import { TableChartRounded, TableRowsRounded } from "@mui/icons-material";
 import { closeAllConnections } from "@/services/api";
 import { atomConnectionSetting } from "@/services/states";
-import { BaseEmpty, BasePage } from "@/components/base";
+import {
+  BaseEmpty,
+  BasePage,
+  Notice,
+  formatNoticeMessage,
+} from "@/components/base";
 import { ConnectionItem } from "./components/connection-item";
 import { ConnectionTable } from "./components/connection-table";
 import {
@@ -32,8 +37,7 @@ const ConnectionsPage = () => {
   const [filterText, setFilterText] = useState("");
   const [curOrderOpt, setOrderOpt] = useState("Active Speed");
   const [setting, setSetting] = useRecoilState(atomConnectionSetting);
-  const { connData, wsState, syncConnections, resetConnections } =
-    useConnectionsStream();
+  const { connData, wsState, syncConnections } = useConnectionsStream();
 
   const isTableLayout = setting.layout === "table";
 
@@ -48,9 +52,12 @@ const ConnectionsPage = () => {
   }, [connData, filterText, curOrderOpt]);
 
   const onCloseAll = useLockFn(async () => {
-    await closeAllConnections();
-    resetConnections();
-    await syncConnections().catch(() => undefined);
+    try {
+      await closeAllConnections();
+      await syncConnections();
+    } catch (error) {
+      Notice.error(formatNoticeMessage(error));
+    }
   });
 
   const detailRef = useRef<ConnectionDetailRef>(null!);

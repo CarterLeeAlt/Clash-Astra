@@ -441,8 +441,16 @@ fn start_clash(
 
     let mut locked = state.lock().unwrap();
     if let Some(existing) = locked.as_mut() {
-        let _ = existing.child.kill();
-        let _ = existing.child.wait();
+        if let Err(error) = clash_astra_service_src::process_control::stop(
+            &mut existing.child,
+            std::time::Instant::now() + Duration::from_secs(1),
+        ) {
+            return serde_json::to_string(&JsonResponse::<()> {
+                code: 500,
+                msg: format!("previous owned core did not stop: {error:#}"),
+                data: None,
+            });
+        }
     }
     *locked = None;
 
@@ -526,9 +534,17 @@ fn stop_clash(
     state: &Arc<std::sync::Mutex<Option<ClashState>>>,
 ) -> Result<String, serde_json::Error> {
     let mut locked = state.lock().unwrap();
-    if let Some(mut running) = locked.take() {
-        let _ = running.child.kill();
-        let _ = running.child.wait();
+    if let Err(error) = stop_owned(&mut locked, |child| {
+        clash_astra_service_src::process_control::stop(
+            child,
+            std::time::Instant::now() + Duration::from_secs(1),
+        )
+    }) {
+        return serde_json::to_string(&JsonResponse::<()> {
+            code: 500,
+            msg: format!("owned core stop failed: {error:#}"),
+            data: None,
+        });
     }
     serde_json::to_string(&JsonResponse::<()> {
         code: 0,
@@ -537,10 +553,58 @@ fn stop_clash(
     })
 }
 
+fn stop_owned(
+    state: &mut Option<ClashState>,
+    stop: impl FnOnce(&mut Child) -> Result<()>,
+) -> Result<()> {
+    if let Some(running) = state.as_mut() {
+        stop(&mut running.child)?;
+    }
+    *state = None;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::win32_compatible_path;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn failed_stop_keeps_process_ownership_until_exit_is_confirmed() {
+        use super::*;
+        let mut child = Command::new("powershell.exe");
+        use std::os::windows::process::CommandExt;
+        child.creation_flags(0x08000000).args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Start-Sleep -Seconds 20",
+        ]);
+        let child = child.spawn().unwrap();
+        let pid = child.id();
+        let mut state = Some(ClashState {
+            child,
+            meta: ClashStateData {
+                core_type: "synthetic".into(),
+                bin_path: String::new(),
+                config_dir: String::new(),
+                config_file: String::new(),
+                log_file: String::new(),
+                pid,
+                running: true,
+            },
+        });
+        assert!(stop_owned(&mut state, |_| anyhow::bail!("injected stop failure")).is_err());
+        assert_eq!(state.as_ref().unwrap().child.id(), pid);
+        stop_owned(&mut state, |child| {
+            clash_astra_service_src::process_control::stop(
+                child,
+                std::time::Instant::now() + Duration::from_secs(1),
+            )
+        })
+        .unwrap();
+        assert!(state.is_none());
+    }
 
     #[test]
     fn strips_verbatim_disk_prefix_for_child_processes() {

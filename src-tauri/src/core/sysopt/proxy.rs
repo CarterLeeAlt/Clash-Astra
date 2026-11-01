@@ -88,6 +88,7 @@ pub(super) fn set_system_proxy_with_retry(
     let mut last_err = None;
 
     for (idx, backoff) in BACKOFF_MS.iter().enumerate() {
+        crate::application::budget::check()?;
         match set_system_proxy_once(target, action, allow_registry_fallback) {
             Ok(()) => match Sysproxy::get_system_proxy() {
                 Ok(actual) => {
@@ -222,7 +223,7 @@ impl Sysopt {
             if let Err(err) = set_result {
                 #[cfg(target_os = "windows")]
                 if let Err(rollback_err) = windows_snapshot.restore() {
-                    log::error!(target: "app", "initial system proxy rollback failed: {rollback_err}");
+                    return Err(anyhow!("initial system proxy write failed: {err}; restoration unverified, recovery journal retained: {rollback_err}"));
                 }
                 #[cfg(target_os = "windows")]
                 clear_windows_proxy_recovery("initial proxy enable rollback");
@@ -234,7 +235,7 @@ impl Sysopt {
                 Ok(snapshot) => snapshot,
                 Err(err) => {
                     if let Err(rollback_err) = windows_snapshot.restore() {
-                        log::error!(target: "app", "initial system proxy rollback failed after ownership capture error: {rollback_err}");
+                        return Err(anyhow!("initial ownership capture failed: {err}; restoration unverified, recovery journal retained: {rollback_err}"));
                     }
                     clear_windows_proxy_recovery("initial ownership capture rollback");
                     return Err(err).context("capture Windows proxy ownership after enable");
@@ -342,7 +343,7 @@ impl Sysopt {
             if let Err(err) = set_result {
                 #[cfg(target_os = "windows")]
                 if let Err(rollback_err) = windows_snapshot.restore() {
-                    log::error!(target: "app", "enable system proxy rollback failed: {rollback_err}");
+                    return Err(anyhow!("system proxy write failed: {err}; restoration unverified, recovery journal retained: {rollback_err}"));
                 }
                 #[cfg(target_os = "windows")]
                 rearm_windows_proxy_recovery(
@@ -359,7 +360,7 @@ impl Sysopt {
                 Ok(snapshot) => snapshot,
                 Err(err) => {
                     if let Err(rollback_err) = windows_snapshot.restore() {
-                        log::error!(target: "app", "enable system proxy rollback failed after ownership capture error: {rollback_err}");
+                        return Err(anyhow!("proxy ownership capture failed: {err}; restoration unverified, recovery journal retained: {rollback_err}"));
                     }
                     rearm_windows_proxy_recovery(
                         cached_windows_old.as_ref(),
@@ -533,13 +534,13 @@ impl Sysopt {
     pub fn reset_sysproxy(&self) -> Result<()> {
         let _operation = self.proxy_operation.lock();
         #[cfg(target_os = "windows")]
-        let old_windows_proxy = self.old_windows_proxy.lock().take();
+        let old_windows_proxy = self.old_windows_proxy.lock().clone();
         #[cfg(target_os = "windows")]
-        let owned_windows_proxy = self.owned_windows_proxy.lock().take();
+        let owned_windows_proxy = self.owned_windows_proxy.lock().clone();
         let (cur_sysproxy, old_sysproxy) = {
-            let mut cur_sysproxy = self.cur_sysproxy.lock();
-            let mut old_sysproxy = self.old_sysproxy.lock();
-            (cur_sysproxy.take(), old_sysproxy.take())
+            let cur_sysproxy = self.cur_sysproxy.lock();
+            let old_sysproxy = self.old_sysproxy.lock();
+            (cur_sysproxy.clone(), old_sysproxy.clone())
         };
 
         #[cfg(target_os = "windows")]
@@ -565,13 +566,18 @@ impl Sysopt {
                     log::warn!(target: "app", "disable app proxy on exit without restoring an unverifiable Windows snapshot");
                     if let Some(mut current) = cur_sysproxy.clone() {
                         current.enable = false;
-                        current.set_system_proxy()?;
+                        set_system_proxy_with_retry(
+                            &current,
+                            "disable system proxy on exit",
+                            false,
+                        )?;
                     }
                 }
             } else {
                 log::info!(target: "app", "skip Windows proxy restore because current proxy is not owned by app");
             }
             clear_windows_proxy_recovery("system proxy exit handling completed");
+            self.clear_proxy_ownership();
             return Ok(());
         }
 
@@ -599,12 +605,13 @@ impl Sysopt {
             if parsed_owned && registry_owned {
                 if let Some(mut current) = cur_sysproxy.clone() {
                     current.enable = false;
-                    current.set_system_proxy()?;
+                    set_system_proxy_with_retry(&current, "disable system proxy on exit", false)?;
                 }
             } else {
                 log::info!(target: "app", "skip Windows proxy disable because current proxy is not owned by app");
             }
             clear_windows_proxy_recovery("system proxy exit handling completed");
+            self.clear_proxy_ownership();
             return Ok(());
         }
 
@@ -634,13 +641,23 @@ impl Sysopt {
         }
 
         if let Some(proxy) = target {
-            proxy.set_system_proxy()?;
+            set_system_proxy_with_retry(&proxy, "restore system proxy on exit", false)?;
         }
 
         #[cfg(target_os = "windows")]
         clear_windows_proxy_recovery("system proxy exit handling completed");
-
+        self.clear_proxy_ownership();
         Ok(())
+    }
+
+    fn clear_proxy_ownership(&self) {
+        *self.cur_sysproxy.lock() = None;
+        *self.old_sysproxy.lock() = None;
+        #[cfg(windows)]
+        {
+            *self.old_windows_proxy.lock() = None;
+            *self.owned_windows_proxy.lock() = None;
+        }
     }
 }
 

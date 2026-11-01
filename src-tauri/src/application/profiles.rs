@@ -37,12 +37,18 @@ async fn append(mut item: PrfItem, activate_first: bool) -> Result<()> {
 }
 
 pub async fn import(url: String, option: Option<PrfOption>) -> Result<()> {
-    let item = PrfItem::from_url(&url, None, None, option).await?;
-    append(item, true).await
+    super::dispatch_with_budget(super::budget::UPDATE_TIMEOUT, async move {
+        let item = PrfItem::from_url(&url, None, None, option).await?;
+        append(item, true).await
+    })
+    .await
 }
 
 pub async fn create(item: PrfItem, data: Option<String>) -> Result<()> {
-    append(PrfItem::from(item, data).await?, false).await
+    super::dispatch_with_budget(super::budget::UPDATE_TIMEOUT, async move {
+        append(PrfItem::from(item, data).await?, false).await
+    })
+    .await
 }
 
 pub async fn reorder(active: String, over: String) -> Result<()> {
@@ -170,6 +176,13 @@ pub async fn patch(uid: String, patch: PrfItem) -> Result<()> {
 }
 
 pub async fn update_profile(uid: String, option: Option<PrfOption>) -> Result<()> {
+    super::dispatch_with_budget(super::budget::UPDATE_TIMEOUT, async move {
+        update_profile_inner(uid, option).await
+    })
+    .await
+}
+
+async fn update_profile_inner(uid: String, option: Option<PrfOption>) -> Result<()> {
     let snapshot = Config::snapshot();
     let original = snapshot.profiles.get_item(&uid)?.clone();
     let expected_version = snapshot.profile_versions.get(&uid).copied().unwrap_or(0);
@@ -252,7 +265,13 @@ pub async fn save_file(uid: String, data: String) -> Result<()> {
                 .and_then(|uid| change.next.profiles.get_item(uid).ok())
                 .and_then(|item| item.name.clone())
                 .unwrap_or_default();
-            crate::enhance::script::validate_script_strict(data.clone(), current, &name)?;
+            crate::enhance::script::validate_script_strict_until(
+                data.clone(),
+                current,
+                &name,
+                std::time::Instant::now()
+                    + super::budget::remaining(std::time::Duration::from_secs(10))?,
+            )?;
         }
         change.files.insert(file, Some(data));
         change.reload = item.is_global_script()

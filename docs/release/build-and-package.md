@@ -84,6 +84,14 @@ node scripts/pnpm.mjs run test:backend --mixed-port 0 --upstream-proxy http://12
 
 本机与 CI 的测试用例和断言相同，但网络出口不同；真实外网波动或 runner 出口不可达会导致 CI 失败，不能通过过滤、忽略或自动回退规避。本机显式上游验证通过不代表 GitHub DIRECT 出口已经验证，真实订阅和节点质量另在本机验证。
 
+系统代理依赖库的默认完整测试：
+
+```powershell
+node scripts/pnpm.mjs exec cargo test --manifest-path src-tauri/Cargo.toml -p sysproxy --locked
+```
+
+该入口只运行只读检查和生产逻辑的纯单元测试，不包含真实系统代理写入目标，也不要求额外宿主环境。禁用状态按空地址和端口 `0` 的接口语义断言；生产恢复字段核验、有限重试与持续查询失败通过内存输入验证。它们不代表真实 Windows 写入恢复已经实测，实际网络变更另行获准并留存操作前状态，见 [sysproxy 测试说明](../../src-tauri/vendor-crates/sysproxy-rs/README.md)。
+
 Watchdog 黑盒回归：
 
 ```powershell

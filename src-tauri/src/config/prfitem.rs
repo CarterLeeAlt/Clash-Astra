@@ -174,6 +174,27 @@ impl PrfItem {
         desc: Option<String>,
         option: Option<PrfOption>,
     ) -> Result<PrfItem> {
+        crate::application::budget::step(Duration::from_secs(40), async {
+            for attempt in 0..3 {
+                match Self::from_url_once(url, name.clone(), desc.clone(), option.clone()).await {
+                    Ok(item) => return Ok(item),
+                    Err(error) if attempt < 2 && crate::application::budget::retryable(&error) => {
+                        tokio::time::sleep(Duration::from_millis(250 * (attempt + 1))).await;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            unreachable!()
+        })
+        .await
+    }
+
+    async fn from_url_once(
+        url: &str,
+        name: Option<String>,
+        desc: Option<String>,
+        option: Option<PrfOption>,
+    ) -> Result<PrfItem> {
         let requested_option = option.clone();
         let opt_ref = option.as_ref();
         let with_proxy = opt_ref.map_or(false, |o| o.with_proxy.unwrap_or(false));
@@ -191,7 +212,9 @@ impl PrfItem {
             .use_rustls_tls()
             .no_proxy()
             .connect_timeout(Duration::from_secs(8))
-            .timeout(Duration::from_secs(20));
+            .timeout(crate::application::budget::remaining(Duration::from_secs(
+                15,
+            ))?);
 
         // 使用软件自己的代理
         if self_proxy {
@@ -251,11 +274,14 @@ impl PrfItem {
             .send()
             .await
             .map_err(|error| error.without_url())
-            .context("failed to fetch remote profile within 20s (connect limit 8s); check the network or proxy")?;
+            .context("failed to fetch remote profile (request limit 15s, connect limit 8s)")?;
 
         let status_code = resp.status();
         if !StatusCode::is_success(&status_code) {
-            bail!("failed to fetch remote profile with status {status_code}")
+            if let Err(error) = resp.error_for_status_ref() {
+                return Err(error.without_url()).context("remote subscription HTTP rejection");
+            }
+            bail!("remote subscription returned unexpected status {status_code}");
         }
 
         let header = resp.headers();
@@ -344,7 +370,7 @@ impl PrfItem {
             .chunk()
             .await
             .map_err(|error| error.without_url())
-            .context("failed to download subscription body within 20s")?
+            .context("failed to download subscription body within request deadline")?
         {
             anyhow::ensure!(
                 bytes.len() + chunk.len() <= MAX_PROFILE_BYTES,
@@ -450,6 +476,38 @@ impl PrfItem {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn subscription_retries_transient_http_errors_but_not_authentication_errors() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use warp::Filter;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let count = calls.clone();
+        let route = warp::path::full().map(move |path: warp::path::FullPath| {
+            let attempt = count.fetch_add(1, Ordering::SeqCst);
+            let (status, body) = if path.as_str() == "/forbidden" { (401, "forbidden") }
+                else if attempt == 0 { (503, "temporary") }
+                else { (200, "proxies:\n  - {name: Synthetic, type: socks5, server: 127.0.0.1, port: 9}\nproxy-groups:\n  - {name: Main, type: select, proxies: [Synthetic]}\nrules:\n  - MATCH,Main\n") };
+            warp::http::Response::builder().status(status).body(body).unwrap()
+        });
+        let (address, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+        let task = tokio::spawn(server);
+        let item =
+            super::PrfItem::from_url(&format!("http://{address}/subscription"), None, None, None)
+                .await
+                .unwrap();
+        assert!(item.file_data.unwrap().contains("Synthetic"));
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(
+            super::PrfItem::from_url(&format!("http://{address}/forbidden"), None, None, None)
+                .await
+                .is_err()
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+        task.abort();
+    }
     use super::*;
 
     #[test]

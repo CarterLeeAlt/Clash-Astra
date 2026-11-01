@@ -12,6 +12,7 @@ import { CloseRounded } from "@mui/icons-material";
 import { deleteConnection } from "@/services/api";
 import parseTraffic from "@/utils/parse-traffic";
 import { textSizes } from "@/shared/typography";
+import { Notice, formatNoticeMessage } from "@/components/base";
 
 const Tag = styled("span")(({ theme }) => ({
   fontSize: textSizes.tag,
@@ -33,7 +34,13 @@ export const ConnectionItem = (props: Props) => {
 
   const { id, metadata, chains, start, curUpload, curDownload } = value;
 
-  const onDelete = useLockFn(async () => deleteConnection(id));
+  const onDelete = useLockFn(async () => {
+    try {
+      await deleteConnection(id);
+    } catch (error) {
+      Notice.error(formatNoticeMessage(error));
+    }
+  });
   const showTraffic = curUpload! >= 100 || curDownload! >= 100;
 
   return (

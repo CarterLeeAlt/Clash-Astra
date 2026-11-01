@@ -97,6 +97,8 @@ pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate:
         .map(|uid| chain_item(profiles.get_item(uid)?, files))
         .collect::<Result<Vec<_>>>()?;
     let runtime = enhance::compile(CompileInput {
+        deadline: std::time::Instant::now()
+            + crate::application::budget::remaining(std::time::Duration::from_secs(20))?,
         clash_config: snapshot.clash.0.clone(),
         enable_tun: snapshot.clash_settings.enable_tun_mode.unwrap_or(false),
         current,
@@ -170,6 +172,7 @@ impl FileTransaction {
 
     pub fn apply(&self) -> Result<()> {
         for entry in &self.entries {
+            crate::application::budget::check()?;
             write_optional(&self.root.join(&entry.relative), entry.after.as_deref())?;
         }
         Ok(())

@@ -78,9 +78,16 @@ fn changed<T: serde::Serialize>(before: &T, after: &T) -> bool {
 async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T> + Send + 'static,
 ) -> Result<T> {
-    tokio::task::spawn_blocking(work)
-        .await
-        .context("configuration worker failed")?
+    let budget = super::budget::Budget::current();
+    tokio::task::spawn_blocking(move || {
+        if let Some(budget) = budget {
+            budget.blocking(work)
+        } else {
+            work()
+        }
+    })
+    .await
+    .context("configuration worker failed")?
 }
 
 impl Driver {
@@ -114,6 +121,7 @@ impl Driver {
     }
 
     fn check_deadline(&self) -> Result<()> {
+        super::budget::check()?;
         self.change
             .switch_budget
             .map_or(Ok(()), SwitchBudget::check)
@@ -130,6 +138,9 @@ impl Driver {
         }
         if self.action != RuntimeAction::None || self.recovered {
             clash_api::verify_runtime(&self.change.next).await?;
+        }
+        if matches!(self.action, RuntimeAction::Reload | RuntimeAction::Restart) {
+            clash_api::verify_structure(&self.change.next).await?;
         }
         Ok(())
     }
@@ -266,6 +277,7 @@ impl TransactionDriver for Driver {
                 Ok(connections) => {
                     self.cleanup = Some(clash_api::ConnectionCleanup::capture(&connections, edge))
                 }
+                Err(error) if super::budget::permanent(&error) => return Err(error),
                 Err(_) => self.recovery_required = true,
             }
         }
@@ -316,6 +328,7 @@ impl TransactionDriver for Driver {
                         .filter_map(|proxy| proxy.now.map(|node| (proxy.name, node)))
                         .collect();
                 }
+                Err(error) if super::budget::permanent(&error) => return Err(error),
                 Err(_) => self.recovery_required = true,
             }
         }
@@ -393,8 +406,8 @@ impl TransactionDriver for Driver {
                         })
                         .await?;
                     } else {
-                        clash_api::patch_configs_for(
-                            before.clash.get_client_info(),
+                        clash_api::patch_configs_verified(
+                            next,
                             self.change.core_patch.as_ref().unwrap(),
                         )
                         .await?;
@@ -406,6 +419,11 @@ impl TransactionDriver for Driver {
         if let Some(budget) = self.change.switch_budget {
             let first_deadline = budget.recovery_at().max(tokio::time::Instant::now());
             let result = tokio::time::timeout_at(first_deadline, action).await;
+            if let Ok(Err(error)) = &result {
+                if super::budget::permanent(error) {
+                    return result.unwrap();
+                }
+            }
             if !matches!(result, Ok(Ok(()))) {
                 self.recover_core().await?;
             }
@@ -433,10 +451,13 @@ impl TransactionDriver for Driver {
                 &selection.node,
                 budget.recovery_at(),
             );
-            if !matches!(
-                tokio::time::timeout_at(budget.recovery_at(), apply).await,
-                Ok(Ok(()))
-            ) {
+            let result = tokio::time::timeout_at(budget.recovery_at(), apply).await;
+            if let Ok(Err(error)) = &result {
+                if super::budget::permanent(error) {
+                    return result.unwrap();
+                }
+            }
+            if !matches!(result, Ok(Ok(()))) {
                 self.recover_core().await?;
             }
         } else if self.change.restore_selection && !self.recovered {
@@ -453,6 +474,7 @@ impl TransactionDriver for Driver {
         }
         if self.action == RuntimeAction::Reload {
             clash_api::verify_tun_state(&self.change.next).await?;
+            clash_api::verify_structure(&self.change.next).await?;
         }
         let before = &self.change.before;
         let next = &self.change.next;
@@ -530,7 +552,10 @@ impl TransactionDriver for Driver {
                 .unwrap_or_else(|| tokio::time::Instant::now() + std::time::Duration::from_secs(4));
             if let Err(error) = super::routing::retry_until(deadline, || self.verify_target()).await
             {
-                if self.recovered || self.action == RuntimeAction::Restart {
+                if self.recovered
+                    || self.action == RuntimeAction::Restart
+                    || super::budget::permanent(&error)
+                {
                     return Err(error);
                 }
                 self.recover_core().await?;
@@ -593,7 +618,10 @@ impl TransactionDriver for Driver {
                 } else if self.action == RuntimeAction::Restart || self.recovered {
                     CoreManager::global().run_core_with(before).await
                 } else {
-                    CoreManager::global().update_config(before).await
+                    CoreManager::global().update_config(before).await?;
+                    clash_api::wait_subscription_ready(before).await?;
+                    clash_api::verify_runtime(before).await?;
+                    clash_api::verify_structure(before).await
                 }
             };
             let result = if let Some(budget) = self.change.switch_budget {
@@ -608,7 +636,7 @@ impl TransactionDriver for Driver {
         if self.selection_attempted || self.runtime_attempted {
             for (group, node) in &self.selection_before {
                 let restore =
-                    clash_api::select_proxy_for(before.clash.get_client_info(), group, node);
+                    clash_api::select_proxy_verified(before.clash.get_client_info(), group, node);
                 let result = if let Some(budget) = self.change.switch_budget {
                     budget.run(restore).await
                 } else {
@@ -926,7 +954,7 @@ pub async fn reload() -> Result<()> {
 }
 
 pub async fn refresh_network_data(provider: Option<(String, String)>) -> Result<()> {
-    super::dispatch(async move {
+    super::dispatch_with_budget(super::budget::UPDATE_TIMEOUT, async move {
         let _operation = super::operation().await?;
         let mut change = Change::new();
         let info = change.next.clash.get_client_info();

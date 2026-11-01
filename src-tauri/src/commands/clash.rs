@@ -100,6 +100,11 @@ pub async fn refresh_geo_data() -> CmdResult {
     wrap_err!(configuration::refresh_network_data(None).await)
 }
 
+#[tauri::command]
+pub async fn close_connections_verified(id: Option<String>) -> CmdResult {
+    wrap_err!(crate::application::routing::close_connections(id).await)
+}
+
 #[tauri::command(async)]
 pub fn get_clash_logs() -> CmdResult<VecDeque<String>> {
     Ok(logger::Logger::global().get_log())

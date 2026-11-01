@@ -36,31 +36,34 @@ pub trait TransactionDriver {
 
 pub async fn execute(driver: &mut impl TransactionDriver) -> Result<()> {
     let mut stage = "prepare";
-    let result = async {
-        driver.prepare().await?;
+    let result = Box::pin(async {
+        Box::pin(driver.prepare()).await?;
         stage = "apply";
-        driver.apply().await?;
+        Box::pin(driver.apply()).await?;
         stage = "commit";
-        driver.commit().await?;
+        Box::pin(driver.commit()).await?;
         Ok::<_, anyhow::Error>(())
-    }
+    })
     .await;
     match result {
         Ok(()) => {
-            let completion = driver.complete().await;
+            let completion = Box::pin(driver.complete()).await;
             driver.publish();
             completion.map_err(|error| CompletionFailure(format!("{error:#}")).into())
         }
-        Err(error) => Err(OperationFailure {
-            stage,
-            cause: format!("{error:#}"),
-            recovery_error: driver
-                .rollback()
-                .await
-                .err()
-                .map(|error| format!("{error:#}")),
+        Err(error) => {
+            let rollback = if let Some(budget) = super::budget::Budget::current() {
+                budget.recover(Box::pin(driver.rollback())).await
+            } else {
+                Box::pin(driver.rollback()).await
+            };
+            Err(OperationFailure {
+                stage,
+                cause: format!("{error:#}"),
+                recovery_error: rollback.err().map(|error| format!("{error:#}")),
+            }
+            .into())
         }
-        .into()),
     }
 }
 

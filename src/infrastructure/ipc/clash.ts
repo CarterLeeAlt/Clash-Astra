@@ -64,6 +64,8 @@ export async function restartSidecar() {
 export const applyProviderUpdate = (kind: "proxies" | "rules", name: string) =>
   invoke<void>("refresh_provider", { kind, name });
 export const applyGeoUpdate = () => invoke<void>("refresh_geo_data");
+export const closeConnectionsVerified = (id?: string) =>
+  invoke<void>("close_connections_verified", { id });
 
 export async function cmdGetProxyDelay(
   name: string,

@@ -3,11 +3,6 @@
 use crate::utils::dirs;
 use anyhow::{bail, Context, Result};
 use deelevate::{PrivilegeLevel, Token};
-use runas::Command as RunasCommand;
-use std::os::windows::process::CommandExt;
-use std::process::Command as StdCommand;
-
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn set_lan_firewall_enabled(enabled: bool) -> Result<()> {
     let helper = dirs::firewall_helper_path()?;
@@ -21,18 +16,12 @@ pub fn set_lan_firewall_enabled(enabled: bool) -> Result<()> {
         "--disable-lan"
     };
     let level = Token::with_current_process()?.privilege_level()?;
-    let status = match level {
-        PrivilegeLevel::NotPrivileged => RunasCommand::new(&helper)
-            .arg(operation)
-            .show(false)
-            .status()
-            .context("administrator approval for Windows Firewall was denied or failed")?,
-        _ => StdCommand::new(&helper)
-            .arg(operation)
-            .creation_flags(CREATE_NO_WINDOW)
-            .status()
-            .context("failed to run Windows Firewall helper")?,
-    };
+    let status = crate::infrastructure::privileged_process::run(
+        &helper,
+        &[operation],
+        !matches!(level, PrivilegeLevel::NotPrivileged),
+    )
+    .context("failed to execute Windows Firewall helper")?;
 
     if !status.success() {
         bail!(

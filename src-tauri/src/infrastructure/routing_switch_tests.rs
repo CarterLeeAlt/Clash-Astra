@@ -521,6 +521,16 @@ async fn real_core_switch_closes_old_group_tunnels_without_reload_or_restart() {
     snapshot.clash.0 = serde_yaml::from_str(&config).unwrap();
     snapshot.runtime.config = Some(snapshot.clash.0.clone());
     let patch = serde_yaml::from_str("mode: global").unwrap();
+    clash_api::verify_structure(&snapshot).await.unwrap();
+    let mut stale = snapshot.clone();
+    stale.runtime.config.as_mut().unwrap().insert(
+        "rules".into(),
+        serde_yaml::from_str::<serde_yaml::Value>("- MATCH,REJECT").unwrap(),
+    );
+    assert!(
+        clash_api::verify_structure(&stale).await.is_err(),
+        "an old nonempty routing table must not count as applied"
+    );
     clash_api::patch_configs_for(info.clone(), &patch)
         .await
         .unwrap();
@@ -558,4 +568,188 @@ async fn real_core_switch_closes_old_group_tunnels_without_reload_or_restart() {
     proxy_b.abort();
     echo_task.abort();
     println!("routing switch contract passed; reports={}", root.display());
+}
+
+#[tokio::test]
+async fn real_provider_update_advances_marker_and_loads_new_nodes() {
+    use std::os::windows::process::CommandExt;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use warp::Filter;
+    let changed = Arc::new(AtomicBool::new(false));
+    let serve_changed = changed.clone();
+    let route = warp::path::full().map(move |path: warp::path::FullPath| {
+        if path.as_str() == "/rules" {
+            let domain = if serve_changed.load(Ordering::SeqCst) {
+                "new.invalid"
+            } else {
+                "old.invalid"
+            };
+            return format!("payload:\n  - DOMAIN-SUFFIX,{domain}\n");
+        }
+        let name = if serve_changed.load(Ordering::SeqCst) {
+            "SyntheticB"
+        } else {
+            "SyntheticA"
+        };
+        format!("proxies:\n  - {{name: {name}, type: socks5, server: 127.0.0.1, port: 9}}\n")
+    });
+    let (provider_address, provider_server) =
+        warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+    let provider_task = tokio::spawn(provider_server);
+    let reservation = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = reservation.local_addr().unwrap().port();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../.tmp/provider-verification")
+        .join(nanoid::nanoid!());
+    fs::create_dir_all(&root).unwrap();
+    let config = format!(
+        r#"
+mixed-port: 0
+socks-port: 0
+port: 0
+external-controller: 127.0.0.1:{port}
+secret: synthetic
+mode: rule
+log-level: warning
+find-process-mode: always
+proxy-providers:
+  SyntheticProvider:
+    type: http
+    proxy: DIRECT
+    url: http://{provider_address}/nodes
+    path: ./provider.yaml
+    interval: 86400
+rule-providers:
+  SyntheticRules:
+    type: http
+    proxy: DIRECT
+    behavior: classical
+    format: yaml
+    url: http://{provider_address}/rules
+    path: ./rules.yaml
+    interval: 86400
+proxy-groups:
+  - name: ProviderGroup
+    type: select
+    use: [SyntheticProvider]
+rules:
+  - RULE-SET,SyntheticRules,DIRECT
+  - IP-CIDR,192.0.2.1/24,DIRECT,no-resolve
+  - IP-CIDR6,2001:db8::1/32,DIRECT,no-resolve
+  - MATCH,ProviderGroup
+"#
+    );
+    let path = root.join("runtime.yaml");
+    fs::write(&path, &config).unwrap();
+    let log = fs::File::create(root.join("core.log")).unwrap();
+    drop(reservation);
+    let core = Core(
+        Command::new(crate::core::mihomo::binary_path().unwrap())
+            .args(["-d"])
+            .arg(&root)
+            .arg("-f")
+            .arg(&path)
+            .creation_flags(0x08000000)
+            .stdout(Stdio::from(log.try_clone().unwrap()))
+            .stderr(Stdio::from(log))
+            .spawn()
+            .unwrap(),
+    );
+    let info = ClashInfo {
+        server: format!("127.0.0.1:{port}"),
+        secret: Some("synthetic".into()),
+        ..Default::default()
+    };
+    clash_api::wait_for_core_ready(info.clone(), Duration::from_secs(5))
+        .await
+        .unwrap();
+    let snapshot = ConfigSnapshot {
+        revision: 0,
+        runtime_revision: 0,
+        profile_versions: Default::default(),
+        clash: IClashTemp(serde_yaml::from_str(&config).unwrap()),
+        clash_settings: IClashSettings::template(),
+        profiles: IProfiles {
+            current: Some("synthetic".into()),
+            ..IProfiles::template()
+        },
+        runtime: IRuntime {
+            config: Some(serde_yaml::from_str(&config).unwrap()),
+            ..Default::default()
+        },
+    };
+    clash_api::wait_subscription_ready(&snapshot).await.unwrap();
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .unwrap();
+    let before: serde_json::Value = client
+        .get(format!(
+            "http://127.0.0.1:{port}/providers/proxies/SyntheticProvider"
+        ))
+        .bearer_auth("synthetic")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    fs::write(
+        root.join("provider-before.json"),
+        serde_json::to_vec_pretty(&before).unwrap(),
+    )
+    .unwrap();
+    changed.store(true, Ordering::SeqCst);
+    let update = crate::application::budget::Budget::new(Duration::from_secs(60))
+        .scope(clash_api::update_provider(
+            info.clone(),
+            "proxies",
+            "SyntheticProvider",
+        ))
+        .await;
+    let after: serde_json::Value = client
+        .get(format!(
+            "http://127.0.0.1:{port}/providers/proxies/SyntheticProvider"
+        ))
+        .bearer_auth("synthetic")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    fs::write(
+        root.join("provider-after.json"),
+        serde_json::to_vec_pretty(&after).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        update.is_ok(),
+        "{update:?}; before={before}; after={after}; reports={}",
+        root.display()
+    );
+    crate::application::budget::Budget::new(Duration::from_secs(60))
+        .scope(clash_api::update_provider(
+            info.clone(),
+            "rules",
+            "SyntheticRules",
+        ))
+        .await
+        .unwrap();
+    clash_api::verify_runtime(&snapshot).await.unwrap();
+    clash_api::verify_structure(&snapshot).await.unwrap();
+    let nodes = clash_api::get_proxies_for(info).await.unwrap();
+    assert!(nodes.proxies["ProviderGroup"]
+        .all
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|name| name == "SyntheticB"));
+    drop(core);
+    provider_task.abort();
+    println!("real provider readback passed; reports={}", root.display());
 }

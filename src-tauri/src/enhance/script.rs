@@ -12,20 +12,50 @@ const SCRIPT_MEMORY_LIMIT: usize = 256 * 1024 * 1024;
 const SCRIPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 const SCRIPT_MAX_LOGS: usize = 1000;
 
+#[cfg(test)]
 pub fn use_script(
     script: String,
     config: Mapping,
     profile_name: &str,
 ) -> Result<(Mapping, Vec<(String, String)>)> {
-    run_script_inner(script, config, profile_name, false)
+    use_script_until(
+        script,
+        config,
+        profile_name,
+        std::time::Instant::now() + SCRIPT_TIMEOUT,
+    )
 }
 
+pub fn use_script_until(
+    script: String,
+    config: Mapping,
+    profile_name: &str,
+    deadline: std::time::Instant,
+) -> Result<(Mapping, Vec<(String, String)>)> {
+    run_script_inner(script, config, profile_name, false, deadline)
+}
+
+#[cfg(test)]
 pub fn validate_script_strict(
     script: String,
     config: Mapping,
     profile_name: &str,
 ) -> Result<Mapping> {
-    let (config, _) = run_script_inner(script, config, profile_name, true)?;
+    validate_script_strict_until(
+        script,
+        config,
+        profile_name,
+        std::time::Instant::now() + SCRIPT_TIMEOUT,
+    )
+}
+
+pub fn validate_script_strict_until(
+    script: String,
+    config: Mapping,
+    profile_name: &str,
+    deadline: std::time::Instant,
+) -> Result<Mapping> {
+    let (config, _) = run_script_inner(script, config, profile_name, true, deadline)?;
     validate_script_output_shape(&config)?;
     Ok(config)
 }
@@ -35,6 +65,7 @@ fn run_script_inner(
     config: Mapping,
     profile_name: &str,
     strict: bool,
+    operation_deadline: std::time::Instant,
 ) -> Result<(Mapping, Vec<(String, String)>)> {
     use rquickjs::{function::Func, Context, Runtime};
     use std::sync::{Arc, Mutex};
@@ -43,7 +74,11 @@ fn run_script_inner(
     // 用户脚本不可信：死循环会让生成配置永远不返回（启动期就是窗口永远不出现），
     // 大分配会耗尽内存结束整个进程。限制内存并设执行时限，超限时脚本抛错。
     runtime.set_memory_limit(SCRIPT_MEMORY_LIMIT);
-    let deadline = std::time::Instant::now() + SCRIPT_TIMEOUT;
+    let deadline = (std::time::Instant::now() + SCRIPT_TIMEOUT).min(operation_deadline);
+    anyhow::ensure!(
+        std::time::Instant::now() < deadline,
+        "script operation deadline expired"
+    );
     runtime.set_interrupt_handler(Some(Box::new(move || {
         std::time::Instant::now() >= deadline
     })));

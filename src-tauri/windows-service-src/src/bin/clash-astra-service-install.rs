@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use clash_astra_service_src::process_control;
 use clash_astra_service_src::{api_token_path, SERVICE_BINARY, SERVICE_DISPLAY_NAME, SERVICE_NAME};
 use rand::{rngs::OsRng, RngCore};
 use std::ffi::OsString;
@@ -12,10 +13,11 @@ use windows_service::service::{
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 fn current_user_sid() -> Result<String> {
-    let output = Command::new("whoami.exe")
-        .args(["/user", "/fo", "csv", "/nh"])
-        .output()
-        .context("failed to query current Windows user SID")?;
+    let output = process_control::output(
+        Command::new("whoami.exe").args(["/user", "/fo", "csv", "/nh"]),
+        Duration::from_secs(3),
+    )
+    .context("failed to query current Windows user SID")?;
     if !output.status.success() {
         anyhow::bail!("whoami.exe failed while querying the current user SID");
     }
@@ -50,15 +52,19 @@ fn requested_user_sid() -> Result<String> {
 
 fn restrict_token_acl(path: &std::path::Path, user_sid: &str) -> Result<()> {
     let user_rule = format!("*{user_sid}:R");
-    let status = Command::new("icacls.exe")
-        .arg(path)
-        .arg("/inheritance:r")
-        .arg("/grant:r")
-        .arg(&user_rule)
-        .arg("*S-1-5-18:F")
-        .arg("*S-1-5-32-544:F")
-        .status()
-        .context("failed to set service token ACL")?;
+    process_control::check_helper_deadline()?;
+    let status = process_control::output(
+        Command::new("icacls.exe")
+            .arg(path)
+            .arg("/inheritance:r")
+            .arg("/grant:r")
+            .arg(&user_rule)
+            .arg("*S-1-5-18:F")
+            .arg("*S-1-5-32-544:F"),
+        Duration::from_secs(5),
+    )
+    .context("failed to set service token ACL")?
+    .status;
     if !status.success() {
         anyhow::bail!("icacls.exe failed to protect the service token");
     }
@@ -67,15 +73,19 @@ fn restrict_token_acl(path: &std::path::Path, user_sid: &str) -> Result<()> {
 
 fn restrict_token_directory_acl(path: &std::path::Path, user_sid: &str) -> Result<()> {
     let user_rule = format!("*{user_sid}:(OI)(CI)R");
-    let status = Command::new("icacls.exe")
-        .arg(path)
-        .arg("/inheritance:r")
-        .arg("/grant:r")
-        .arg(&user_rule)
-        .arg("*S-1-5-18:(OI)(CI)F")
-        .arg("*S-1-5-32-544:(OI)(CI)F")
-        .status()
-        .context("failed to set service token directory ACL")?;
+    process_control::check_helper_deadline()?;
+    let status = process_control::output(
+        Command::new("icacls.exe")
+            .arg(path)
+            .arg("/inheritance:r")
+            .arg("/grant:r")
+            .arg(&user_rule)
+            .arg("*S-1-5-18:(OI)(CI)F")
+            .arg("*S-1-5-32-544:(OI)(CI)F"),
+        Duration::from_secs(5),
+    )
+    .context("failed to set service token directory ACL")?
+    .status;
     if !status.success() {
         anyhow::bail!("icacls.exe failed to protect the service token directory");
     }
@@ -83,6 +93,7 @@ fn restrict_token_directory_acl(path: &std::path::Path, user_sid: &str) -> Resul
 }
 
 fn ensure_api_token(user_sid: &str) -> Result<()> {
+    process_control::check_helper_deadline()?;
     let path = api_token_path().context("failed to resolve the local service token path")?;
     let parent = path.parent().context("service token path has no parent")?;
     fs::create_dir_all(parent).context("failed to create service token directory")?;
@@ -131,6 +142,7 @@ fn ensure_api_token(user_sid: &str) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    process_control::check_helper_deadline()?;
     let user_sid = requested_user_sid()?;
     ensure_api_token(&user_sid)?;
 
@@ -163,6 +175,7 @@ fn main() -> Result<()> {
             | ServiceAccess::CHANGE_CONFIG,
     ) {
         Ok(existing) => {
+            process_control::check_helper_deadline()?;
             existing
                 .change_config(&info)
                 .with_context(|| format!("failed to repair service '{}'", SERVICE_NAME))?;
@@ -184,6 +197,7 @@ fn main() -> Result<()> {
             .stop()
             .with_context(|| format!("failed to stop service '{}'", SERVICE_NAME))?;
         for _ in 0..40 {
+            process_control::check_helper_deadline()?;
             if service.query_status()?.current_state == ServiceState::Stopped {
                 break;
             }

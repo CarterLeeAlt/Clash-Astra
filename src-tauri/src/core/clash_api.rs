@@ -1,5 +1,6 @@
+use crate::application::budget;
 use crate::config::{ClashInfo, Config, DEFAULT_LATENCY_TEST_URL};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use once_cell::sync::Lazy;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::header::HeaderMap;
@@ -31,7 +32,7 @@ pub async fn put_configs_for(info: ClashInfo, path: &str) -> Result<()> {
     let client = reqwest::ClientBuilder::new()
         .no_proxy()
         .connect_timeout(Duration::from_secs(2))
-        .timeout(Duration::from_secs(8))
+        .timeout(budget::remaining(Duration::from_secs(8))?)
         .build()?;
     let builder = client
         .put(&url)
@@ -43,6 +44,7 @@ pub async fn put_configs_for(info: ClashInfo, path: &str) -> Result<()> {
     match response.status().as_u16() {
         204 => Ok(()),
         status => {
+            response.error_for_status()?;
             bail!("failed to put configs with status \"{status}\"")
         }
     }
@@ -56,7 +58,7 @@ pub async fn patch_configs_for(info: ClashInfo, config: &Mapping) -> Result<()> 
     let client = reqwest::ClientBuilder::new()
         .no_proxy()
         .connect_timeout(Duration::from_secs(2))
-        .timeout(Duration::from_secs(8))
+        .timeout(budget::remaining(Duration::from_secs(8))?)
         .build()?;
     let builder = client.patch(&url).headers(headers.clone()).json(config);
     builder.send().await?.error_for_status()?;
@@ -180,7 +182,9 @@ pub async fn get_proxy_delay_for(
         .get(&url)
         .headers(headers)
         .query(&[("timeout", &timeout_param), ("url", &test_url)])
-        .timeout(Duration::from_millis(timeout as u64 + 5000))
+        .timeout(budget::remaining(Duration::from_millis(
+            timeout as u64 + 5000,
+        ))?)
         .build()
         .map_err(|err| {
             anyhow::anyhow!(
@@ -234,7 +238,12 @@ pub async fn get_proxies_for(info: ClashInfo) -> Result<ProxiesRes> {
     let (url, headers) = build_clash_client_info(info)?;
     let url = format!("{url}/proxies");
 
-    let response = API_CLIENT.get(&url).headers(headers).send().await?;
+    let response = API_CLIENT
+        .get(&url)
+        .headers(headers)
+        .timeout(budget::remaining(Duration::from_secs(8))?)
+        .send()
+        .await?;
 
     Ok(response.error_for_status()?.json::<ProxiesRes>().await?)
 }
@@ -264,7 +273,7 @@ pub async fn check_subscription_ready(snapshot: &crate::config::ConfigSnapshot) 
         let response = API_CLIENT
             .get(format!("{url}/{endpoint}"))
             .headers(headers.clone())
-            .timeout(Duration::from_secs(3))
+            .timeout(budget::remaining(Duration::from_secs(3))?)
             .send()
             .await?
             .error_for_status()?;
@@ -288,9 +297,7 @@ pub async fn wait_subscription_ready(snapshot: &crate::config::ConfigSnapshot) -
             }
         }
     };
-    tokio::time::timeout(Duration::from_secs(15), check)
-        .await
-        .map_err(|_| anyhow::anyhow!("subscription providers did not become ready within 15s"))?
+    budget::step(Duration::from_secs(15), check).await
 }
 
 fn validate_loaded_provider(actual: &serde_json::Value, proxy_provider: bool) -> Result<()> {
@@ -328,6 +335,7 @@ pub async fn select_proxy_for(info: ClashInfo, group: &str, proxy: &str) -> Resu
         .put(format!("{url}/proxies/{group}"))
         .headers(headers)
         .json(&serde_json::json!({ "name": proxy }))
+        .timeout(budget::remaining(Duration::from_secs(8))?)
         .send()
         .await?
         .error_for_status()?;
@@ -343,7 +351,12 @@ pub async fn get_connections_for(info: ClashInfo) -> Result<ConnectionsRes> {
     let (url, headers) = build_clash_client_info(info)?;
     let url = format!("{url}/connections");
 
-    let response = API_CLIENT.get(&url).headers(headers).send().await?;
+    let response = API_CLIENT
+        .get(&url)
+        .headers(headers)
+        .timeout(budget::remaining(Duration::from_secs(8))?)
+        .send()
+        .await?;
 
     Ok(response
         .error_for_status()?
@@ -356,6 +369,7 @@ pub async fn get_configs_for(info: ClashInfo) -> Result<serde_json::Value> {
     let mut actual: serde_json::Value = API_CLIENT
         .get(format!("{url}/configs"))
         .headers(headers)
+        .timeout(budget::remaining(Duration::from_secs(8))?)
         .send()
         .await?
         .error_for_status()?
@@ -378,32 +392,163 @@ pub async fn get_configs_for(info: ClashInfo) -> Result<serde_json::Value> {
 pub async fn update_provider(info: ClashInfo, kind: &str, name: &str) -> Result<()> {
     anyhow::ensure!(matches!(kind, "proxies" | "rules"), "invalid provider kind");
     let (url, headers) = build_clash_client_info(info)?;
-    let name = utf8_percent_encode(name, NON_ALPHANUMERIC);
-    API_CLIENT
-        .put(format!("{url}/providers/{kind}/{name}"))
-        .headers(headers)
-        .timeout(Duration::from_secs(60))
+    let encoded_name = utf8_percent_encode(name, NON_ALPHANUMERIC);
+    let endpoint = format!("{url}/providers/{kind}/{encoded_name}");
+    // The pinned rule-provider API has no GET /providers/rules/{name}.
+    let read_endpoint = format!("{url}/providers/{kind}");
+    let before: serde_json::Value = API_CLIENT
+        .get(&read_endpoint)
+        .headers(headers.clone())
+        .timeout(budget::remaining(Duration::from_secs(3))?)
         .send()
         .await?
-        .error_for_status()?;
-    Ok(())
+        .error_for_status()?
+        .json()
+        .await?;
+    let before = before["providers"][name].clone();
+    validate_loaded_provider(&before, kind == "proxies")?;
+    let request = API_CLIENT
+        .put(&endpoint)
+        .headers(headers.clone())
+        .timeout(budget::remaining(Duration::from_secs(40))?)
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status);
+    if let Err(error) = &request {
+        if error.status().is_some() {
+            return Err(request.unwrap_err().into());
+        }
+    }
+    // Do not replay a download whose response was lost. Poll its observable completion.
+    budget::step(Duration::from_secs(5), async {
+        loop {
+            let after = API_CLIENT
+                .get(&read_endpoint)
+                .headers(headers.clone())
+                .timeout(budget::remaining(Duration::from_secs(2))?)
+                .send()
+                .await;
+            if let Ok(response) = after {
+                if let Ok(response) = response.error_for_status() {
+                    if let Ok(after) = response.json::<serde_json::Value>().await {
+                        if provider_updated(&before, &after["providers"][name], kind == "proxies") {
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!("provider update completion could not be verified: {error:#}"))
+}
+
+fn provider_updated(before: &serde_json::Value, after: &serde_json::Value, proxies: bool) -> bool {
+    after["updatedAt"]
+        .as_str()
+        .is_some_and(|date| !date.is_empty() && after["updatedAt"] != before["updatedAt"])
+        && validate_loaded_provider(after, proxies).is_ok()
 }
 
 pub async fn update_geo_data(info: ClashInfo) -> Result<()> {
+    let root = crate::utils::dirs::app_home_dir()?;
+    let started = std::time::SystemTime::now();
     let (url, headers) = build_clash_client_info(info)?;
-    API_CLIENT
+    let response = API_CLIENT
         .post(format!("{url}/configs/geo"))
         .headers(headers)
-        .timeout(Duration::from_secs(60))
+        .timeout(budget::remaining(Duration::from_secs(40))?)
         .send()
-        .await?
-        .error_for_status()?;
+        .await
+        .and_then(reqwest::Response::error_for_status);
+    let mut observed = false;
+    for name in ["Country.mmdb", "geoip.dat", "geosite.dat"] {
+        let path = root.join(name);
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            if metadata
+                .modified()
+                .is_ok_and(|modified| modified >= started)
+            {
+                anyhow::ensure!(metadata.len() > 0, "updated Geo data file is empty");
+                std::fs::File::open(path)?;
+                observed = true;
+            }
+        }
+    }
+    anyhow::ensure!(
+        observed,
+        "Geo update could not be verified from local data-file modification state"
+    );
+    if let Err(error) = response {
+        return Err(error).context("Geo data files changed but the update response failed; partial completion cannot be reported as success");
+    }
     Ok(())
 }
 
+#[test]
+fn provider_readback_requires_a_new_update_marker_and_loaded_content() {
+    let old = serde_json::json!({"updatedAt":"old","proxies":[{"name":"A"}]});
+    assert!(!provider_updated(&old, &old, true));
+    assert!(!provider_updated(
+        &old,
+        &serde_json::json!({"updatedAt":"new","proxies":[]}),
+        true
+    ));
+    assert!(provider_updated(
+        &old,
+        &serde_json::json!({"updatedAt":"new","proxies":[{"name":"A"}]}),
+        true
+    ));
+}
+
 pub async fn select_proxy_verified(info: ClashInfo, group: &str, node: &str) -> Result<()> {
-    select_proxy_for(info.clone(), group, node).await?;
+    if let Err(error) = select_proxy_for(info.clone(), group, node).await {
+        if budget::permanent(&error) {
+            return Err(error);
+        }
+        if verify_selection(info.clone(), group, node).await.is_ok() {
+            return Ok(());
+        }
+        return Err(error);
+    }
     verify_selection(info, group, node).await
+}
+
+pub async fn patch_configs_verified(
+    snapshot: &crate::config::ConfigSnapshot,
+    patch: &Mapping,
+) -> Result<()> {
+    let mut last_error = None;
+    for attempt in 0..3 {
+        budget::check()?;
+        let response = patch_configs_for(snapshot.clash.get_client_info(), patch).await;
+        if response.as_ref().err().is_some_and(budget::permanent) {
+            return response;
+        }
+        // A failed response does not prove a failed write. Always confirm before replaying.
+        let confirmed = budget::step(Duration::from_secs(2), async {
+            loop {
+                match verify_runtime(snapshot).await {
+                    Ok(()) => return Ok(()),
+                    Err(error) if budget::permanent(&error) => return Err(error),
+                    Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+                }
+            }
+        })
+        .await;
+        if confirmed.is_ok() {
+            return Ok(());
+        }
+        if confirmed.as_ref().err().is_some_and(budget::permanent) {
+            return confirmed;
+        }
+        last_error = response.err().or_else(|| confirmed.err());
+        if attempt < 2 {
+            tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("configuration patch was not confirmed")))
 }
 
 /// A fallback Set may run a health check inside Mihomo. Wait for that request
@@ -427,6 +572,9 @@ pub async fn select_proxy_until(
             Ok(Ok(())) => return Ok(()),
             Err(_) => bail!("selection request did not finish before recovery was required"),
             Ok(Err(error)) => {
+                if !budget::retryable(&error) {
+                    return Err(error);
+                }
                 let wait = crate::application::routing::retry_delay(attempt);
                 if tokio::time::Instant::now() + wait >= deadline {
                     return Err(error);
@@ -531,6 +679,13 @@ impl ConnectionCleanup {
                             .map_err(anyhow::Error::from)
                             .and_then(|result| result.map_err(anyhow::Error::from))
                         {
+                            if budget::permanent(&error)
+                                && !error.downcast_ref::<reqwest::Error>().is_some_and(|error| {
+                                    error.status().is_some_and(|status| status.as_u16() == 404)
+                                })
+                            {
+                                return Err(error);
+                            }
                             last_error = error.to_string();
                         }
                     }
@@ -540,6 +695,7 @@ impl ConnectionCleanup {
             match tokio::time::timeout_at(deadline, round).await {
                 Ok(Ok(true)) => return Ok(()),
                 Ok(Ok(false)) => {},
+                Ok(Err(error)) if budget::permanent(&error) => return Err(error),
                 Ok(Err(error)) => last_error = error.to_string(),
                 Err(_) => bail!("old connections could not be verified closed before the deadline: {last_error}"),
             }
@@ -569,6 +725,7 @@ pub async fn verify_runtime(snapshot: &crate::config::ConfigSnapshot) -> Result<
         "mixed-port",
         "socks-port",
         "port",
+        "find-process-mode",
     ] {
         if let Some(value) = expected.get(key) {
             anyhow::ensure!(
@@ -626,6 +783,263 @@ pub async fn verify_runtime(snapshot: &crate::config::ConfigSnapshot) -> Result<
         }
     }
     Ok(())
+}
+
+fn canonical_rule_type(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Verify observable routing content rather than accepting an old nonempty provider table.
+pub async fn verify_structure(snapshot: &crate::config::ConfigSnapshot) -> Result<()> {
+    let config = snapshot
+        .runtime
+        .config
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("runtime missing"))?;
+    let info = snapshot.clash.get_client_info();
+    if config.contains_key("proxies") || config.contains_key("proxy-groups") {
+        let actual = get_proxies_for(info.clone()).await?.proxies;
+        for field in ["proxies", "proxy-groups"] {
+            for expected in config
+                .get(field)
+                .and_then(serde_yaml::Value::as_sequence)
+                .into_iter()
+                .flatten()
+            {
+                let name = expected
+                    .get("name")
+                    .and_then(serde_yaml::Value::as_str)
+                    .ok_or_else(|| anyhow::anyhow!("routing item has no name"))?;
+                let loaded = actual
+                    .get(name)
+                    .ok_or_else(|| anyhow::anyhow!("routing item {name} was not loaded"))?;
+                if let Some(kind) = expected.get("type").and_then(serde_yaml::Value::as_str) {
+                    let kind = match kind {
+                        "select" => "selector",
+                        "ss" => "shadowsocks",
+                        "ssr" => "shadowsocksr",
+                        other => other,
+                    };
+                    anyhow::ensure!(
+                        canonical_rule_type(kind) == canonical_rule_type(&loaded.proxy_type),
+                        "routing item {name} has a stale type"
+                    );
+                }
+                if let Some(nodes) = expected
+                    .get("proxies")
+                    .and_then(serde_yaml::Value::as_sequence)
+                {
+                    for node in nodes.iter().filter_map(serde_yaml::Value::as_str) {
+                        anyhow::ensure!(
+                            loaded
+                                .all
+                                .as_ref()
+                                .is_some_and(|all| all.iter().any(|n| n == node)),
+                            "group {name} did not load member {node}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    if let Some(expected) = config.get("rules").and_then(serde_yaml::Value::as_sequence) {
+        let (url, headers) = build_clash_client_info(info)?;
+        let actual: serde_json::Value = API_CLIENT
+            .get(format!("{url}/rules"))
+            .headers(headers)
+            .timeout(budget::remaining(Duration::from_secs(3))?)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        verify_rules(expected, &actual)?;
+    }
+    Ok(())
+}
+
+fn verify_rules(expected: &[serde_yaml::Value], actual: &serde_json::Value) -> Result<()> {
+    let rules = actual["rules"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("rules readback missing"))?;
+    anyhow::ensure!(
+        expected.len() == rules.len(),
+        "loaded rule count differs from candidate"
+    );
+    for (expected, actual) in expected.iter().zip(rules) {
+        let expected = expected
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("invalid candidate rule"))?;
+        let mut parts: Vec<_> = expected.split(',').map(str::trim).collect();
+        let mut kind = canonical_rule_type(parts[0]);
+        if kind == "ipcidr6" {
+            kind = "ipcidr".into();
+        }
+        anyhow::ensure!(
+            canonical_rule_type(actual["type"].as_str().unwrap_or_default()) == kind,
+            "loaded rule type/order differs from candidate"
+        );
+        if parts.last() == Some(&"no-resolve") {
+            parts.pop();
+        }
+        if !matches!(kind.as_str(), "and" | "or" | "not" | "subrule") {
+            let target = parts.last().copied().unwrap_or_default();
+            anyhow::ensure!(
+                actual["proxy"].as_str() == Some(target),
+                "loaded rule target differs from candidate"
+            );
+            if parts.len() >= 3 {
+                // CIDR payloads may be canonicalized by Mihomo; compare the parsed networks separately.
+                let payload = actual["payload"].as_str().unwrap_or_default();
+                let equivalent = if matches!(kind.as_str(), "ipcidr" | "srcipcidr" | "dstipcidr") {
+                    canonical_network(payload) == canonical_network(parts[1])
+                        && canonical_network(payload).is_some()
+                } else {
+                    payload == parts[1]
+                };
+                anyhow::ensure!(equivalent, "loaded rule payload differs from candidate");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn canonical_network(value: &str) -> Option<(u128, u8, bool)> {
+    let (address, prefix) = value.split_once('/')?;
+    let prefix: u8 = prefix.parse().ok()?;
+    let (address, bits) = match address.parse::<std::net::IpAddr>().ok()? {
+        std::net::IpAddr::V4(address) => (u32::from(address) as u128, 32u8),
+        std::net::IpAddr::V6(address) => (u128::from(address), 128u8),
+    };
+    if prefix > bits {
+        return None;
+    }
+    let mask = if prefix == 0 {
+        0
+    } else {
+        u128::MAX << (bits - prefix)
+    };
+    Some((address & mask, prefix, bits == 128))
+}
+
+#[cfg(test)]
+mod operation_readback_tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use warp::Filter;
+
+    fn info(address: std::net::SocketAddr) -> ClashInfo {
+        ClashInfo {
+            server: address.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn lost_write_response_is_read_back_without_a_second_setter() {
+        let writes = Arc::new(AtomicUsize::new(0));
+        let count = writes.clone();
+        let route = warp::method().map(move |method: warp::http::Method| {
+            if method == warp::http::Method::PUT {
+                count.fetch_add(1, Ordering::SeqCst);
+                warp::http::Response::builder()
+                    .status(503)
+                    .body("{}".to_string())
+                    .unwrap()
+            } else {
+                warp::http::Response::builder()
+                    .body(r#"{"proxies":{"Main":{"name":"Main","now":"B"}}}"#.to_string())
+                    .unwrap()
+            }
+        });
+        let (address, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+        let task = tokio::spawn(server);
+        select_proxy_verified(info(address), "Main", "B")
+            .await
+            .unwrap();
+        assert_eq!(writes.load(Ordering::SeqCst), 1);
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn authentication_failure_is_not_retried() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let count = calls.clone();
+        let route = warp::any().map(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+            warp::http::Response::builder()
+                .status(401)
+                .body("{}")
+                .unwrap()
+        });
+        let (address, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+        let task = tokio::spawn(server);
+        let result = crate::application::routing::retry_until(
+            tokio::time::Instant::now() + Duration::from_secs(1),
+            || get_configs_for(info(address)),
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn false_provider_success_does_not_pass_or_repeat_the_download() {
+        let writes = Arc::new(AtomicUsize::new(0));
+        let count = writes.clone();
+        let route = warp::method().map(move |method: warp::http::Method| {
+            if method == warp::http::Method::PUT {
+                count.fetch_add(1, Ordering::SeqCst);
+            }
+            warp::reply::json(&serde_json::json!({"providers":{"Synthetic":{"updatedAt":"old","proxies":[{"name":"A"}]}}}))
+        });
+        let (address, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+        let task = tokio::spawn(server);
+        let result = budget::Budget::new(Duration::from_secs(6))
+            .scope(update_provider(info(address), "proxies", "Synthetic"))
+            .await;
+        assert!(result.is_err());
+        assert_eq!(writes.load(Ordering::SeqCst), 1);
+        task.abort();
+    }
+
+    #[test]
+    fn cidr_readback_compares_networks_not_host_bits_or_ipv6_spelling() {
+        assert_eq!(
+            canonical_network("10.2.3.4/24"),
+            canonical_network("10.2.3.0/24")
+        );
+        assert_eq!(
+            canonical_network("2001:db8::1/32"),
+            canonical_network("2001:0db8::/32")
+        );
+        assert_ne!(
+            canonical_network("10.2.3.0/24"),
+            canonical_network("10.2.4.0/24")
+        );
+    }
+}
+
+#[test]
+fn rule_readback_rejects_same_count_stale_rules_and_reordered_targets() {
+    let expected = serde_yaml::from_str::<Vec<serde_yaml::Value>>(
+        "- DOMAIN-SUFFIX,example.com,DIRECT\n- MATCH,REJECT",
+    )
+    .unwrap();
+    let good = serde_json::json!({"rules":[{"type":"DomainSuffix","payload":"example.com","proxy":"DIRECT"},{"type":"Match","payload":"","proxy":"REJECT"}]});
+    verify_rules(&expected, &good).unwrap();
+    let mut stale = good.clone();
+    stale["rules"][0]["payload"] = "stale.example".into();
+    assert!(verify_rules(&expected, &stale).is_err());
+    assert!(verify_rules(&expected, &serde_json::json!({})).is_err());
 }
 
 pub async fn verify_tun_state(snapshot: &crate::config::ConfigSnapshot) -> Result<()> {

@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod budget;
 pub mod configuration;
 pub mod diagnostics;
 pub mod profiles;
@@ -15,7 +16,16 @@ static OPERATIONS: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 static STOPPING: AtomicBool = AtomicBool::new(false);
 
 pub async fn operation() -> anyhow::Result<MutexGuard<'static, ()>> {
-    let guard = OPERATIONS.lock().await;
+    let guard = if budget::Budget::current().is_some() {
+        tokio::time::timeout(
+            budget::remaining(budget::UPDATE_TIMEOUT)?,
+            OPERATIONS.lock(),
+        )
+        .await
+        .map_err(|_| budget::DeadlineExceeded("configuration operation queue timed out"))?
+    } else {
+        OPERATIONS.lock().await
+    };
     anyhow::ensure!(
         !STOPPING.load(Ordering::SeqCst),
         "application is shutting down"
@@ -44,8 +54,23 @@ pub fn shutdown_guard() -> MutexGuard<'static, ()> {
 pub async fn dispatch<T: Send + 'static>(
     work: impl std::future::Future<Output = anyhow::Result<T>> + Send + 'static,
 ) -> anyhow::Result<T> {
-    tokio::spawn(work)
+    dispatch_with_budget(budget::CONFIG_TIMEOUT, work).await
+}
+
+pub async fn dispatch_with_budget<T: Send + 'static>(
+    timeout: std::time::Duration,
+    work: impl std::future::Future<Output = anyhow::Result<T>> + Send + 'static,
+) -> anyhow::Result<T> {
+    let budget = budget::Budget::current().unwrap_or_else(|| budget::Budget::new(timeout));
+    // The worker retains the operation gate through compensation even when the caller times out.
+    let worker = tokio::spawn(budget.scope(Box::pin(work)));
+    tokio::time::timeout_at(budget.deadline, worker)
         .await
+        .map_err(|_| {
+            budget::DeadlineExceeded(
+                "operation timed out; consistency cleanup may still be running",
+            )
+        })?
         .map_err(|error| anyhow::anyhow!("business operation failed: {error}"))?
 }
 

@@ -28,7 +28,9 @@ impl From<anyhow::Error> for CommandError {
     fn from(error: anyhow::Error) -> Self {
         let failure = error.downcast_ref::<crate::application::transaction::OperationFailure>();
         Self {
-            code: if error.is::<crate::application::transaction::CompletionFailure>() {
+            code: if error.is::<crate::application::budget::DeadlineExceeded>() {
+                "OPERATION_TIMEOUT"
+            } else if error.is::<crate::application::transaction::CompletionFailure>() {
                 "APPLY_INCOMPLETE"
             } else if failure.is_some_and(|failure| failure.recovery_error.is_some()) {
                 "RECOVERY_INCOMPLETE"
