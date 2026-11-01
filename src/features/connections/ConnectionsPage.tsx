@@ -24,6 +24,7 @@ import {
 import { connectionOrderOptions } from "./model";
 import { FilterTextField } from "@/components/form/filter-text-field";
 import { useConnectionsStream } from "./use-connections-stream";
+import { textSizes } from "@/shared/typography";
 
 const ConnectionsPage = () => {
   const { t, i18n } = useTranslation();
@@ -120,7 +121,7 @@ const ConnectionsPage = () => {
           >
             {Object.keys(connectionOrderOptions).map((opt) => (
               <MenuItem key={opt} value={opt}>
-                <span style={{ fontSize: 14 }}>{t(opt)}</span>
+                <span style={{ fontSize: textSizes.secondary }}>{t(opt)}</span>
               </MenuItem>
             ))}
           </Select>

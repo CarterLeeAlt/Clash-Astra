@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, type SvgIconProps } from "@mui/material";
 import {
   ArrowDownward,
   ArrowUpward,
@@ -12,6 +12,7 @@ import { useVisibility } from "@/hooks/use-visibility";
 import { useWebsocket } from "@/hooks/use-websocket";
 import parseTraffic from "@/utils/parse-traffic";
 import { buildControllerWsUrl } from "@/utils/controller";
+import { textSizes } from "@/shared/typography";
 
 // 订阅流量与内存快照，供侧栏展示。
 export const LayoutTraffic = () => {
@@ -75,9 +76,9 @@ export const LayoutTraffic = () => {
   const [down, downUnit] = parseTraffic(traffic.down);
   const [inuse, inuseUnit] = parseTraffic(memory.inuse);
 
-  const iconStyle: any = {
+  const iconStyle = {
     sx: { mr: "8px", fontSize: 16 },
-  };
+  } satisfies SvgIconProps;
   const valStyle: any = {
     component: "span",
     // color: "primary",
@@ -91,7 +92,7 @@ export const LayoutTraffic = () => {
   const unitStyle: any = {
     component: "span",
     color: "grey.500",
-    fontSize: "12px",
+    fontSize: textSizes.caption,
     textAlign: "right",
     sx: { flex: "0 1 27px", userSelect: "none" },
   };

@@ -7,6 +7,7 @@ import delayManager, {
   hasDelayResult,
 } from "@/services/delay";
 import { useProxyDelay } from "@/features/proxies/use-proxy-delay";
+import { textSizes } from "@/shared/typography";
 
 interface Props {
   groupName: string;
@@ -151,7 +152,7 @@ export const ProxyItemMini = (props: Props) => {
 
 const Widget = styled(Box)(({ theme: { typography } }) => ({
   padding: "2px 4px",
-  fontSize: 12,
+  fontSize: textSizes.caption,
   fontFamily: typography.fontFamily,
   borderRadius: "4px",
 }));
@@ -162,7 +163,7 @@ const TypeBox = styled(Box)(({ theme: { palette, typography } }) => ({
   borderColor: palette.mode === "light" ? "#d9d9d9" : "#424242",
   color: palette.mode === "light" ? "#8c8c8c" : "#ffffff",
   borderRadius: 4,
-  fontSize: 10,
+  fontSize: textSizes.tag,
   fontFamily: typography.fontFamily,
   marginRight: "4px",
   marginTop: "auto",

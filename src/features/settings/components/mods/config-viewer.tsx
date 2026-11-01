@@ -11,6 +11,7 @@ import { Chip } from "@mui/material";
 import { atomThemeMode } from "@/services/states";
 import { getRuntimeYaml } from "@/services/cmds";
 import { BaseDialog, DialogRef } from "@/components/base";
+import { textSizePx } from "@/shared/typography";
 import { editor } from "monaco-editor/esm/vs/editor/editor.api";
 
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js";
@@ -50,6 +51,7 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
           language: "yaml",
           theme: themeMode === "light" ? "vs" : "vs-dark",
           minimap: { enabled: false },
+          fontSize: textSizePx.secondary,
           fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,
           readOnly: true,
         });

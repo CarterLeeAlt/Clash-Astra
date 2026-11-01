@@ -6,6 +6,7 @@ import {
   ListItemIcon,
 } from "@mui/material";
 import { useMatch, useResolvedPath, useNavigate } from "react-router-dom";
+import { textSizes } from "@/shared/typography";
 
 interface Props {
   to: string;
@@ -32,7 +33,7 @@ export const LayoutItem = (props: Props) => {
             marginRight: 1.25,
             "& .MuiListItemText-primary": {
               color: "text.primary",
-              fontSize: "1.05rem",
+              fontSize: textSizes.body,
               fontWeight: 600,
             },
           },

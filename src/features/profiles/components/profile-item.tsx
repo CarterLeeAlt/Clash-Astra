@@ -22,7 +22,8 @@ import { formatNoticeMessage, Notice } from "@/components/base";
 import { invalidateProfiles } from "@/shared/query/invalidate";
 import { parseExpire } from "../format";
 import { EditorViewer } from "./editor-viewer";
-import { PROFILE_CARD_TITLE_FONT_SIZE, ProfileBox } from "./profile-box";
+import { ProfileBox } from "./profile-box";
+import { textSizes } from "@/shared/typography";
 import parseTraffic from "@/utils/parse-traffic";
 
 const round = keyframes`
@@ -190,7 +191,7 @@ export const ProfileItem = (props: Props) => {
   const bottomInfoRowStyle = {
     ...boxStyle,
     columnGap: 1,
-    fontSize: 14,
+    fontSize: textSizes.secondary,
   };
   const leftInfoStyle = {
     minWidth: 0,
@@ -265,7 +266,7 @@ export const ProfileItem = (props: Props) => {
               title={displayName}
               sx={{
                 color: "#000000",
-                fontSize: PROFILE_CARD_TITLE_FONT_SIZE,
+                fontSize: textSizes.body,
                 fontWeight: 600,
               }}
             >
@@ -299,18 +300,23 @@ export const ProfileItem = (props: Props) => {
         <Box sx={bottomInfoRowStyle}>
           {hasUrl ? (
             <>
-              <Typography noWrap title="Used / Total" sx={leftInfoStyle}>
-                {hasExtra
-                  ? `${parseTraffic(upload + download)} / ${parseTraffic(
-                      total
-                    )}`
-                  : t(itemData.validation_status || "Stored, not activated")}
-              </Typography>
+              {hasExtra && (
+                <Typography
+                  noWrap
+                  title="Used / Total"
+                  fontSize={textSizes.secondary}
+                  sx={leftInfoStyle}
+                >
+                  {`${parseTraffic(upload + download)} / ${parseTraffic(
+                    total
+                  )}`}
+                </Typography>
+              )}
 
               <Typography
                 noWrap
                 flex="1 0 auto"
-                fontSize={14}
+                fontSize={textSizes.secondary}
                 textAlign="right"
                 sx={rightTimeStyle}
                 title={`Updated Time: ${parseExpire(updated)}`}
@@ -340,7 +346,7 @@ export const ProfileItem = (props: Props) => {
           <Typography
             component="span"
             noWrap
-            fontSize={14}
+            fontSize={textSizes.secondary}
             title={hasExtra ? "Expire Time" : "Updated Time"}
             sx={rightTimeStyle}
           >

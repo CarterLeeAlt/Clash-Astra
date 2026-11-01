@@ -135,11 +135,6 @@
   "Lock Window Size": "锁定窗口大小",
   "Unlock Window Size": "解除窗口大小锁定",
   "Pinned Core Description": "内核随应用交付，使用经过验证的固定版本。",
-  "Stored, not activated": "已保存，未激活验证",
-  "Core not ready": "内核尚未就绪",
-  "Providers not ready": "订阅集合未就绪",
-  "Loaded and ready": "已加载并就绪",
-
   "Back": "返回",
   "Save": "保存",
   "Cancel": "取消",

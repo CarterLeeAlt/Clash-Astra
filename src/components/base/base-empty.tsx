@@ -1,5 +1,6 @@
 import { alpha, Box, Typography } from "@mui/material";
 import { InboxRounded } from "@mui/icons-material";
+import { textSizes } from "@/shared/typography";
 
 interface Props {
   text?: React.ReactNode;
@@ -22,7 +23,7 @@ export const BaseEmpty = (props: Props) => {
       })}
     >
       <InboxRounded sx={{ fontSize: "4em" }} />
-      <Typography sx={{ fontSize: "1.25em" }}>{text}</Typography>
+      <Typography sx={{ fontSize: textSizes.title }}>{text}</Typography>
       {extra}
     </Box>
   );

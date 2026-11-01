@@ -5,6 +5,7 @@ import { appWindow } from "@tauri-apps/api/window";
 import { atomThemeMode } from "@/services/states";
 import { defaultTheme, defaultDarkTheme } from "@/app/theme";
 import { useVerge } from "@/hooks/use-verge";
+import { textSizeCssVariables, textTheme } from "@/shared/typography";
 
 /**
  * custom theme
@@ -40,6 +41,7 @@ export const useCustomTheme = () => {
 
     try {
       theme = createTheme({
+        ...textTheme,
         breakpoints: {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
         },
@@ -61,12 +63,14 @@ export const useCustomTheme = () => {
         },
         shadows: Array(25).fill("none") as Shadows,
         typography: {
+          ...textTheme.typography,
           fontFamily: dt.font_family,
         },
       });
     } catch {
       // 用户主题字段无效时，保留可用的基础调色板以保证界面能够渲染。
       theme = createTheme({
+        ...textTheme,
         breakpoints: {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
         },
@@ -80,7 +84,7 @@ export const useCustomTheme = () => {
           success: { main: dt.success_color },
           text: { primary: dt.primary_text, secondary: dt.secondary_text },
         },
-        typography: { fontFamily: dt.font_family },
+        typography: { ...textTheme.typography, fontFamily: dt.font_family },
       });
     }
 
@@ -92,6 +96,9 @@ export const useCustomTheme = () => {
       mode === "light" ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.06)";
 
     const rootEle = document.documentElement;
+    for (const [property, size] of Object.entries(textSizeCssVariables)) {
+      rootEle.style.setProperty(property, size);
+    }
     rootEle.style.setProperty("--divider-color", dividerColor);
     rootEle.style.setProperty("--background-color", backgroundColor);
     rootEle.style.setProperty("--selection-color", selectColor);

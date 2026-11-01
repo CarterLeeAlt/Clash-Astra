@@ -18,7 +18,8 @@ import { viewProfile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { parseExpire } from "../format";
 import { EditorViewer } from "./editor-viewer";
-import { PROFILE_CARD_TITLE_FONT_SIZE, ProfileBox } from "./profile-box";
+import { ProfileBox } from "./profile-box";
+import { textSizes } from "@/shared/typography";
 import { LogViewer } from "./log-viewer";
 
 const GLOBAL_SCRIPT_UID = "__global_script__";
@@ -137,7 +138,7 @@ export const ProfileMore = (props: Props) => {
   const bottomInfoRowStyle = {
     ...boxStyle,
     columnGap: 1,
-    fontSize: 14,
+    fontSize: textSizes.secondary,
   };
   const leftInfoStyle = {
     minWidth: 0,
@@ -193,7 +194,7 @@ export const ProfileMore = (props: Props) => {
                 title={displayName}
                 sx={{
                   color: "#000000",
-                  fontSize: PROFILE_CARD_TITLE_FONT_SIZE,
+                  fontSize: textSizes.body,
                   fontWeight: 600,
                 }}
               >
@@ -209,7 +210,7 @@ export const ProfileMore = (props: Props) => {
                 component="span"
                 textAlign="right"
                 title={`Updated Time: ${parseExpire(itemData.updated)}`}
-                sx={{ ...rightTimeStyle, fontSize: 14 }}
+                sx={{ ...rightTimeStyle, fontSize: textSizes.secondary }}
               >
                 {!!itemData.updated
                   ? dayjs(itemData.updated! * 1000).fromNow()
@@ -232,7 +233,7 @@ export const ProfileMore = (props: Props) => {
               <Typography
                 component="span"
                 noWrap
-                fontSize={14}
+                fontSize={textSizes.secondary}
                 title="Updated Time"
                 sx={rightTimeStyle}
               >
@@ -269,7 +270,7 @@ export const ProfileMore = (props: Props) => {
                 title={displayName}
                 sx={{
                   color: "#000000",
-                  fontSize: PROFILE_CARD_TITLE_FONT_SIZE,
+                  fontSize: textSizes.body,
                   fontWeight: 600,
                 }}
               >
@@ -326,7 +327,7 @@ export const ProfileMore = (props: Props) => {
                 noWrap
                 component="span"
                 title={`Updated Time: ${parseExpire(itemData.updated)}`}
-                style={{ fontSize: 14 }}
+                style={{ fontSize: textSizes.secondary }}
               >
                 {!!itemData.updated
                   ? dayjs(itemData.updated! * 1000).fromNow()

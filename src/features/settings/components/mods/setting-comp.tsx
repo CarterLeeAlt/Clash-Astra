@@ -1,4 +1,5 @@
 import React, { ReactNode } from "react";
+import { textSizes } from "@/shared/typography";
 import {
   Box,
   List,
@@ -18,11 +19,23 @@ export const SettingItem: React.FC<ItemProps> = (props) => {
   const { label, extra, children, secondary } = props;
 
   const primary = !extra ? (
-    <Box sx={{ display: "flex", alignItems: "center", fontSize: "14px" }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        fontSize: textSizes.secondary,
+      }}
+    >
       <span>{label}</span>
     </Box>
   ) : (
-    <Box sx={{ display: "flex", alignItems: "center", fontSize: "14px" }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        fontSize: textSizes.secondary,
+      }}
+    >
       <span>{label}</span>
       {extra}
     </Box>
@@ -43,7 +56,11 @@ export const SettingList: React.FC<{
   <List>
     <ListSubheader
       sx={[
-        { background: "transparent", fontSize: "16px", fontWeight: 600 },
+        {
+          background: "transparent",
+          fontSize: textSizes.body,
+          fontWeight: 600,
+        },
         ({ palette }) => {
           return {
             color: palette.text.primary,

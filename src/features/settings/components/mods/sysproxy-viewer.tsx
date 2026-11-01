@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { useVerge } from "@/hooks/use-verge";
 import { getSchedulerState, getSystemProxy } from "@/services/cmds";
+import { textSizes } from "@/shared/typography";
 import {
   BaseDialog,
   DialogRef,
@@ -166,7 +167,10 @@ export const SysproxyViewer = forwardRef<DialogRef>((_props, ref) => {
       </List>
 
       <Box sx={{ mt: 2.5 }}>
-        <Typography variant="body1" sx={{ fontSize: "18px", mb: 1 }}>
+        <Typography
+          variant="body1"
+          sx={{ fontSize: textSizes.sectionTitle, mb: 1 }}
+        >
           {t("Current System Proxy")}
         </Typography>
 

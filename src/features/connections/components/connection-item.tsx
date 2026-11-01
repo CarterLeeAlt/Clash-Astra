@@ -11,9 +11,10 @@ import {
 import { CloseRounded } from "@mui/icons-material";
 import { deleteConnection } from "@/services/api";
 import parseTraffic from "@/utils/parse-traffic";
+import { textSizes } from "@/shared/typography";
 
 const Tag = styled("span")(({ theme }) => ({
-  fontSize: "10px",
+  fontSize: textSizes.tag,
   padding: "0 4px",
   lineHeight: 1.375,
   border: "1px solid",

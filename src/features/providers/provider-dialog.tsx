@@ -26,6 +26,7 @@ import {
 import { BaseDialog } from "@/components/base";
 import parseTraffic from "@/utils/parse-traffic";
 import { queryKeys } from "@/shared/query/keys";
+import { textSizes } from "@/shared/typography";
 
 type ProviderKind = "proxy" | "rule";
 
@@ -171,7 +172,7 @@ export const ProviderDialog = ({ kind }: Props) => {
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "space-between",
-                              fontSize: 14,
+                              fontSize: textSizes.secondary,
                             }}
                           >
                             <span title="Used / Total">
@@ -222,7 +223,7 @@ const TypeTag = styled(Box, {
   borderColor: alpha(theme.palette[tone].main, 0.5),
   color: alpha(theme.palette[tone].main, 0.8),
   borderRadius: 4,
-  fontSize: 10,
+  fontSize: textSizes.tag,
   marginRight: "4px",
   padding: "0 2px",
   lineHeight: 1.25,

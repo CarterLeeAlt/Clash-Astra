@@ -17,6 +17,7 @@ import delayManager, {
   hasDelayResult,
 } from "@/services/delay";
 import { useProxyDelay } from "@/features/proxies/use-proxy-delay";
+import { textSizes } from "@/shared/typography";
 
 interface Props {
   groupName: string;
@@ -29,7 +30,7 @@ interface Props {
 
 const Widget = styled(Box)(() => ({
   padding: "3px 6px",
-  fontSize: 14,
+  fontSize: textSizes.secondary,
   borderRadius: "4px",
 }));
 
@@ -39,7 +40,7 @@ const TypeBox = styled(Box)(({ theme }) => ({
   borderColor: alpha(theme.palette.text.secondary, 0.36),
   color: alpha(theme.palette.text.secondary, 0.42),
   borderRadius: 4,
-  fontSize: 10,
+  fontSize: textSizes.tag,
   marginRight: "4px",
   padding: "0 2px",
   lineHeight: 1.25,
@@ -89,7 +90,7 @@ export const ProxyItem = (props: Props) => {
               <span
                 style={{
                   marginRight: "8px",
-                  fontSize: "13px",
+                  fontSize: textSizes.secondary,
                   color: "text.primary",
                   fontWeight: 600,
                 }}

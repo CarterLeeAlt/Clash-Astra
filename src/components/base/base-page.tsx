@@ -1,5 +1,6 @@
 import React, { ReactNode } from "react";
 import { Typography } from "@mui/material";
+import { textSizes } from "@/shared/typography";
 import { BaseErrorBoundary } from "./base-error-boundary";
 import { useCustomTheme } from "@/components/layout/use-custom-theme";
 
@@ -21,7 +22,10 @@ export const BasePage: React.FC<Props> = (props) => {
     <BaseErrorBoundary>
       <div className="base-page">
         <header data-windrag style={{ userSelect: "none" }}>
-          <Typography sx={{ fontSize: "20px", fontWeight: 600 }} data-windrag>
+          <Typography
+            sx={{ fontSize: textSizes.title, fontWeight: 600 }}
+            data-windrag
+          >
             {title}
           </Typography>
 

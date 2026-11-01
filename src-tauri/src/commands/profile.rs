@@ -10,29 +10,7 @@ use crate::{
 #[tauri::command]
 pub async fn get_profiles() -> CmdResult<serde_json::Value> {
     let snapshot = Config::snapshot();
-    let ready = crate::core::CoreManager::global().is_core_ready();
-    let providers_ready = ready
-        && crate::core::clash_api::check_subscription_ready(&snapshot)
-            .await
-            .is_ok();
-    let mut value = serde_json::to_value(&snapshot.profiles).map_err(|error| error.to_string())?;
-    for item in value["items"].as_array_mut().into_iter().flatten() {
-        if !matches!(item["type"].as_str(), Some("remote" | "local")) {
-            continue;
-        }
-        let active = item["uid"].as_str() == snapshot.profiles.current.as_deref();
-        item["validation_status"] = if !active {
-            "Stored, not activated"
-        } else if !ready {
-            "Core not ready"
-        } else if !providers_ready {
-            "Providers not ready"
-        } else {
-            "Loaded and ready"
-        }
-        .into();
-    }
-    Ok(value)
+    Ok(serde_json::to_value(&snapshot.profiles).map_err(|error| error.to_string())?)
 }
 
 #[tauri::command]

@@ -12,6 +12,7 @@ import {
 import { atomThemeMode } from "@/services/states";
 import { readProfileFile, saveProfileFile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
+import { textSizePx } from "@/shared/typography";
 
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js";
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js";
@@ -52,6 +53,7 @@ export const EditorViewer = (props: Props) => {
           language: mode,
           theme: themeMode === "light" ? "vs" : "vs-dark",
           minimap: { enabled: false },
+          fontSize: textSizePx.secondary,
           fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,
         });
 

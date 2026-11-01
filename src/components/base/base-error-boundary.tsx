@@ -1,6 +1,7 @@
 import { ReactNode, useEffect } from "react";
 import { reportFrontendError } from "@/infrastructure/ipc/system";
 import { ErrorBoundary, FallbackProps } from "react-error-boundary";
+import { textSizes } from "@/shared/typography";
 
 const AUTO_RELOAD_KEY = "clash-astra:error-auto-reloads";
 const AUTO_RELOAD_WINDOW_MS = 10 * 60 * 1000;
@@ -50,14 +51,19 @@ function ErrorFallback({
   }, [autoReload]);
 
   return (
-    <div role="alert" style={{ padding: 16 }}>
-      <h4>Something went wrong:(</h4>
+    <div role="alert" style={{ padding: 16, fontSize: textSizes.body }}>
+      <h4 style={{ fontSize: textSizes.body }}>Something went wrong:(</h4>
 
-      <pre>{message}</pre>
+      <pre style={{ fontSize: textSizes.secondary }}>{message}</pre>
 
       <button
         type="button"
-        style={{ marginTop: 8, padding: "4px 12px", cursor: "pointer" }}
+        style={{
+          marginTop: 8,
+          padding: "4px 12px",
+          cursor: "pointer",
+          fontSize: textSizes.secondary,
+        }}
         onClick={() => window.location.reload()}
       >
         重新加载界面
@@ -65,7 +71,7 @@ function ErrorFallback({
 
       <details title="Error Stack">
         <summary>Error Stack</summary>
-        <pre>{stack}</pre>
+        <pre style={{ fontSize: textSizes.secondary }}>{stack}</pre>
       </details>
     </div>
   );

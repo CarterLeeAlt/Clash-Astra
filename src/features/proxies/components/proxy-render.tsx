@@ -20,6 +20,7 @@ import { useVerge } from "@/hooks/use-verge";
 import { useRecoilState } from "recoil";
 import { atomThemeMode } from "@/services/states";
 import { utf8ToBase64 } from "@/utils/base64";
+import { textSizes } from "@/shared/typography";
 
 interface RenderProps {
   item: IRenderItem;
@@ -186,7 +187,7 @@ export const ProxyRender = (props: RenderProps) => {
 };
 
 const StyledPrimary = styled("span")`
-  font-size: 15px;
+  font-size: ${textSizes.body};
   font-weight: 600;
   line-height: 1.5;
   overflow: hidden;
@@ -194,7 +195,7 @@ const StyledPrimary = styled("span")`
   white-space: nowrap;
 `;
 const StyledSubtitle = styled("span")`
-  font-size: 13px;
+  font-size: ${textSizes.secondary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -210,7 +211,7 @@ const StyledTypeBox = styled(ListItemTextChild)(({ theme }) => ({
   borderColor: alpha(theme.palette.primary.main, 0.5),
   color: alpha(theme.palette.primary.main, 0.8),
   borderRadius: 4,
-  fontSize: 10,
+  fontSize: textSizes.tag,
   padding: "0 4px",
   lineHeight: 1.5,
   marginRight: "8px",

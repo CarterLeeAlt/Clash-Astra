@@ -22,6 +22,7 @@ import { cmdTestDelay } from "@/services/cmds";
 import type { ITestDelayResult } from "@/services/cmds";
 import { RequestEpoch } from "@/shared/async/request-epoch";
 import { utf8ToBase64 } from "@/utils/base64";
+import { textSizes } from "@/shared/typography";
 
 interface Props {
   id: string;
@@ -256,7 +257,7 @@ export const TestItem = (props: Props) => {
               component="h2"
               noWrap
               title={name}
-              sx={{ fontSize: 16 }}
+              sx={{ fontSize: textSizes.body }}
             >
               {name}
             </Typography>
@@ -361,7 +362,7 @@ export const TestItem = (props: Props) => {
 };
 const Widget = styled(Box)(({ theme: { typography } }) => ({
   padding: "3px 6px",
-  fontSize: 14,
+  fontSize: textSizes.secondary,
   fontFamily: typography.fontFamily,
   borderRadius: "4px",
   maxWidth: "100%",
