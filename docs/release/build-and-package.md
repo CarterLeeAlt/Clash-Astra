@@ -78,7 +78,9 @@ node scripts/pnpm.mjs run test:backend --mixed-port 0 --upstream-proxy http://12
 
 独立内核集成默认使用 `src-tauri/tests/fixtures/mihomo-control.yaml`，无需设置环境变量；该无凭据夹具只用于控制接口、配置重载和事务回滚验证，不代表远程节点可用。需要其他输入时，可在进程级设置 `ASTRA_TEST_SUBSCRIPTION_FILE` 指向工作区内的测试配置。缺少内核、代理或指定输入，或网络与断言不满足时，必须报告失败，不能视为跳过或通过。
 
-`test:backend` 默认使用无订阅的 `MATCH,DIRECT` 配置，监听 `7897`，控制器另选临时端口；已有进程占用目标端口时明确失败，不接管或终止它。`--mixed-port 0` 由系统选择临时空闲端口，`--upstream-proxy` 只接受无认证信息的 HTTP 代理端点。端口、宿主架构内核路径和报告目录由入口显式传入同一套测试，不添加测试过滤或忽略开关。
+`test:backend` 先运行 `web:build` 生成真实前端产物，再编译和执行默认 Tauri 后端测试；`custom-protocol` 编译需要 `dist/index.html`，干净工作区无需预留旧产物或空占位目录。前端构建失败直接阻止后端测试，步骤日志与结果一并记录。
+
+该入口默认使用无订阅的 `MATCH,DIRECT` 配置，监听 `7897`，控制器另选临时端口；已有进程占用目标端口时明确失败，不接管或终止它。`--mixed-port 0` 由系统选择临时空闲端口，`--upstream-proxy` 只接受无认证信息的 HTTP 代理端点。端口、宿主架构内核路径和报告目录由入口显式传入同一套测试，不添加测试过滤或忽略开关。
 
 发布 CI 调用 `pnpm test:backend`，自动准备上述无订阅运行环境，仍使用全部测试与相同断言；不传本机上游参数，四站探测使用 GitHub runner 自身网络。Mihomo 配置校验、控制器就绪、测试、超时和收尾均由入口负责。单轮整体预算 20 分钟、就绪上限 15 秒；定期输出运行状态，失败或正常完成均清理自建进程。工作流另设 25 分钟步骤预算，并无论测试成败归档 `.tmp/backend-tests/` 中的日志和汇总 JSON，保留 7 天，不上传配置或用户数据。
 

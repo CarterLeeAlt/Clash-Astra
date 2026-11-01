@@ -280,6 +280,34 @@ try {
   if (hostTarget !== mihomoLock.target)
     throw new Error("No pinned core for this host");
   verifyMihomo(binary);
+  // Default Tauri custom-protocol tests embed dist at compile time. Build the
+  // actual frontend before compiling Rust, including on a clean CI checkout.
+  const packageManager = process.env.npm_execpath;
+  if (!packageManager || !fs.existsSync(packageManager))
+    throw new Error(
+      "Run backend tests through the documented pnpm test:backend entrypoint"
+    );
+  const frontend = start(
+    "frontend-build",
+    process.execPath,
+    [packageManager, "run", "web:build"],
+    true
+  );
+  heartbeat = setInterval(() => {
+    log(
+      `RUNNING frontend-build pid=${
+        frontend.child.pid
+      } log_bytes=${Buffer.byteLength(frontend.output)}`
+    );
+  }, 60_000);
+  if ((await wait(frontend, 300_000)) !== 0)
+    throw new Error(
+      "Frontend build failed before Tauri backend test compilation"
+    );
+  clearInterval(heartbeat);
+  if (!fs.existsSync(path.join(repoRoot, "dist/index.html")))
+    throw new Error("Frontend build did not produce dist/index.html");
+  log("Frontend assets are ready for Tauri test compilation");
   mixedPort = await reserve(mixedPort);
   const controllerPort = await reserve(0);
   const secret = randomUUID();
