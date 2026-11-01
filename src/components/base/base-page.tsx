@@ -2,7 +2,6 @@ import React, { ReactNode } from "react";
 import { Typography } from "@mui/material";
 import { textSizes } from "@/shared/typography";
 import { BaseErrorBoundary } from "./base-error-boundary";
-import { useCustomTheme } from "@/components/layout/use-custom-theme";
 
 interface Props {
   title?: React.ReactNode; // 页面标题。
@@ -14,10 +13,6 @@ interface Props {
 
 export const BasePage: React.FC<Props> = (props) => {
   const { title, header, contentStyle, full, children } = props;
-  const { theme } = useCustomTheme();
-
-  const isDark = theme.palette.mode === "dark";
-
   return (
     <BaseErrorBoundary>
       <div className="base-page">
@@ -34,11 +29,11 @@ export const BasePage: React.FC<Props> = (props) => {
 
         <div
           className={full ? "base-container no-padding" : "base-container"}
-          style={{ backgroundColor: isDark ? "#1e1f27" : "#ffffff" }}
+          style={{ backgroundColor: "#ffffff" }}
         >
           <section
             style={{
-              backgroundColor: isDark ? "#1e1f27" : "var(--background-color)",
+              backgroundColor: "var(--background-color)",
             }}
           >
             <div className="base-content" style={contentStyle}>

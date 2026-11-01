@@ -7,8 +7,6 @@ import { openWebUrl } from "@/services/cmds";
 import SettingVerge from "./components/setting-verge";
 import SettingClash from "./components/setting-clash";
 import SettingSystem from "./components/setting-system";
-import { atomThemeMode } from "@/services/states";
-import { useRecoilState } from "recoil";
 
 const SettingPage = () => {
   const { t } = useTranslation();
@@ -20,9 +18,6 @@ const SettingPage = () => {
   const toGithubRepo = useLockFn(() => {
     return openWebUrl("https://github.com/CarterLeeAlt/Clash-Astra");
   });
-
-  const [mode] = useRecoilState(atomThemeMode);
-  const isDark = mode === "light" ? false : true;
 
   return (
     <BasePage
@@ -49,7 +44,7 @@ const SettingPage = () => {
             sx={{
               borderRadius: 2,
               marginBottom: 1.5,
-              backgroundColor: isDark ? "#282a36" : "#ffffff",
+              backgroundColor: "#ffffff",
             }}
           >
             <SettingSystem onError={onError} />
@@ -57,7 +52,7 @@ const SettingPage = () => {
           <Box
             sx={{
               borderRadius: 2,
-              backgroundColor: isDark ? "#282a36" : "#ffffff",
+              backgroundColor: "#ffffff",
             }}
           >
             <SettingClash onError={onError} />
@@ -67,7 +62,7 @@ const SettingPage = () => {
           <Box
             sx={{
               borderRadius: 2,
-              backgroundColor: isDark ? "#282a36" : "#ffffff",
+              backgroundColor: "#ffffff",
             }}
           >
             <SettingVerge onError={onError} />

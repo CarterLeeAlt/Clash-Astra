@@ -34,45 +34,43 @@ test("the seven text roles are the only source of pixel, rem and CSS variable si
 });
 
 test("MUI text variants and component-specific defaults use the shared scale", () => {
-  for (const mode of ["light", "dark"]) {
-    const theme = createTheme({ ...textTheme, palette: { mode } });
-    for (const [variant, role] of Object.entries({
-      h1: "title",
-      h2: "title",
-      h3: "title",
-      h4: "title",
-      h5: "title",
-      h6: "title",
-      subtitle1: "body",
-      subtitle2: "secondary",
-      body1: "body",
-      body2: "secondary",
-      button: "secondary",
-      caption: "caption",
-      overline: "caption",
-    }))
-      assert.equal(theme.typography[variant].fontSize, textSizes[role]);
-    assert.equal(
-      theme.components.MuiButton.styleOverrides.sizeSmall.fontSize,
-      textSizes.secondary
-    );
-    assert.equal(
-      theme.components.MuiButton.styleOverrides.sizeLarge.fontSize,
-      textSizes.body
-    );
-    assert.equal(
-      theme.components.MuiChip.styleOverrides.root.fontSize,
-      textSizes.secondary
-    );
-    assert.equal(
-      theme.components.MuiTooltip.styleOverrides.tooltip.fontSize,
-      textSizes.caption
-    );
-    assert.equal(
-      theme.components.MuiTooltip.styleOverrides.touch.fontSize,
-      textSizes.secondary
-    );
-  }
+  const theme = createTheme({ ...textTheme, palette: { mode: "light" } });
+  for (const [variant, role] of Object.entries({
+    h1: "title",
+    h2: "title",
+    h3: "title",
+    h4: "title",
+    h5: "title",
+    h6: "title",
+    subtitle1: "body",
+    subtitle2: "secondary",
+    body1: "body",
+    body2: "secondary",
+    button: "secondary",
+    caption: "caption",
+    overline: "caption",
+  }))
+    assert.equal(theme.typography[variant].fontSize, textSizes[role]);
+  assert.equal(
+    theme.components.MuiButton.styleOverrides.sizeSmall.fontSize,
+    textSizes.secondary
+  );
+  assert.equal(
+    theme.components.MuiButton.styleOverrides.sizeLarge.fontSize,
+    textSizes.body
+  );
+  assert.equal(
+    theme.components.MuiChip.styleOverrides.root.fontSize,
+    textSizes.secondary
+  );
+  assert.equal(
+    theme.components.MuiTooltip.styleOverrides.tooltip.fontSize,
+    textSizes.caption
+  );
+  assert.equal(
+    theme.components.MuiTooltip.styleOverrides.touch.fontSize,
+    textSizes.secondary
+  );
 });
 
 function inspectTextSizes(name, code) {

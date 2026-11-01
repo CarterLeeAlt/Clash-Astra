@@ -17,8 +17,6 @@ import { ProxyItem } from "./proxy-item";
 import { ProxyItemMini } from "./proxy-item-mini";
 import type { IRenderItem } from "./use-render-list";
 import { useVerge } from "@/hooks/use-verge";
-import { useRecoilState } from "recoil";
-import { atomThemeMode } from "@/services/states";
 import { utf8ToBase64 } from "@/utils/base64";
 import { textSizes } from "@/shared/typography";
 
@@ -37,9 +35,6 @@ export const ProxyRender = (props: RenderProps) => {
   const { type, group, headState, proxy, proxyCol } = item;
   const { verge } = useVerge();
   const enable_group_icon = verge?.enable_group_icon ?? true;
-  const [mode] = useRecoilState(atomThemeMode);
-  const isDark = mode === "light" ? false : true;
-  const itembackgroundcolor = isDark ? "#282A36" : "#ffffff";
 
   if (type === 0 && !group.hidden) {
     return (
@@ -47,7 +42,7 @@ export const ProxyRender = (props: RenderProps) => {
         <ListItemButton
           dense
           sx={{
-            background: itembackgroundcolor,
+            background: "#ffffff",
             height: 64,
             borderRadius: "8px",
           }}
@@ -94,7 +89,7 @@ export const ProxyRender = (props: RenderProps) => {
                 <StyledTypeBox>{group.type}</StyledTypeBox>
                 <StyledSubtitle
                   sx={{
-                    color: isDark ? "#ffffff" : "#8c8c8c",
+                    color: "#8c8c8c",
                     fontWeight: "600",
                   }}
                 >

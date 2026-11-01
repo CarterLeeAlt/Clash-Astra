@@ -1,16 +1,9 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLockFn } from "ahooks";
 import { useTranslation } from "react-i18next";
-import {
-  List,
-  ListItem,
-  ListItemText,
-  styled,
-  TextField,
-  useTheme,
-} from "@mui/material";
+import { List, ListItem, ListItemText, styled, TextField } from "@mui/material";
 import { useVerge } from "@/hooks/use-verge";
-import { defaultTheme, defaultDarkTheme } from "@/app/theme";
+import { defaultTheme } from "@/app/theme";
 import {
   BaseDialog,
   DialogRef,
@@ -53,22 +46,17 @@ export const ThemeViewer = forwardRef<DialogRef>((_props, ref) => {
     }
   });
 
-  // 按当前明暗模式选择默认主题。
-  const { palette } = useTheme();
-
-  const dt = palette.mode === "light" ? defaultTheme : defaultDarkTheme;
-
   type ThemeKey = keyof typeof theme & keyof typeof defaultTheme;
 
   const renderItem = (label: string, key: ThemeKey) => {
     return (
       <Item>
         <ListItemText primary={label} />
-        <Round sx={{ background: theme[key] || dt[key] }} />
+        <Round sx={{ background: theme[key] || defaultTheme[key] }} />
         <TextField
           {...textProps}
           value={theme[key] ?? ""}
-          placeholder={dt[key]}
+          placeholder={defaultTheme[key]}
           onChange={handleChange(key)}
           onKeyDown={(e) => e.key === "Enter" && onSave()}
         />

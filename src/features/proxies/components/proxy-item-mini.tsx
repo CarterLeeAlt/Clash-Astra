@@ -38,10 +38,9 @@ export const ProxyItemMini = (props: Props) => {
           justifyContent: "space-between",
           alignItems: "center",
         },
-        ({ palette: { mode, primary } }) => {
-          const bgcolor = mode === "light" ? "#ffffff" : "#24252f";
+        ({ palette: { primary } }) => {
           const showDelay = hasDelayResult(delay);
-          const selectColor = mode === "light" ? primary.main : primary.light;
+          const selectColor = primary.main;
 
           return {
             "&:hover .the-check": { display: !showDelay ? "block" : "none" },
@@ -49,12 +48,9 @@ export const ProxyItemMini = (props: Props) => {
             "&:hover .the-icon": { display: "none" },
             "&.Mui-selected": {
               boxShadow: `inset 3px 0 0 ${selectColor}`,
-              bgcolor:
-                mode === "light"
-                  ? alpha(primary.main, 0.15)
-                  : alpha(primary.main, 0.35),
+              bgcolor: alpha(primary.main, 0.15),
             },
-            backgroundColor: bgcolor,
+            backgroundColor: "#ffffff",
           };
         },
       ]}
@@ -157,11 +153,11 @@ const Widget = styled(Box)(({ theme: { typography } }) => ({
   borderRadius: "4px",
 }));
 
-const TypeBox = styled(Box)(({ theme: { palette, typography } }) => ({
+const TypeBox = styled(Box)(({ theme: { typography } }) => ({
   display: "inline-block",
   border: "1px solid #ccc",
-  borderColor: palette.mode === "light" ? "#d9d9d9" : "#424242",
-  color: palette.mode === "light" ? "#8c8c8c" : "#ffffff",
+  borderColor: "#d9d9d9",
+  color: "#8c8c8c",
   borderRadius: 4,
   fontSize: textSizes.tag,
   fontFamily: typography.fontFamily,

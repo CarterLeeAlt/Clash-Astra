@@ -6,9 +6,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useRecoilValue } from "recoil";
 import { Chip } from "@mui/material";
-import { atomThemeMode } from "@/services/states";
 import { getRuntimeYaml } from "@/services/cmds";
 import { BaseDialog, DialogRef } from "@/components/base";
 import { textSizePx } from "@/shared/typography";
@@ -25,7 +23,6 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
 
   const editorRef = useRef<any>();
   const instanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const themeMode = useRecoilValue(atomThemeMode);
 
   useEffect(() => {
     return () => {
@@ -49,7 +46,7 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
         instanceRef.current = editor.create(editorRef.current, {
           value: data ?? "# Error\n",
           language: "yaml",
-          theme: themeMode === "light" ? "vs" : "vs-dark",
+          theme: "vs",
           minimap: { enabled: false },
           fontSize: textSizePx.secondary,
           fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,

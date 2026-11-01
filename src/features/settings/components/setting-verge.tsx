@@ -15,7 +15,6 @@ import { useVerge } from "@/hooks/use-verge";
 import { version } from "@root/package.json";
 import { DialogRef } from "@/components/base";
 import { SettingList, SettingItem } from "./mods/setting-comp";
-import { ThemeModeSwitch } from "./mods/theme-mode-switch";
 import { ConfigViewer } from "./mods/config-viewer";
 import { HotkeyViewer } from "./mods/hotkey-viewer";
 import { MiscViewer } from "./mods/misc-viewer";
@@ -34,8 +33,7 @@ const SettingVerge = ({ onError }: Props) => {
   const { t } = useTranslation();
 
   const { verge, patchVerge, mutateVerge } = useVerge();
-  const { theme_mode, language, env_type, startup_script, start_page } =
-    verge ?? {};
+  const { language, env_type, startup_script, start_page } = verge ?? {};
   const configRef = useRef<DialogRef>(null);
   const hotkeyRef = useRef<DialogRef>(null);
   const miscRef = useRef<DialogRef>(null);
@@ -67,17 +65,6 @@ const SettingVerge = ({ onError }: Props) => {
             <MenuItem value="en">English</MenuItem>
             <MenuItem value="ru">Русский</MenuItem>
           </Select>
-        </GuardState>
-      </SettingItem>
-
-      <SettingItem label={t("Theme Mode")}>
-        <GuardState
-          value={theme_mode}
-          onCatch={onError}
-          onChange={(e) => onChangeData({ theme_mode: e })}
-          onGuard={(e) => patchVerge({ theme_mode: e })}
-        >
-          <ThemeModeSwitch />
         </GuardState>
       </SettingItem>
 

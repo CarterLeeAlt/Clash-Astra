@@ -251,6 +251,7 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         // 固定标题：任务管理器按窗口标题显示应用名，不附加运行模式后缀。
         // 看门狗按 "Clash Astra" 前缀查找主窗口，改名时同步修改 watchdog/src/window.rs。
         .title("Clash Astra")
+        .theme(Some(tauri::Theme::Light))
         .data_directory(webview_data_dir.clone())
         .visible(false)
         .fullscreen(false)

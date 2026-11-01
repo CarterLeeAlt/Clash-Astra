@@ -18,9 +18,6 @@ pub struct IVerge {
     // 界面语言。
     pub language: Option<String>,
 
-    /// 主题模式：light、dark 或 system。
-    pub theme_mode: Option<String>,
-
     /// 托盘单击执行的操作。
     pub tray_event: Option<String>,
 
@@ -187,7 +184,6 @@ impl IVerge {
         Self {
             clash_core: Some(MIHOMO_CORE.into()),
             language: Some("zh".into()),
-            theme_mode: Some("system".into()),
             env_type: Some("powershell".into()),
             start_page: Some("/".into()),
             traffic_graph: Some(true),
@@ -243,7 +239,6 @@ impl IVerge {
 
         patch!(app_log_level);
         patch!(language);
-        patch!(theme_mode);
         patch!(tray_event);
         patch!(env_type);
         patch!(start_page);
@@ -331,6 +326,12 @@ mod tests {
     #[test]
     fn template_uses_mihomo_core_identifier() {
         assert_eq!(IVerge::template().clash_core.as_deref(), Some(MIHOMO_CORE));
+    }
+
+    #[test]
+    fn settings_template_has_no_theme_mode_selector() {
+        let value = serde_json::to_value(IVerge::template()).unwrap();
+        assert!(value.get("theme_mode").is_none());
     }
 
     #[test]

@@ -37,12 +37,9 @@ export const LayoutItem = (props: Props) => {
               fontWeight: 600,
             },
           },
-          ({ palette: { mode, primary } }) => {
-            const bgcolor =
-              mode === "light"
-                ? alpha(primary.main, 0.15)
-                : alpha(primary.main, 0.35);
-            const color = mode === "light" ? "#1f1f1f" : "#ffffff";
+          ({ palette: { primary } }) => {
+            const bgcolor = alpha(primary.main, 0.15);
+            const color = "#1f1f1f";
 
             return {
               "&.Mui-selected": { bgcolor },

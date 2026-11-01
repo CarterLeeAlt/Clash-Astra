@@ -60,9 +60,8 @@ export const ProxyItem = (props: Props) => {
         onClick={() => onClick?.(proxy.name)}
         sx={[
           { borderRadius: 1 },
-          ({ palette: { mode, primary } }) => {
-            const bgcolor = mode === "light" ? "#ffffff" : "#24252f";
-            const selectColor = mode === "light" ? primary.main : primary.light;
+          ({ palette: { primary } }) => {
+            const selectColor = primary.main;
             const showDelay = hasDelayResult(delay);
 
             return {
@@ -71,12 +70,9 @@ export const ProxyItem = (props: Props) => {
               "&:hover .the-icon": { display: "none" },
               "&.Mui-selected": {
                 boxShadow: `inset 3px 0 0 ${selectColor}`,
-                bgcolor:
-                  mode === "light"
-                    ? alpha(primary.main, 0.15)
-                    : alpha(primary.main, 0.35),
+                bgcolor: alpha(primary.main, 0.15),
               },
-              backgroundColor: bgcolor,
+              backgroundColor: "#ffffff",
               marginBottom: "8px",
               height: "40px",
             };

@@ -1,9 +1,6 @@
-import { useEffect, useMemo } from "react";
-import { useRecoilState } from "recoil";
+import { useMemo } from "react";
 import { alpha, createTheme, Shadows, Theme } from "@mui/material";
-import { appWindow } from "@tauri-apps/api/window";
-import { atomThemeMode } from "@/services/states";
-import { defaultTheme, defaultDarkTheme } from "@/app/theme";
+import { defaultTheme } from "@/app/theme";
 import { useVerge } from "@/hooks/use-verge";
 import { textSizeCssVariables, textTheme } from "@/shared/typography";
 
@@ -12,30 +9,11 @@ import { textSizeCssVariables, textTheme } from "@/shared/typography";
  */
 export const useCustomTheme = () => {
   const { verge } = useVerge();
-  const { theme_mode, theme_setting } = verge ?? {};
-  const [mode, setMode] = useRecoilState(atomThemeMode);
-
-  useEffect(() => {
-    const themeMode = ["light", "dark", "system"].includes(theme_mode!)
-      ? theme_mode!
-      : "light";
-
-    if (themeMode !== "system") {
-      setMode(themeMode);
-      return;
-    }
-
-    appWindow.theme().then((m) => m && setMode(m));
-    const unlisten = appWindow.onThemeChanged((e) => setMode(e.payload));
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [theme_mode]);
+  const { theme_setting } = verge ?? {};
 
   const theme = useMemo(() => {
     const setting = theme_setting || {};
-    const dt = mode === "light" ? defaultTheme : defaultDarkTheme;
+    const dt = defaultTheme;
 
     let theme: Theme;
 
@@ -46,7 +24,7 @@ export const useCustomTheme = () => {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
         },
         palette: {
-          mode,
+          mode: "light",
           primary: { main: setting.primary_color || dt.primary_color },
           secondary: { main: setting.secondary_color || dt.secondary_color },
           info: { main: setting.info_color || dt.info_color },
@@ -75,7 +53,7 @@ export const useCustomTheme = () => {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
         },
         palette: {
-          mode,
+          mode: "light",
           primary: { main: dt.primary_color },
           secondary: { main: dt.secondary_color },
           info: { main: dt.info_color },
@@ -89,11 +67,10 @@ export const useCustomTheme = () => {
     }
 
     // 同步供非 MUI 组件使用的主题 CSS 变量。
-    const backgroundColor = mode === "light" ? "#f0f0f0" : "#2e303d";
-    const selectColor = mode === "light" ? "#f5f5f5" : "#d5d5d5";
-    const scrollColor = mode === "light" ? "#90939980" : "#54545480";
-    const dividerColor =
-      mode === "light" ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.06)";
+    const backgroundColor = "#f0f0f0";
+    const selectColor = "#f5f5f5";
+    const scrollColor = "#90939980";
+    const dividerColor = "rgba(0, 0, 0, 0.06)";
 
     const rootEle = document.documentElement;
     for (const [property, size] of Object.entries(textSizeCssVariables)) {
@@ -135,7 +112,7 @@ export const useCustomTheme = () => {
     }, 0);
 
     return theme;
-  }, [mode, theme_setting]);
+  }, [theme_setting]);
 
   return { theme };
 };

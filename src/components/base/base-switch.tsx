@@ -32,13 +32,10 @@ export const Switch = styled((props: SwitchProps) => (
       border: "6px solid #fff",
     },
     "&.Mui-disabled .MuiSwitch-thumb": {
-      color:
-        theme.palette.mode === "light"
-          ? theme.palette.grey[100]
-          : theme.palette.grey[600],
+      color: theme.palette.grey[100],
     },
     "&.Mui-disabled + .MuiSwitch-track": {
-      opacity: theme.palette.mode === "light" ? 0.7 : 0.3,
+      opacity: 0.7,
     },
   },
   "& .MuiSwitch-thumb": {
@@ -48,7 +45,7 @@ export const Switch = styled((props: SwitchProps) => (
   },
   "& .MuiSwitch-track": {
     borderRadius: 26 / 2,
-    backgroundColor: theme.palette.mode === "light" ? "#E9E9EA" : "#39393D",
+    backgroundColor: "#E9E9EA",
     opacity: 1,
     transition: theme.transitions.create(["background-color"], {
       duration: 500,

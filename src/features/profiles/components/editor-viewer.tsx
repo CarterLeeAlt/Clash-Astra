@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useLockFn } from "ahooks";
-import { useRecoilValue } from "recoil";
 import { useTranslation } from "react-i18next";
 import {
   Button,
@@ -9,7 +8,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@mui/material";
-import { atomThemeMode } from "@/services/states";
 import { readProfileFile, saveProfileFile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { textSizePx } from "@/shared/typography";
@@ -34,7 +32,6 @@ export const EditorViewer = (props: Props) => {
   const { t } = useTranslation();
   const editorRef = useRef<any>();
   const instanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const themeMode = useRecoilValue(atomThemeMode);
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +48,7 @@ export const EditorViewer = (props: Props) => {
         instanceRef.current = editor.create(editorRef.current, {
           value: data,
           language: mode,
-          theme: themeMode === "light" ? "vs" : "vs-dark",
+          theme: "vs",
           minimap: { enabled: false },
           fontSize: textSizePx.secondary,
           fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,
