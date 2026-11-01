@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "clash-astra"
-version = "1.8.2"
+version = "1.8.3"
 dependencies = [
  "anyhow",
  "auto-launch",
