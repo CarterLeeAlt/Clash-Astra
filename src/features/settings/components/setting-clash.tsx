@@ -26,6 +26,7 @@ import { invoke_uwp_tool } from "@/services/cmds";
 import getSystem from "@/utils/get-system";
 import { useClashSettings } from "@/hooks/use-clash-settings";
 import { updateGeoData } from "@/services/api";
+import { textSizes } from "@/shared/typography";
 
 const isWIN = getSystem() === "windows";
 
@@ -103,7 +104,16 @@ const SettingClash = ({ onError }: Props) => {
           onChange={(e) => onChangeData({ "log-level": e })}
           onGuard={(e) => patchClash({ "log-level": e })}
         >
-          <Select size="small" sx={{ width: 100, "> div": { py: "7.5px" } }}>
+          <Select
+            size="small"
+            sx={{
+              width: 100,
+              "> div": { py: "7.5px", fontSize: textSizes.secondary },
+            }}
+            MenuProps={{
+              sx: { "& .MuiMenuItem-root": { fontSize: textSizes.secondary } },
+            }}
+          >
             <MenuItem value="debug">Debug</MenuItem>
             <MenuItem value="info">Info</MenuItem>
             <MenuItem value="warning">Warn</MenuItem>
@@ -144,7 +154,14 @@ const SettingClash = ({ onError }: Props) => {
           autoComplete="off"
           size="small"
           value={clash_mixed_port ?? 7897}
-          sx={{ width: 100, input: { py: "7.5px", cursor: "pointer" } }}
+          sx={{
+            width: 100,
+            input: {
+              py: "7.5px",
+              fontSize: textSizes.secondary,
+              cursor: "pointer",
+            },
+          }}
           onClick={(e) => {
             portRef.current?.open();
             (e.target as any).blur();
@@ -178,7 +195,9 @@ const SettingClash = ({ onError }: Props) => {
           </IconButton>
         }
       >
-        <Typography sx={{ py: "7px", pr: 1 }}>{version}</Typography>
+        <Typography sx={{ py: "7px", pr: 1, fontSize: textSizes.secondary }}>
+          {version}
+        </Typography>
       </SettingItem>
 
       {isWIN && (

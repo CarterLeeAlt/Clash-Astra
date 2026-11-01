@@ -23,6 +23,7 @@ import { GuardState } from "./mods/guard-state";
 import { LayoutViewer } from "./mods/layout-viewer";
 import getSystem from "@/utils/get-system";
 import { navigation } from "@/shared/navigation";
+import { textSizes } from "@/shared/typography";
 interface Props {
   onError?: (err: Error) => void;
 }
@@ -62,7 +63,16 @@ const SettingApplication = ({ onError }: Props) => {
           onChange={(e) => onChangeData({ language: e })}
           onGuard={(e) => patchClashSettings({ language: e })}
         >
-          <Select size="small" sx={{ width: 100, "> div": { py: "7.5px" } }}>
+          <Select
+            size="small"
+            sx={{
+              width: 100,
+              "> div": { py: "7.5px", fontSize: textSizes.secondary },
+            }}
+            MenuProps={{
+              sx: { "& .MuiMenuItem-root": { fontSize: textSizes.secondary } },
+            }}
+          >
             <MenuItem value="zh">中文</MenuItem>
             <MenuItem value="en">English</MenuItem>
             <MenuItem value="ru">Русский</MenuItem>
@@ -78,7 +88,16 @@ const SettingApplication = ({ onError }: Props) => {
           onChange={(e) => onChangeData({ env_type: e })}
           onGuard={(e) => patchClashSettings({ env_type: e })}
         >
-          <Select size="small" sx={{ width: 140, "> div": { py: "7.5px" } }}>
+          <Select
+            size="small"
+            sx={{
+              width: 140,
+              "> div": { py: "7.5px", fontSize: textSizes.secondary },
+            }}
+            MenuProps={{
+              sx: { "& .MuiMenuItem-root": { fontSize: textSizes.secondary } },
+            }}
+          >
             <MenuItem value="bash">Bash</MenuItem>
             <MenuItem value="cmd">CMD</MenuItem>
             <MenuItem value="powershell">PowerShell</MenuItem>
@@ -94,7 +113,16 @@ const SettingApplication = ({ onError }: Props) => {
           onChange={(e) => onChangeData({ start_page: e })}
           onGuard={(e) => patchClashSettings({ start_page: e })}
         >
-          <Select size="small" sx={{ width: 140, "> div": { py: "7.5px" } }}>
+          <Select
+            size="small"
+            sx={{
+              width: 140,
+              "> div": { py: "7.5px", fontSize: textSizes.secondary },
+            }}
+            MenuProps={{
+              sx: { "& .MuiMenuItem-root": { fontSize: textSizes.secondary } },
+            }}
+          >
             {Object.values(navigation).map((page) => {
               return (
                 <MenuItem key={page.link} value={page.link}>
@@ -117,7 +145,7 @@ const SettingApplication = ({ onError }: Props) => {
           <Input
             value={startup_script}
             disabled
-            sx={{ width: 230 }}
+            sx={{ width: 230, "& input": { fontSize: textSizes.secondary } }}
             endAdornment={
               <>
                 <Button
@@ -244,7 +272,9 @@ const SettingApplication = ({ onError }: Props) => {
       </SettingItem>
 
       <SettingItem label={t("Application Version")}>
-        <Typography sx={{ py: "7px", pr: 1 }}>v{version}</Typography>
+        <Typography sx={{ py: "7px", pr: 1, fontSize: textSizes.secondary }}>
+          v{version}
+        </Typography>
       </SettingItem>
     </SettingList>
   );
