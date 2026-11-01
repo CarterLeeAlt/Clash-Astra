@@ -182,7 +182,7 @@ export const ProxyRender = (props: RenderProps) => {
 };
 
 const StyledPrimary = styled("span")`
-  font-size: ${textSizes.body};
+  font-size: ${textSizes.groupTitle};
   font-weight: 600;
   line-height: 1.5;
   overflow: hidden;

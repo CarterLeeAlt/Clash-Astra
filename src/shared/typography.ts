@@ -5,6 +5,7 @@ export const textSizePx = {
   tag: 10,
   caption: 12,
   secondary: 14,
+  groupTitle: 15,
   body: 16,
   sectionTitle: 18,
   title: 20,

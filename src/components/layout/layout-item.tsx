@@ -33,7 +33,7 @@ export const LayoutItem = (props: Props) => {
             marginRight: 1.25,
             "& .MuiListItemText-primary": {
               color: "text.primary",
-              fontSize: textSizes.body,
+              fontSize: textSizes.title,
               fontWeight: 600,
             },
           },
