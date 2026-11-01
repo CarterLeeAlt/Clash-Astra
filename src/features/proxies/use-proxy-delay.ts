@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLockFn } from "ahooks";
 import delayManager, { DELAY_PENDING, DELAY_UNKNOWN } from "@/services/delay";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 
 /** 订阅延迟状态，并在组件卸载时释放 delayManager 监听。 */
 export const useProxyDelay = (proxy: IProxyItem, groupName: string) => {
   const [delay, setDelay] = useState(DELAY_UNKNOWN);
-  const { verge } = useVerge();
-  const rawTimeout = Number(verge?.default_latency_timeout);
+  const { clashSettings } = useClashSettings();
+  const rawTimeout = Number(clashSettings?.default_latency_timeout);
   const timeout =
     Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
   // 分组卡片跟随其当前选中节点的延迟

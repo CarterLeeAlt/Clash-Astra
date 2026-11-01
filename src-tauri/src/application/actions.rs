@@ -61,8 +61,13 @@ pub fn toggle_system_proxy() {
     // 切换意图在协调器内读取已提交值，避免连续热键基于同一个旧值重复写入。
     tauri::async_runtime::spawn(async move {
         match mutate(|change| {
-            change.next.verge.enable_system_proxy =
-                Some(!change.next.verge.enable_system_proxy.unwrap_or(false));
+            change.next.clash_settings.enable_system_proxy = Some(
+                !change
+                    .next
+                    .clash_settings
+                    .enable_system_proxy
+                    .unwrap_or(false),
+            );
             Ok(())
         })
         .await
@@ -83,8 +88,8 @@ pub fn toggle_system_proxy() {
 pub fn toggle_tun_mode() {
     tauri::async_runtime::spawn(async move {
         match mutate(|change| {
-            change.next.verge.enable_tun_mode =
-                Some(!change.next.verge.enable_tun_mode.unwrap_or(false));
+            change.next.clash_settings.enable_tun_mode =
+                Some(!change.next.clash_settings.enable_tun_mode.unwrap_or(false));
             change.reload = true;
             Ok(())
         })

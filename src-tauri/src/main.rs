@@ -97,8 +97,8 @@ fn main() -> std::io::Result<()> {
             cmds::get_runtime_logs,
             cmds::invoke_uwp_tool,
             // 应用设置与诊断。
-            cmds::get_verge_config,
-            cmds::patch_verge_config,
+            cmds::get_clash_settings,
+            cmds::patch_clash_settings,
             cmds::test_delay,
             cmds::get_auto_site_test_results,
             cmds::trigger_auto_site_test,

@@ -12,7 +12,7 @@ import lockOpenIconUrl from "@/assets/icons/lock_open.svg";
 import restartIconUrl from "@/assets/icons/restart.svg";
 import { formatNoticeMessage, Notice } from "@/components/base";
 import { restartSidecar, setWindowSizeLocked } from "@/services/cmds";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 
 interface LayoutControlProps {
   nativeDecorations?: boolean;
@@ -52,7 +52,7 @@ export const LayoutControl = ({
     color: "text.secondary",
   };
 
-  const { verge, mutateVerge } = useVerge();
+  const { clashSettings, mutateClashSettings } = useClashSettings();
   const [isMaximized, setIsMaximized] = useState(false);
   const [isSizeLocked, setIsSizeLocked] = useState(false);
 
@@ -66,8 +66,8 @@ export const LayoutControl = ({
   }, [nativeDecorations]);
 
   useEffect(() => {
-    setIsSizeLocked(verge?.window_size_locked ?? false);
-  }, [verge?.window_size_locked]);
+    setIsSizeLocked(clashSettings?.window_size_locked ?? false);
+  }, [clashSettings?.window_size_locked]);
 
   const onToggleSizeLocked = async () => {
     const nextLocked = !isSizeLocked;
@@ -76,7 +76,7 @@ export const LayoutControl = ({
       await setWindowSizeLocked(nextLocked);
       setIsSizeLocked(nextLocked);
       if (nextLocked) setIsMaximized(false);
-      await mutateVerge();
+      await mutateClashSettings();
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
     }

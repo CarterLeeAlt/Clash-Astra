@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLockFn } from "ahooks";
 import { useTranslation } from "react-i18next";
 import { List, ListItem, ListItemText, styled, TextField } from "@mui/material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { defaultTheme } from "@/app/theme";
 import {
   BaseDialog,
@@ -15,8 +15,8 @@ export const ThemeViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const [open, setOpen] = useState(false);
-  const { verge, patchVerge } = useVerge();
-  const { theme_setting } = verge ?? {};
+  const { clashSettings, patchClashSettings } = useClashSettings();
+  const { theme_setting } = clashSettings ?? {};
   const [theme, setTheme] = useState(theme_setting || {});
 
   useImperativeHandle(ref, () => ({
@@ -39,7 +39,7 @@ export const ThemeViewer = forwardRef<DialogRef>((_props, ref) => {
 
   const onSave = useLockFn(async () => {
     try {
-      await patchVerge({ theme_setting: theme });
+      await patchClashSettings({ theme_setting: theme });
       setOpen(false);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));

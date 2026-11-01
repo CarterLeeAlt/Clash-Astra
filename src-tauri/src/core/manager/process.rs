@@ -92,7 +92,7 @@ impl CoreManager {
             use crate::core::win_service;
 
             // 服务模式
-            let enable = snapshot.verge.enable_service_mode;
+            let enable = snapshot.clash_settings.enable_service_mode;
             let enable = enable.unwrap_or(false);
 
             *self.use_service_mode.lock() = enable;
@@ -100,7 +100,7 @@ impl CoreManager {
             if enable {
                 // 服务模式启动失败直接报错，避免误判为服务托管
                 log::debug!(target: "app", "try to run core in service mode");
-                let tun_enabled = snapshot.verge.enable_tun_mode.unwrap_or(false);
+                let tun_enabled = snapshot.clash_settings.enable_tun_mode.unwrap_or(false);
 
                 match (|| async {
                     win_service::ensure_service_ready().await?;
@@ -134,7 +134,7 @@ impl CoreManager {
         let app_dir = dirs::app_home_dir()?;
         let app_dir = dirs::path_to_str(&app_dir)?;
 
-        let clash_core = snapshot.verge.clash_core.clone();
+        let clash_core = snapshot.clash_settings.clash_core.clone();
         let clash_core = clash_core.unwrap_or_else(|| MIHOMO_CORE.into());
 
         let config_path = dirs::path_to_str(&config_path)?;
@@ -228,7 +228,7 @@ impl CoreManager {
     }
 
     fn log_tun_prerequisites(&self, snapshot: &ConfigSnapshot) {
-        let tun_enabled = snapshot.verge.enable_tun_mode.unwrap_or(false);
+        let tun_enabled = snapshot.clash_settings.enable_tun_mode.unwrap_or(false);
         if !tun_enabled {
             return;
         }
@@ -236,7 +236,7 @@ impl CoreManager {
         {
             use crate::core::handle::Handle;
             use deelevate::{PrivilegeLevel, Token};
-            let service_mode = snapshot.verge.enable_service_mode.unwrap_or(false);
+            let service_mode = snapshot.clash_settings.enable_service_mode.unwrap_or(false);
             let privilege = Token::with_current_process()
                 .ok()
                 .and_then(|t| t.privilege_level().ok());

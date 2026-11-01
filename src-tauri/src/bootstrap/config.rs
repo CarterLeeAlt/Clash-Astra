@@ -32,9 +32,9 @@ pub fn init_config() -> Result<()> {
         help::save_yaml(&path, &IClashTemp::template().0, Some("# Clash Astra"))?;
     }
 
-    let path = dirs::verge_path()?;
+    let path = dirs::clash_settings_path()?;
     if !path.exists() {
-        help::save_yaml(&path, &IVerge::template(), Some("# Clash Astra"))?;
+        help::save_yaml(&path, &IClashSettings::template(), Some("# Clash Astra"))?;
     }
 
     let path = dirs::profiles_path()?;

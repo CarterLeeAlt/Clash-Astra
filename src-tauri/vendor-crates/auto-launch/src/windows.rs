@@ -138,7 +138,7 @@ $ErrorActionPreference = "Stop"
 try {
     $process = Start-Process `
         -FilePath (Join-Path $env:SystemRoot "System32\schtasks.exe") `
-        -ArgumentList $env:CLASH_VERGE_SCHTASKS_ARGUMENTS `
+        -ArgumentList $env:CLASH_SCHTASKS_ARGUMENTS `
         -Verb RunAs `
         -WindowStyle Hidden `
         -Wait `
@@ -163,7 +163,7 @@ try {
             "-Command",
             ELEVATED_SCHTASKS_SCRIPT,
         ])
-        .env("CLASH_VERGE_SCHTASKS_ARGUMENTS", arguments)
+        .env("CLASH_SCHTASKS_ARGUMENTS", arguments)
         .creation_flags(CREATE_NO_WINDOW)
         .output()
 }
@@ -460,7 +460,7 @@ impl TemporaryTaskXml {
             .unwrap_or_default()
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "clash-verge-auto-launch-{}-{timestamp}.xml",
+            "clash-auto-launch-{}-{timestamp}.xml",
             std::process::id()
         ));
         let mut file = fs::OpenOptions::new()

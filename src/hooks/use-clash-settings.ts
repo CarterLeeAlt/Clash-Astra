@@ -1,21 +1,24 @@
 import useSWR, { mutate } from "swr";
-import { getVergeConfig, patchVergeConfig } from "@/services/cmds";
+import {
+  getClashSettings,
+  patchClashSettings as persistClashSettings,
+} from "@/services/cmds";
 import { queryKeys } from "@/shared/query/keys";
 
-export const useVerge = () => {
-  const { data: verge, mutate: mutateVerge } = useSWR(
-    queryKeys.vergeConfig,
-    getVergeConfig
+export const useClashSettings = () => {
+  const { data: clashSettings, mutate: mutateClashSettings } = useSWR(
+    queryKeys.clashSettings,
+    getClashSettings
   );
 
-  const patchVerge = async (value: Partial<IVergeConfig>) => {
+  const patchClashSettings = async (value: Partial<IClashSettings>) => {
     try {
-      await patchVergeConfig(value);
+      await persistClashSettings(value);
     } catch (error) {
-      await mutateVerge().catch(() => undefined);
+      await mutateClashSettings().catch(() => undefined);
       throw error;
     }
-    await mutateVerge();
+    await mutateClashSettings();
 
     const affectsRuntime =
       value.enable_service_mode !== undefined ||
@@ -33,8 +36,8 @@ export const useVerge = () => {
   };
 
   return {
-    verge,
-    mutateVerge,
-    patchVerge,
+    clashSettings,
+    mutateClashSettings,
+    patchClashSettings,
   };
 };

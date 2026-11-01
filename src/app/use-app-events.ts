@@ -75,7 +75,7 @@ export const useAppEvents = () => {
       }>("astra://configuration-committed", ({ payload }) => {
         if (!payload || payload.revision <= revision) return;
         revision = payload.revision;
-        if (payload.settingsChanged) void mutate(queryKeys.vergeConfig);
+        if (payload.settingsChanged) void mutate(queryKeys.clashSettings);
         if (payload.profilesChanged) {
           void mutate(queryKeys.profiles);
           void mutate(queryKeys.proxies);
@@ -93,7 +93,7 @@ export const useAppEvents = () => {
 
     unlistenTasks.push(
       listen<{ runtimeRevision: number; generation: number }>(
-        "verge://refresh-clash-config",
+        "clash://refresh-clash-config",
         ({ payload }) => {
           // 内核独立重启不改变配置版本，但会使连接与测速缓存失效。
           delayManager.invalidate();
@@ -106,7 +106,7 @@ export const useAppEvents = () => {
     );
 
     unlistenTasks.push(
-      listen("verge://notice-message", ({ payload }) => {
+      listen("clash://notice-message", ({ payload }) => {
         const [status, msg] = payload as [string, string];
         switch (status) {
           case "set_config::ok":
@@ -132,7 +132,7 @@ export const useAppEvents = () => {
         updatedAt: number;
         runtimeRevision: number;
         generation: number;
-      }>("verge://auto-site-test-result", ({ payload }) => {
+      }>("clash://auto-site-test-result", ({ payload }) => {
         if (payload?.url && payload.result && acceptSiteTestVersion(payload)) {
           updateSiteTestResult(payload.url, payload.result, payload.updatedAt);
         }
@@ -141,7 +141,7 @@ export const useAppEvents = () => {
 
     unlistenTasks.push(
       listen<import("@/services/cmds").ISiteTestSnapshot>(
-        "verge://auto-site-test-results",
+        "clash://auto-site-test-results",
         ({ payload }) => {
           if (payload && acceptSiteTestVersion(payload))
             setSiteTestResults(payload.results, payload.updatedAt);

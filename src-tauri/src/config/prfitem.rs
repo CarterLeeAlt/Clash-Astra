@@ -195,8 +195,8 @@ impl PrfItem {
 
         // 使用软件自己的代理
         if self_proxy {
-            let port = Config::verge()
-                .verge_mixed_port
+            let port = Config::clash_settings()
+                .clash_mixed_port
                 .unwrap_or(Config::clash().get_mixed_port());
 
             let proxy_scheme = format!("http://127.0.0.1:{port}");

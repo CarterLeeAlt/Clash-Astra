@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { BasePage, formatNoticeMessage, Notice } from "@/components/base";
 import { GitHub } from "@mui/icons-material";
 import { openWebUrl } from "@/services/cmds";
-import SettingVerge from "./components/setting-verge";
+import SettingApplication from "./components/setting-application";
 import SettingClash from "./components/setting-clash";
 import SettingSystem from "./components/setting-system";
 
@@ -65,7 +65,7 @@ const SettingPage = () => {
               backgroundColor: "#ffffff",
             }}
           >
-            <SettingVerge onError={onError} />
+            <SettingApplication onError={onError} />
           </Box>
         </Grid>
       </Grid>

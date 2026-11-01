@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import { openAppDir, openCoreDir, openLogsDir } from "@/services/cmds";
 import { ArrowForward } from "@mui/icons-material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { version } from "@root/package.json";
 import { DialogRef } from "@/components/base";
 import { SettingList, SettingItem } from "./mods/setting-comp";
@@ -29,23 +29,25 @@ interface Props {
 
 const OS = getSystem();
 
-const SettingVerge = ({ onError }: Props) => {
+const SettingApplication = ({ onError }: Props) => {
   const { t } = useTranslation();
 
-  const { verge, patchVerge, mutateVerge } = useVerge();
-  const { language, env_type, startup_script, start_page } = verge ?? {};
+  const { clashSettings, patchClashSettings, mutateClashSettings } =
+    useClashSettings();
+  const { language, env_type, startup_script, start_page } =
+    clashSettings ?? {};
   const configRef = useRef<DialogRef>(null);
   const hotkeyRef = useRef<DialogRef>(null);
   const miscRef = useRef<DialogRef>(null);
   const themeRef = useRef<DialogRef>(null);
   const layoutRef = useRef<DialogRef>(null);
 
-  const onChangeData = (patch: Partial<IVergeConfig>) => {
-    mutateVerge((current) => ({ ...current, ...patch }), false);
+  const onChangeData = (patch: Partial<IClashSettings>) => {
+    mutateClashSettings((current) => ({ ...current, ...patch }), false);
   };
 
   return (
-    <SettingList title={t("Verge Setting")}>
+    <SettingList title={t("Application Settings")}>
       <ThemeViewer ref={themeRef} />
       <ConfigViewer ref={configRef} />
       <HotkeyViewer ref={hotkeyRef} />
@@ -58,7 +60,7 @@ const SettingVerge = ({ onError }: Props) => {
           onCatch={onError}
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ language: e })}
-          onGuard={(e) => patchVerge({ language: e })}
+          onGuard={(e) => patchClashSettings({ language: e })}
         >
           <Select size="small" sx={{ width: 100, "> div": { py: "7.5px" } }}>
             <MenuItem value="zh">中文</MenuItem>
@@ -74,7 +76,7 @@ const SettingVerge = ({ onError }: Props) => {
           onCatch={onError}
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ env_type: e })}
-          onGuard={(e) => patchVerge({ env_type: e })}
+          onGuard={(e) => patchClashSettings({ env_type: e })}
         >
           <Select size="small" sx={{ width: 140, "> div": { py: "7.5px" } }}>
             <MenuItem value="bash">Bash</MenuItem>
@@ -90,7 +92,7 @@ const SettingVerge = ({ onError }: Props) => {
           onCatch={onError}
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ start_page: e })}
-          onGuard={(e) => patchVerge({ start_page: e })}
+          onGuard={(e) => patchClashSettings({ start_page: e })}
         >
           <Select size="small" sx={{ width: 140, "> div": { py: "7.5px" } }}>
             {Object.values(navigation).map((page) => {
@@ -110,7 +112,7 @@ const SettingVerge = ({ onError }: Props) => {
           onCatch={onError}
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ startup_script: e })}
-          onGuard={(e) => patchVerge({ startup_script: e })}
+          onGuard={(e) => patchClashSettings({ startup_script: e })}
         >
           <Input
             value={startup_script}
@@ -132,7 +134,7 @@ const SettingVerge = ({ onError }: Props) => {
                     });
                     if (path?.length) {
                       onChangeData({ startup_script: `${path}` });
-                      patchVerge({ startup_script: `${path}` });
+                      patchClashSettings({ startup_script: `${path}` });
                     }
                   }}
                 >
@@ -142,7 +144,7 @@ const SettingVerge = ({ onError }: Props) => {
                   <Button
                     onClick={async () => {
                       onChangeData({ startup_script: "" });
-                      patchVerge({ startup_script: "" });
+                      patchClashSettings({ startup_script: "" });
                     }}
                   >
                     {t("Clear")}
@@ -241,11 +243,11 @@ const SettingVerge = ({ onError }: Props) => {
         </IconButton>
       </SettingItem>
 
-      <SettingItem label={t("Verge Version")}>
+      <SettingItem label={t("Application Version")}>
         <Typography sx={{ py: "7px", pr: 1 }}>v{version}</Typography>
       </SettingItem>
     </SettingList>
   );
 };
 
-export default SettingVerge;
+export default SettingApplication;

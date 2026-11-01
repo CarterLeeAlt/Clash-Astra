@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { Box, Button, Grid } from "@mui/material";
 import {
   DndContext,
@@ -35,7 +35,7 @@ import {
 } from "@/features/test/site-test-results";
 
 // 站点名称、地址和初始顺序由后端模板维护，前端只提供对应图标。
-const BUILTIN_TEST_ICONS: Record<string, Pick<IVergeTestItem, "icon">> = {
+const BUILTIN_TEST_ICONS: Record<string, Pick<IClashTestItem, "icon">> = {
   "builtin-apple": {
     icon: AppleIcon,
   },
@@ -69,17 +69,19 @@ const TestPage = () => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-  const { verge, mutateVerge, patchVerge } = useVerge();
+  const { clashSettings, mutateClashSettings, patchClashSettings } =
+    useClashSettings();
 
   // 默认站点与用户站点统一生成展示列表。
   const testList = useMemo(
-    () => presentTestList(verge?.test_list ?? [], BUILTIN_TEST_ICON_MAP),
-    [verge?.test_list]
+    () =>
+      presentTestList(clashSettings?.test_list ?? [], BUILTIN_TEST_ICON_MAP),
+    [clashSettings?.test_list]
   );
 
   const onTestListItemChange = (
     uid: string,
-    patch?: Partial<IVergeTestItem>
+    patch?: Partial<IClashTestItem>
   ) => {
     if (patch) {
       const newList = testList.map((x) => {
@@ -88,9 +90,12 @@ const TestPage = () => {
         }
         return x;
       });
-      mutateVerge((current) => ({ ...current, test_list: newList }), false);
+      mutateClashSettings(
+        (current) => ({ ...current, test_list: newList }),
+        false
+      );
     } else {
-      mutateVerge();
+      mutateClashSettings();
     }
   };
 
@@ -102,7 +107,7 @@ const TestPage = () => {
     }
 
     const newList = testList.filter((x) => x.uid !== uid);
-    await patchVerge({ test_list: newList });
+    await patchClashSettings({ test_list: newList });
   };
 
   const reorder = (list: any[], startIndex: number, endIndex: number) => {
@@ -123,7 +128,7 @@ const TestPage = () => {
         }
         let newList = reorder(testList, old_index, new_index);
         try {
-          await patchVerge({ test_list: newList });
+          await patchClashSettings({ test_list: newList });
         } catch (error) {
           Notice.error(formatNoticeMessage(error));
         }

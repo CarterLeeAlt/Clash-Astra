@@ -6,7 +6,7 @@ import {
   MemoryOutlined,
 } from "@mui/icons-material";
 import { useClashInfo } from "@/hooks/use-clash";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { TrafficGraph, type TrafficRef, trafficUpColor } from "./traffic-graph";
 import { useVisibility } from "@/hooks/use-visibility";
 import { useWebsocket } from "@/hooks/use-websocket";
@@ -17,10 +17,10 @@ import { textSizes } from "@/shared/typography";
 // 订阅流量与内存快照，供侧栏展示。
 export const LayoutTraffic = () => {
   const { clashInfo } = useClashInfo();
-  const { verge } = useVerge();
+  const { clashSettings } = useClashSettings();
 
   // 用户是否隐藏流量图。
-  const trafficGraph = verge?.traffic_graph ?? true;
+  const trafficGraph = clashSettings?.traffic_graph ?? true;
 
   const trafficRef = useRef<TrafficRef>(null);
   const [traffic, setTraffic] = useState({ up: 0, down: 0 });
@@ -49,8 +49,9 @@ export const LayoutTraffic = () => {
   }, [clashInfo, pageVisible]);
 
   /* --------- Mihomo memory information --------- */
-  const isMihomoCore = verge?.clash_core?.startsWith("mihomo");
-  const displayMemory = isMihomoCore && (verge?.enable_memory_usage ?? true);
+  const isMihomoCore = clashSettings?.clash_core?.startsWith("mihomo");
+  const displayMemory =
+    isMihomoCore && (clashSettings?.enable_memory_usage ?? true);
 
   const memoryWs = useWebsocket(
     (event) => {

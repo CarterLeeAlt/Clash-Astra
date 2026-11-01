@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Button, ButtonGroup, Tooltip } from "@mui/material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import getSystem from "@/utils/get-system";
 import { useServiceStatus } from "../../use-service-status";
 
@@ -13,8 +13,8 @@ interface Props {
 
 export const StackModeSwitch = (props: Props) => {
   const { value, onChange } = props;
-  const { verge } = useVerge();
-  const { enable_service_mode } = verge ?? {};
+  const { clashSettings } = useClashSettings();
+  const { enable_service_mode } = clashSettings ?? {};
   // 切换 TUN 协议栈。
   const { data: serviceStatus } = useServiceStatus(isWIN);
 

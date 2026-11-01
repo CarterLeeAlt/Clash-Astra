@@ -9,31 +9,33 @@ import {
   formatNoticeMessage,
   Notice,
 } from "@/components/base";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { patchPorts } from "@/services/cmds";
 
 export const ClashPortViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
   const { clashInfo, mutateInfo } = useClashInfo();
-  const { verge, mutateVerge } = useVerge();
+  const { clashSettings, mutateClashSettings } = useClashSettings();
 
   const [open, setOpen] = useState(false);
   const [mixedPort, setMixedPort] = useState(
-    verge?.verge_mixed_port ?? clashInfo?.mixed_port ?? 7897
+    clashSettings?.clash_mixed_port ?? clashInfo?.mixed_port ?? 7897
   );
   const [socksPort, setSocksPort] = useState(
-    verge?.verge_socks_port ?? clashInfo?.socks_port ?? 7898
+    clashSettings?.clash_socks_port ?? clashInfo?.socks_port ?? 7898
   );
   const [port, setPort] = useState(
-    verge?.verge_port ?? clashInfo?.port ?? 7899
+    clashSettings?.clash_port ?? clashInfo?.port ?? 7899
   );
 
   useImperativeHandle(ref, () => ({
     open: () => {
-      if (verge?.verge_mixed_port) setMixedPort(verge?.verge_mixed_port);
-      if (verge?.verge_socks_port) setSocksPort(verge?.verge_socks_port);
-      if (verge?.verge_port) setPort(verge?.verge_port);
+      if (clashSettings?.clash_mixed_port)
+        setMixedPort(clashSettings?.clash_mixed_port);
+      if (clashSettings?.clash_socks_port)
+        setSocksPort(clashSettings?.clash_socks_port);
+      if (clashSettings?.clash_port) setPort(clashSettings?.clash_port);
       setOpen(true);
     },
     close: () => setOpen(false),
@@ -41,16 +43,16 @@ export const ClashPortViewer = forwardRef<DialogRef>((_props, ref) => {
 
   const onSave = useLockFn(async () => {
     if (
-      mixedPort === verge?.verge_mixed_port &&
-      socksPort === verge?.verge_socks_port &&
-      port === verge?.verge_port
+      mixedPort === clashSettings?.clash_mixed_port &&
+      socksPort === clashSettings?.clash_socks_port &&
+      port === clashSettings?.clash_port
     ) {
       setOpen(false);
       return;
     }
     try {
       await patchPorts({ mixed: mixedPort, socks: socksPort, http: port });
-      await Promise.all([mutateInfo(), mutateVerge()]);
+      await Promise.all([mutateInfo(), mutateClashSettings()]);
       setOpen(false);
       Notice.success("Clash ports updated.");
     } catch (err: any) {

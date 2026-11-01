@@ -25,7 +25,7 @@ impl Hotkey {
     pub fn init(&self, app_handle: AppHandle) -> Result<()> {
         *self.app_handle.lock() = Some(app_handle);
 
-        self.update(Config::verge().hotkeys.unwrap_or_default())
+        self.update(Config::clash_settings().hotkeys.unwrap_or_default())
     }
 
     fn get_manager(&self) -> Result<impl GlobalShortcutManager> {

@@ -194,7 +194,7 @@ export const useLogStream = () => {
   useEffect(() => {
     let disposed = false;
     let unlisten: null | (() => void) = null;
-    listen<ILogItem>("verge://app-log", (event) => {
+    listen<ILogItem>("clash://app-log", (event) => {
       if (disposed) return;
       mergeLogs([normalizeLogItem(event.payload ?? {})]);
     })

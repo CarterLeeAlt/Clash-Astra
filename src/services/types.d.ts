@@ -191,7 +191,7 @@ interface IProfilesConfig {
   items?: IProfileItem[];
 }
 
-interface IVergeTestItem {
+interface IClashTestItem {
   uid: string;
   name?: string;
   icon?: string;
@@ -199,7 +199,7 @@ interface IVergeTestItem {
   builtIn?: boolean;
 }
 
-interface IVergeConfig {
+interface IClashSettings {
   app_log_level?: "trace" | "debug" | "info" | "warn" | "error" | string;
   language?: string;
   tray_event?: "main_window" | "system_proxy" | "tun_mode" | string;
@@ -220,9 +220,9 @@ interface IVergeConfig {
   enable_custom_frameless_window?: boolean;
   enable_system_proxy?: boolean;
   enable_random_port?: boolean;
-  verge_mixed_port?: number;
-  verge_socks_port?: number;
-  verge_port?: number;
+  clash_mixed_port?: number;
+  clash_socks_port?: number;
+  clash_port?: number;
   enable_proxy_guard?: boolean;
   proxy_guard_duration?: number;
   system_proxy_bypass?: string;
@@ -244,7 +244,7 @@ interface IVergeConfig {
   default_latency_timeout?: number;
   auto_log_clean?: 0 | 1 | 2 | 3;
   proxy_layout_column?: number;
-  test_list?: IVergeTestItem[];
+  test_list?: IClashTestItem[];
   window_size_position?: number[];
   window_is_maximized?: boolean;
   window_size_locked?: boolean;

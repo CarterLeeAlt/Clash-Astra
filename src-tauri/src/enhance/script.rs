@@ -53,7 +53,7 @@ fn run_script_inner(
     let copy_outputs = outputs.clone();
     let result = context.with(|ctx| -> Result<Mapping> {
         ctx.globals().set(
-            "__verge_log__",
+            "__clash_log__",
             Func::from(move |level: String, data: String| {
                 let mut out = copy_outputs.lock().unwrap_or_else(|err| err.into_inner());
                 if out.len() < SCRIPT_MAX_LOGS {
@@ -64,10 +64,10 @@ fn run_script_inner(
 
         ctx.eval::<(), _>(
             r#"var console = Object.freeze({
-        log(data){__verge_log__("log",JSON.stringify(data))}, 
-        info(data){__verge_log__("info",JSON.stringify(data))}, 
-        error(data){__verge_log__("error",JSON.stringify(data))},
-        debug(data){__verge_log__("debug",JSON.stringify(data))},
+        log(data){__clash_log__("log",JSON.stringify(data))},
+        info(data){__clash_log__("info",JSON.stringify(data))},
+        error(data){__clash_log__("error",JSON.stringify(data))},
+        debug(data){__clash_log__("debug",JSON.stringify(data))},
       });"#,
         )?;
 

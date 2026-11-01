@@ -33,7 +33,7 @@ impl Handle {
     pub fn refresh_clash() {
         if let Some(window) = Self::global().get_window() {
             log_err!(window.emit(
-                "verge://refresh-clash-config",
+                "clash://refresh-clash-config",
                 serde_json::json!({
                     "runtimeRevision": crate::config::Config::snapshot().runtime_revision,
                     "generation": crate::core::CoreManager::global().generation()
@@ -65,14 +65,14 @@ impl Handle {
 
     pub fn notice_message<S: Into<String>, M: Into<String>>(status: S, msg: M) {
         if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://notice-message", (status.into(), msg.into())));
+            log_err!(window.emit("clash://notice-message", (status.into(), msg.into())));
         }
     }
 
     /// 一轮后台自动延迟测试完成后通知前端刷新；manual 与自动走同一套延迟缓存。
     pub fn notify_auto_delay_finished() {
         if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://auto-delay-finished", "yes"));
+            log_err!(window.emit("clash://auto-delay-finished", "yes"));
         }
     }
 
@@ -81,7 +81,7 @@ impl Handle {
         results: &crate::application::diagnostics::SiteTestSnapshot,
     ) {
         if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://auto-site-test-results", results));
+            log_err!(window.emit("clash://auto-site-test-results", results));
         }
     }
 
@@ -90,7 +90,7 @@ impl Handle {
         event: &crate::application::diagnostics::SiteTestResultEvent,
     ) {
         if let Some(window) = Self::global().get_window() {
-            log_err!(window.emit("verge://auto-site-test-result", event));
+            log_err!(window.emit("clash://auto-site-test-result", event));
         }
     }
 
@@ -100,7 +100,7 @@ impl Handle {
                 r#type: level.into(),
                 payload: msg.into(),
             };
-            log_err!(window.emit("verge://app-log", event));
+            log_err!(window.emit("clash://app-log", event));
         }
     }
 

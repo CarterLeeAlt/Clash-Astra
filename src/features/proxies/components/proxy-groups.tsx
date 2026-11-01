@@ -7,7 +7,7 @@ import {
 } from "react-virtuoso";
 import { providerHealthCheck } from "@/services/api";
 import { useProfiles } from "@/hooks/use-profiles";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { BaseEmpty } from "@/components/base";
 import { useRenderList } from "./use-render-list";
 import { ProxyRender } from "./proxy-render";
@@ -50,9 +50,9 @@ export const ProxyGroups = (props: Props) => {
 
   const { renderList, onProxies, onHeadState } = useRenderList(mode);
 
-  const { verge } = useVerge();
+  const { clashSettings } = useClashSettings();
   const { current } = useProfiles();
-  const rawTimeout = Number(verge?.default_latency_timeout);
+  const rawTimeout = Number(clashSettings?.default_latency_timeout);
   const timeout =
     Number.isInteger(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000;
 
@@ -66,7 +66,7 @@ export const ProxyGroups = (props: Props) => {
         if (!current) throw new Error("No current subscription");
         await selectProxy(current.uid, group.name, proxy.name);
         onProxies();
-        window.dispatchEvent(new CustomEvent("verge://connections-refresh"));
+        window.dispatchEvent(new CustomEvent("clash://connections-refresh"));
       } catch (error) {
         Notice.error(formatNoticeMessage(error));
       }

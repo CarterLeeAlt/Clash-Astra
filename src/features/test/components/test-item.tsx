@@ -26,7 +26,7 @@ import { textSizes } from "@/shared/typography";
 
 interface Props {
   id: string;
-  itemData: IVergeTestItem;
+  itemData: IClashTestItem;
   autoResult?: ITestDelayResult;
   pending?: boolean;
   resetToken?: number;

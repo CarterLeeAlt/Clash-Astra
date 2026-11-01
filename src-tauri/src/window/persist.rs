@@ -110,7 +110,7 @@ pub(crate) fn read_window_state(app_handle: &AppHandle) -> Result<(Option<Vec<f6
         .ok_or(anyhow::anyhow!("failed to get window"))?;
 
     // 窗口 getter 会同步派发到主线程并等待结果；必须在拿配置锁之前取完，
-    // 否则主线程上的同步命令（如 get_verge_config）等锁时会与这里互锁。
+    // 否则主线程上的同步命令（如 get_clash_settings）等锁时会与这里互锁。
     let scale = win.scale_factor()?;
     let size = win.inner_size()?;
     let size = size.to_logical::<f64>(scale);

@@ -98,7 +98,7 @@ pub fn compile(snapshot: &ConfigSnapshot, files: &ProfileFiles) -> Result<crate:
         .collect::<Result<Vec<_>>>()?;
     let runtime = enhance::compile(CompileInput {
         clash_config: snapshot.clash.0.clone(),
-        enable_tun: snapshot.verge.enable_tun_mode.unwrap_or(false),
+        enable_tun: snapshot.clash_settings.enable_tun_mode.unwrap_or(false),
         current,
         profile_name,
         global_script,
@@ -276,8 +276,8 @@ pub(crate) fn prepare_at(
         Some(serde_yaml::to_string(&snapshot.clash.0)?.into_bytes()),
     );
     writes.insert(
-        "verge.yaml".into(),
-        Some(serde_yaml::to_string(&snapshot.verge)?.into_bytes()),
+        "clash-settings.yaml".into(),
+        Some(serde_yaml::to_string(&snapshot.clash_settings)?.into_bytes()),
     );
     writes.insert(
         "profiles.yaml".into(),
@@ -329,10 +329,13 @@ mod tests {
     #[test]
     fn interrupted_multi_file_change_restores_original_bytes() {
         let sandbox = Sandbox::new();
-        fs::write(sandbox.0.join("verge.yaml"), b"old settings").unwrap();
+        fs::write(sandbox.0.join("clash-settings.yaml"), b"old settings").unwrap();
         fs::write(sandbox.0.join("profiles.yaml"), b"old profiles").unwrap();
         let writes = BTreeMap::from([
-            (PathBuf::from("verge.yaml"), Some(b"new settings".to_vec())),
+            (
+                PathBuf::from("clash-settings.yaml"),
+                Some(b"new settings".to_vec()),
+            ),
             (PathBuf::from("profiles.yaml"), None),
             (
                 PathBuf::from("profiles/new.yaml"),
@@ -344,7 +347,7 @@ mod tests {
         drop(transaction);
         FileTransaction::recover(sandbox.0.clone()).unwrap();
         assert_eq!(
-            fs::read(sandbox.0.join("verge.yaml")).unwrap(),
+            fs::read(sandbox.0.join("clash-settings.yaml")).unwrap(),
             b"old settings"
         );
         assert_eq!(
@@ -357,13 +360,17 @@ mod tests {
     #[test]
     fn committed_journal_cleanup_never_rolls_back_success() {
         let sandbox = Sandbox::new();
-        let writes = BTreeMap::from([(PathBuf::from("verge.yaml"), Some(b"new".to_vec()))]);
+        let writes =
+            BTreeMap::from([(PathBuf::from("clash-settings.yaml"), Some(b"new".to_vec()))]);
         let mut transaction = FileTransaction::prepare(sandbox.0.clone(), writes).unwrap();
         transaction.apply().unwrap();
         transaction.committed = true;
         transaction.write_journal().unwrap();
         FileTransaction::recover(sandbox.0.clone()).unwrap();
-        assert_eq!(fs::read(sandbox.0.join("verge.yaml")).unwrap(), b"new");
+        assert_eq!(
+            fs::read(sandbox.0.join("clash-settings.yaml")).unwrap(),
+            b"new"
+        );
     }
 
     #[test]
@@ -401,7 +408,7 @@ mod tests {
             runtime_revision: 0,
             profile_versions: Default::default(),
             clash: crate::config::IClashTemp::template(),
-            verge: crate::config::IVerge::template(),
+            clash_settings: crate::config::IClashSettings::template(),
             profiles: crate::config::IProfiles::template(),
             runtime: crate::config::IRuntime::default(),
         };
@@ -410,10 +417,13 @@ mod tests {
         first.apply().unwrap();
         first.commit().unwrap();
         let runtime_before = fs::read(sandbox.0.join(RUNTIME_CONFIG)).unwrap();
-        snapshot.verge.window_is_maximized = Some(true);
+        snapshot.clash_settings.window_is_maximized = Some(true);
         let mut second = prepare_at(sandbox.0.clone(), &snapshot, &ProfileFiles::new()).unwrap();
         assert_eq!(second.entries.len(), 1);
-        assert_eq!(second.entries[0].relative, PathBuf::from("verge.yaml"));
+        assert_eq!(
+            second.entries[0].relative,
+            PathBuf::from("clash-settings.yaml")
+        );
         second.apply().unwrap();
         second.commit().unwrap();
         assert_eq!(

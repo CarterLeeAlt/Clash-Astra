@@ -9,7 +9,7 @@ import {
   Select,
   TextField,
 } from "@mui/material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import {
   BaseDialog,
   DialogRef,
@@ -20,7 +20,7 @@ import {
 
 export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
-  const { verge, patchVerge } = useVerge();
+  const { clashSettings, patchClashSettings } = useClashSettings();
 
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState({
@@ -36,12 +36,14 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
     open: () => {
       setOpen(true);
       setValues({
-        appLogLevel: verge?.app_log_level ?? "info",
-        autoCloseConnection: verge?.auto_close_connection ?? true,
-        proxyLayoutColumn: verge?.proxy_layout_column ?? 6,
-        defaultLatencyTest: verge?.default_latency_test ?? "",
-        autoLogClean: verge?.auto_log_clean ?? 1,
-        defaultLatencyTimeout: String(verge?.default_latency_timeout ?? 3000),
+        appLogLevel: clashSettings?.app_log_level ?? "info",
+        autoCloseConnection: clashSettings?.auto_close_connection ?? true,
+        proxyLayoutColumn: clashSettings?.proxy_layout_column ?? 6,
+        defaultLatencyTest: clashSettings?.default_latency_test ?? "",
+        autoLogClean: clashSettings?.auto_log_clean ?? 1,
+        defaultLatencyTimeout: String(
+          clashSettings?.default_latency_timeout ?? 3000
+        ),
       });
     },
     close: () => setOpen(false),
@@ -56,7 +58,7 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
         return;
       }
 
-      await patchVerge({
+      await patchClashSettings({
         app_log_level: values.appLogLevel,
         auto_close_connection: values.autoCloseConnection,
         proxy_layout_column: values.proxyLayoutColumn,
@@ -174,7 +176,7 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
             spellCheck="false"
             sx={{ width: 250 }}
             value={values.defaultLatencyTest}
-            placeholder={verge?.default_latency_test ?? ""}
+            placeholder={clashSettings?.default_latency_test ?? ""}
             onChange={(e) =>
               setValues((v) => ({ ...v, defaultLatencyTest: e.target.value }))
             }

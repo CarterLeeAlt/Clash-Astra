@@ -36,7 +36,7 @@ impl Sysopt {
 
     /// 从已提交设置同步自动启动项。
     pub fn update_launch(&self) -> Result<()> {
-        self.apply_launch(Config::verge().enable_auto_launch.unwrap_or(false))
+        self.apply_launch(Config::clash_settings().enable_auto_launch.unwrap_or(false))
     }
 
     pub fn apply_launch(&self, enable: bool) -> Result<()> {

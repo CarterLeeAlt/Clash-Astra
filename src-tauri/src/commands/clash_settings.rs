@@ -7,13 +7,13 @@ use crate::{
 };
 
 #[tauri::command(async)]
-pub fn get_verge_config() -> CmdResult<IVerge> {
-    Ok(Config::verge())
+pub fn get_clash_settings() -> CmdResult<IClashSettings> {
+    Ok(Config::clash_settings())
 }
 
 #[tauri::command]
-pub async fn patch_verge_config(payload: IVerge) -> CmdResult {
-    wrap_err!(configuration::patch_verge(payload).await)
+pub async fn patch_clash_settings(payload: IClashSettings) -> CmdResult {
+    wrap_err!(configuration::patch_clash_settings(payload).await)
 }
 
 #[tauri::command]

@@ -36,12 +36,12 @@ fn run_guard_cycle_blocking() -> Result<()> {
         return reschedule_guard(1);
     };
     let (enable, guard, guard_duration, bypass) = {
-        let verge = Config::verge();
+        let clash_settings = Config::clash_settings();
         (
-            verge.enable_system_proxy.unwrap_or(false),
-            verge.enable_proxy_guard.unwrap_or(false),
-            verge.proxy_guard_duration.unwrap_or(10),
-            verge.system_proxy_bypass.clone(),
+            clash_settings.enable_system_proxy.unwrap_or(false),
+            clash_settings.enable_proxy_guard.unwrap_or(false),
+            clash_settings.proxy_guard_duration.unwrap_or(10),
+            clash_settings.system_proxy_bypass.clone(),
         )
     };
 
@@ -67,8 +67,8 @@ fn run_guard_cycle_blocking() -> Result<()> {
     }
 
     let port = {
-        Config::verge()
-            .verge_mixed_port
+        Config::clash_settings()
+            .clash_mixed_port
             .unwrap_or(Config::clash().get_mixed_port())
     };
 
@@ -89,8 +89,9 @@ fn run_guard_cycle_blocking() -> Result<()> {
     {
         let _operation = Sysopt::global().proxy_operation.lock();
         let still_enabled = {
-            let verge = Config::verge();
-            verge.enable_system_proxy.unwrap_or(false) && verge.enable_proxy_guard.unwrap_or(false)
+            let clash_settings = Config::clash_settings();
+            clash_settings.enable_system_proxy.unwrap_or(false)
+                && clash_settings.enable_proxy_guard.unwrap_or(false)
         };
         if !still_enabled {
             log::debug!(target: "app", "system proxy guard skipped: disabled while waiting");
@@ -153,10 +154,10 @@ impl Sysopt {
     pub fn guard_proxy(&self) {
         let scheduler = OneShotScheduler::global();
         let (enable, guard) = {
-            let verge = Config::verge();
+            let clash_settings = Config::clash_settings();
             (
-                verge.enable_system_proxy.unwrap_or(false),
-                verge.enable_proxy_guard.unwrap_or(false),
+                clash_settings.enable_system_proxy.unwrap_or(false),
+                clash_settings.enable_proxy_guard.unwrap_or(false),
             )
         };
 

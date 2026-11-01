@@ -119,17 +119,17 @@ fn windows_webview2_args(reliable_mode: bool, fallback_mode: bool) -> Option<Str
         args.push("--enable-features=msWebView2EnableDraggableRegions".to_string());
     }
 
-    if fallback_mode || env_flag_enabled("CLASH_VERGE_WEBVIEW2_DISABLE_GPU") {
+    if fallback_mode || env_flag_enabled("CLASH_WEBVIEW2_DISABLE_GPU") {
         args.push("--disable-gpu".to_string());
     }
 
-    if fallback_mode || env_flag_enabled("CLASH_VERGE_WEBVIEW2_DISABLE_HW_ACCELERATION") {
+    if fallback_mode || env_flag_enabled("CLASH_WEBVIEW2_DISABLE_HW_ACCELERATION") {
         args.push("--disable-software-rasterizer".to_string());
         args.push("--disable-accelerated-2d-canvas".to_string());
         args.push("--disable-accelerated-video-decode".to_string());
     }
 
-    if let Ok(extra_args) = std::env::var("CLASH_VERGE_WEBVIEW2_ARGS") {
+    if let Ok(extra_args) = std::env::var("CLASH_WEBVIEW2_ARGS") {
         args.extend(
             extra_args
                 .split_whitespace()
@@ -217,8 +217,8 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
         return;
     }
 
-    let window_size_locked = Config::verge().window_size_locked.unwrap_or(false);
-    let configured_size_pos = Config::verge().window_size_position;
+    let window_size_locked = Config::clash_settings().window_size_locked.unwrap_or(false);
+    let configured_size_pos = Config::clash_settings().window_size_position;
     let size_pos_is_valid = configured_size_pos
         .as_ref()
         .map(|size_pos| valid_saved_geometry(size_pos))
@@ -366,8 +366,10 @@ pub fn create_window(app_handle: &AppHandle, show_when_ready: bool) {
                 win.set_maximizable(!window_size_locked),
                 "set win maximizable"
             );
-            let is_maximized =
-                !window_size_locked && Config::verge().window_is_maximized.unwrap_or(false);
+            let is_maximized = !window_size_locked
+                && Config::clash_settings()
+                    .window_is_maximized
+                    .unwrap_or(false);
             log::trace!("try to calculate the monitor size");
             let center = (|| -> Result<bool> {
                 let mut center = false;

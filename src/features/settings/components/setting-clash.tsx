@@ -24,7 +24,7 @@ import { SettingList, SettingItem } from "./mods/setting-comp";
 import { ClashCoreViewer } from "./mods/clash-core-viewer";
 import { invoke_uwp_tool } from "@/services/cmds";
 import getSystem from "@/utils/get-system";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { updateGeoData } from "@/services/api";
 
 const isWIN = getSystem() === "windows";
@@ -37,11 +37,11 @@ const SettingClash = ({ onError }: Props) => {
   const { t } = useTranslation();
 
   const { clash, version, mutateClash, patchClash } = useClash();
-  const { verge, patchVerge } = useVerge();
+  const { clashSettings, patchClashSettings } = useClashSettings();
 
   const { ipv6, "allow-lan": allowLan, "log-level": logLevel } = clash ?? {};
 
-  const { enable_random_port = false, verge_mixed_port } = verge ?? {};
+  const { enable_random_port = false, clash_mixed_port } = clashSettings ?? {};
 
   const portRef = useRef<DialogRef>(null);
   const ctrlRef = useRef<DialogRef>(null);
@@ -122,7 +122,9 @@ const SettingClash = ({ onError }: Props) => {
               size="small"
               onClick={async () => {
                 try {
-                  await patchVerge({ enable_random_port: !enable_random_port });
+                  await patchClashSettings({
+                    enable_random_port: !enable_random_port,
+                  });
                   Notice.success("Restart required to apply changes.");
                 } catch (error) {
                   Notice.error(formatNoticeMessage(error));
@@ -141,7 +143,7 @@ const SettingClash = ({ onError }: Props) => {
           disabled={enable_random_port}
           autoComplete="off"
           size="small"
-          value={verge_mixed_port ?? 7897}
+          value={clash_mixed_port ?? 7897}
           sx={{ width: 100, input: { py: "7.5px", cursor: "pointer" } }}
           onClick={(e) => {
             portRef.current?.open();

@@ -6,7 +6,11 @@ pub async fn set_size_locked(app: tauri::AppHandle, locked: bool) -> Result<()> 
     super::dispatch(async move {
         let _operation = super::operation().await?;
         let mut change = super::configuration::Change::new();
-        let old_locked = change.before.verge.window_size_locked.unwrap_or(false);
+        let old_locked = change
+            .before
+            .clash_settings
+            .window_size_locked
+            .unwrap_or(false);
         let window = app
             .get_window("main")
             .context("main window is unavailable")?;
@@ -26,10 +30,10 @@ pub async fn set_size_locked(app: tauri::AppHandle, locked: bool) -> Result<()> 
                 );
             }
             let (position, maximized) = crate::window::persist::read_window_state(&app)?;
-            change.next.verge.window_size_position =
-                position.or(change.next.verge.window_size_position);
-            change.next.verge.window_is_maximized = Some(maximized);
-            change.next.verge.window_size_locked = Some(locked);
+            change.next.clash_settings.window_size_position =
+                position.or(change.next.clash_settings.window_size_position);
+            change.next.clash_settings.window_is_maximized = Some(maximized);
+            change.next.clash_settings.window_size_locked = Some(locked);
             window.set_resizable(!locked)?;
             window.set_maximizable(!locked)?;
             super::configuration::apply_locked(change).await

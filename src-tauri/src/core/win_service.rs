@@ -432,7 +432,7 @@ pub(super) async fn run_core_by_service(
         sleep(Duration::from_secs(1)).await;
     }
     let clash_core = snapshot
-        .verge
+        .clash_settings
         .clash_core
         .clone()
         .unwrap_or_else(|| MIHOMO_CORE.into());

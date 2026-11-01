@@ -9,7 +9,7 @@
 | 用户面   | `Clash Astra` | 窗口标题、托盘提示、任务管理器描述、快捷方式，以及发布包根目录里用户直接运行的程序文件名 |
 | 技术标识 | `clash-astra` | 包名、应用标识、服务短名、配置名、数据目录、注册表、TUN 设备、日志、仓库与发布资产       |
 
-用户面名称逐字写作 `Clash Astra`，不写成 `Clash-Astra`、`Clash_Astra`、`ClashAstra` 或全小写。技术标识统一小写并用连字符分词，不写成驼峰、下划线或空格。
+用户面名称逐字写作 `Clash Astra`，不写成 `Clash-Astra`、`Clash_Astra`、`ClashAstra` 或全小写。对外技术标识统一小写并用连字符分词；代码标识符遵循 Rust、TypeScript 各自的命名约定。
 
 便携包解压后，文件基名就是用户看到的应用名：右键发送到桌面快捷方式时，快捷方式名取自文件基名。因此发布包根目录里的程序必须使用用户面名称，不能沿用技术标识。
 
@@ -24,6 +24,7 @@
 | Rust 包名          | `clash-astra`                       |
 | Windows 应用标识   | `io.github.clash-astra`             |
 | 开发版应用标识     | `io.github.clash-astra.dev`         |
+| 应用设置文件       | `clash-settings.yaml`               |
 | 运行配置           | `clash-astra.yaml`                  |
 | 检查配置           | `clash-astra-check.yaml`            |
 | Windows 服务名     | `clash-astra-service`               |
@@ -73,24 +74,23 @@ clash-astra_<version>_source.zip
 
 本地打包输出到 `artifacts/portable/`；CI 的 release staging 在 `artifacts/staging/`。发布脚本只接受上面列出的主程序文件名，缺失时直接失败，不再猜测其他文件名。
 
-## 不再使用的名称
+## 内部职责命名
 
-以下名称不再作为别名、回退或兼容入口：
+应用设置与 Mihomo 内核配置使用不同名称，避免相互混淆。
 
-- `clash-verge-buty`
-- `Clash Verge Buty`
-- `Clash-Verge-Buty`
-- `Clash_Verge_Buty`
-- `Clash Verge Buty` 作为文件名（显示名只用于展示）
-- `io.github.clash-verge-buty.data`
-- `io.github.clash-verge-buty.data.dev`
-- `clash-verge-service`、`clash-verge-service.exe`
-- `install-service.exe`、`uninstall-service.exe`、`firewall-helper.exe`
-- `Clash Verge Buty LAN` 防火墙规则和 `SOFTWARE\Clash-Verge-Buty` 注册表键
-- `Clash Verge Buty` TUN 设备名
-- `clash://` URL 协议注册
-- `clash-astra.exe`、`clash-astra-watchdog.exe` 作为发布文件名
-- `Clash Astra-Watchdog` 作为 Watchdog 的文件描述
+| 职责              | 代码与文件                                                                  |
+| ----------------- | --------------------------------------------------------------------------- |
+| 应用设置数据      | `IClashSettings`、`clashSettings`、`clash_settings`                         |
+| 应用设置前端入口  | `useClashSettings`、`use-clash-settings.ts`                                 |
+| 应用设置界面      | `SettingApplication`、`setting-application.tsx`，显示“应用设置”与“应用版本” |
+| 应用设置 IPC      | `get_clash_settings`、`patch_clash_settings`、`clash-settings.ts`           |
+| Mihomo 内核配置   | `clashConfig`、`IClashTemp`，保持与应用设置分离                             |
+| 开发构建 feature  | `clash-dev`                                                                 |
+| Tauri 内部事件    | `clash://...`，不是 Windows URL 协议注册                                    |
+| 下载环境变量      | `CLASH_DOWNLOAD_*`                                                          |
+| WebView2 环境变量 | `CLASH_WEBVIEW2_*`                                                          |
+
+自有运行代码、配置键、文件名及当前界面只使用当前名称。第三方版权声明、真实上游地址及归档历史记录保留事实原文。
 
 ## 检查
 
@@ -100,4 +100,4 @@ clash-astra_<version>_source.zip
 node scripts/pnpm.mjs run check:naming
 ```
 
-该检查核对应用标识、服务名、主程序与 Watchdog 文件名、TUN 默认值、构建/CI 脚本和发布脚本中的旧名称，以及仓库链接是否已同步。
+该检查核对应用标识、服务名、主程序与 Watchdog 文件名、TUN 默认值、应用设置契约，以及自有源码、文件名、构建脚本和当前仓库链接中的命名一致性。

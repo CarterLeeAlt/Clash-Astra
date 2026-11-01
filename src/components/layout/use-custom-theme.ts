@@ -1,15 +1,15 @@
 import { useMemo } from "react";
 import { alpha, createTheme, Shadows, Theme } from "@mui/material";
 import { defaultTheme } from "@/app/theme";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { textSizeCssVariables, textTheme } from "@/shared/typography";
 
 /**
  * custom theme
  */
 export const useCustomTheme = () => {
-  const { verge } = useVerge();
-  const { theme_setting } = verge ?? {};
+  const { clashSettings } = useClashSettings();
+  const { theme_setting } = clashSettings ?? {};
 
   const theme = useMemo(() => {
     const setting = theme_setting || {};
@@ -87,10 +87,10 @@ export const useCustomTheme = () => {
     );
 
     // 应用用户配置的主题 CSS。
-    let style = document.querySelector("style#verge-theme");
+    let style = document.querySelector("style#clash-theme");
     if (!style) {
       style = document.createElement("style");
-      style.id = "verge-theme";
+      style.id = "clash-theme";
       document.head.appendChild(style!);
     }
     if (style) {

@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLockFn } from "ahooks";
 import { styled, Typography } from "@mui/material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import {
   BaseDialog,
   DialogRef,
@@ -31,7 +31,7 @@ export const HotkeyViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
-  const { verge, patchVerge } = useVerge();
+  const { clashSettings, patchClashSettings } = useClashSettings();
 
   const [hotkeyMap, setHotkeyMap] = useState<Record<string, string[]>>({});
 
@@ -41,7 +41,7 @@ export const HotkeyViewer = forwardRef<DialogRef>((_props, ref) => {
 
       const map = {} as typeof hotkeyMap;
 
-      verge?.hotkeys?.forEach((text) => {
+      clashSettings?.hotkeys?.forEach((text) => {
         const [func, key] = text.split(",").map((e) => e.trim());
 
         if (!func || !key) return;
@@ -74,7 +74,7 @@ export const HotkeyViewer = forwardRef<DialogRef>((_props, ref) => {
       .filter(Boolean);
 
     try {
-      await patchVerge({ hotkeys });
+      await patchClashSettings({ hotkeys });
       setOpen(false);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));

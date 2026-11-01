@@ -14,7 +14,7 @@ import {
   SortByAlphaRounded,
   SortRounded,
 } from "@mui/icons-material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import type { HeadState } from "./use-head-state";
 import type { ProxySortType } from "./use-filter-sort";
 import delayManager from "@/services/delay";
@@ -43,11 +43,14 @@ export const ProxyHead = (props: Props) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const { verge } = useVerge();
+  const { clashSettings } = useClashSettings();
 
   useEffect(() => {
-    delayManager.setUrl(groupName, testUrl || verge?.default_latency_test!);
-  }, [groupName, testUrl, verge?.default_latency_test]);
+    delayManager.setUrl(
+      groupName,
+      testUrl || clashSettings?.default_latency_test!
+    );
+  }, [groupName, testUrl, clashSettings?.default_latency_test]);
 
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ...sx }}>

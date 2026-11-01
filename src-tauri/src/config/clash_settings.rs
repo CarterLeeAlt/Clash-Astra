@@ -8,7 +8,7 @@ pub const VALID_MIHOMO_CORES: [&str; 1] = [MIHOMO_CORE];
 
 /// 当前应用设置的持久化字段，运行中的修改统一经应用协调器提交。
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
-pub struct IVerge {
+pub struct IClashSettings {
     /// 单实例唤起服务的监听端口。
     pub app_singleton_port: Option<u16>,
 
@@ -77,7 +77,7 @@ pub struct IVerge {
     pub proxy_guard_duration: Option<u64>,
 
     /// 用户主题配置。
-    pub theme_setting: Option<IVergeTheme>,
+    pub theme_setting: Option<IClashTheme>,
 
     /// 外部 Web 控制界面列表。
     pub web_ui_list: Option<Vec<String>>,
@@ -102,7 +102,7 @@ pub struct IVerge {
     pub proxy_layout_column: Option<i32>,
 
     /// 测试网站列表
-    pub test_list: Option<Vec<IVergeTestItem>>,
+    pub test_list: Option<Vec<IClashTestItem>>,
 
     /// 日志清理
     /// 0: 不清理; 1: 7天; 2: 30天; 3: 90天
@@ -124,15 +124,15 @@ pub struct IVerge {
     pub enable_random_port: Option<bool>,
 
     /// 持久化的混合代理端口，与内核端口在同一次操作中提交。
-    pub verge_mixed_port: Option<u16>,
+    pub clash_mixed_port: Option<u16>,
 
-    pub verge_socks_port: Option<u16>,
+    pub clash_socks_port: Option<u16>,
 
-    pub verge_port: Option<u16>,
+    pub clash_port: Option<u16>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
-pub struct IVergeTestItem {
+pub struct IClashTestItem {
     pub uid: Option<String>,
     pub name: Option<String>,
     pub icon: Option<String>,
@@ -140,7 +140,7 @@ pub struct IVergeTestItem {
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
-pub struct IVergeTheme {
+pub struct IClashTheme {
     pub primary_color: Option<String>,
     pub secondary_color: Option<String>,
     pub primary_text: Option<String>,
@@ -154,9 +154,9 @@ pub struct IVergeTheme {
     pub css_injection: Option<String>,
 }
 
-impl IVerge {
+impl IClashSettings {
     pub fn new() -> Self {
-        let path = match dirs::verge_path() {
+        let path = match dirs::clash_settings_path() {
             Ok(path) => path,
             Err(err) => {
                 log::error!(target: "app", "{err}");
@@ -164,7 +164,7 @@ impl IVerge {
             }
         };
 
-        match help::read_yaml::<IVerge>(&path) {
+        match help::read_yaml::<IClashSettings>(&path) {
             Ok(config) => config,
             Err(err) => {
                 log::error!(target: "app", "{err}");
@@ -196,9 +196,9 @@ impl IVerge {
             enable_silent_start: Some(false),
             enable_system_proxy: Some(false),
             enable_random_port: Some(false),
-            verge_mixed_port: Some(7897),
-            verge_socks_port: Some(7898),
-            verge_port: Some(7899),
+            clash_mixed_port: Some(7897),
+            clash_socks_port: Some(7898),
+            clash_port: Some(7899),
             enable_proxy_guard: Some(false),
             proxy_guard_duration: Some(30),
             auto_close_connection: Some(true),
@@ -215,7 +215,7 @@ impl IVerge {
                     ("grok", "Grok", "https://grok.com"),
                 ]
                 .into_iter()
-                .map(|(id, name, url)| IVergeTestItem {
+                .map(|(id, name, url)| IClashTestItem {
                     uid: Some(format!("builtin-{id}")),
                     name: Some(name.into()),
                     url: Some(url.into()),
@@ -228,7 +228,7 @@ impl IVerge {
     }
 
     /// 将请求中的已指定字段合入候选设置；此方法不执行 I/O。
-    pub fn patch_config(&mut self, patch: IVerge) {
+    pub fn patch_config(&mut self, patch: IClashSettings) {
         macro_rules! patch {
             ($key: tt) => {
                 if patch.$key.is_some() {
@@ -256,9 +256,9 @@ impl IVerge {
         patch!(enable_silent_start);
         patch!(enable_custom_frameless_window);
         patch!(enable_random_port);
-        patch!(verge_mixed_port);
-        patch!(verge_socks_port);
-        patch!(verge_port);
+        patch!(clash_mixed_port);
+        patch!(clash_socks_port);
+        patch!(clash_port);
         patch!(enable_system_proxy);
         patch!(enable_proxy_guard);
         patch!(system_proxy_bypass);
@@ -282,12 +282,13 @@ impl IVerge {
 
     /// 在初始化前尝试拿到单例端口的值
     pub fn get_singleton_port() -> u16 {
-        #[cfg(not(feature = "verge-dev"))]
+        #[cfg(not(feature = "clash-dev"))]
         const SERVER_PORT: u16 = 33331;
-        #[cfg(feature = "verge-dev")]
+        #[cfg(feature = "clash-dev")]
         const SERVER_PORT: u16 = 11233;
 
-        match dirs::verge_path().and_then(|path| help::read_yaml::<IVerge>(&path)) {
+        match dirs::clash_settings_path().and_then(|path| help::read_yaml::<IClashSettings>(&path))
+        {
             Ok(config) => config.app_singleton_port.unwrap_or(SERVER_PORT),
             Err(_) => SERVER_PORT, // 这里就不log错误了
         }
@@ -318,25 +319,36 @@ mod tests {
     #[test]
     fn template_uses_default_latency_test_url() {
         assert_eq!(
-            IVerge::template().default_latency_test.as_deref(),
+            IClashSettings::template().default_latency_test.as_deref(),
             Some(DEFAULT_LATENCY_TEST_URL)
         );
     }
 
     #[test]
     fn template_uses_mihomo_core_identifier() {
-        assert_eq!(IVerge::template().clash_core.as_deref(), Some(MIHOMO_CORE));
+        assert_eq!(
+            IClashSettings::template().clash_core.as_deref(),
+            Some(MIHOMO_CORE)
+        );
+    }
+
+    #[test]
+    fn settings_template_exposes_application_port_fields() {
+        let settings = serde_json::to_value(IClashSettings::template()).unwrap();
+        assert_eq!(settings["clash_mixed_port"], 7897);
+        assert_eq!(settings["clash_socks_port"], 7898);
+        assert_eq!(settings["clash_port"], 7899);
     }
 
     #[test]
     fn settings_template_has_no_theme_mode_selector() {
-        let value = serde_json::to_value(IVerge::template()).unwrap();
+        let value = serde_json::to_value(IClashSettings::template()).unwrap();
         assert!(value.get("theme_mode").is_none());
     }
 
     #[test]
     fn fresh_settings_contain_the_complete_current_test_sites() {
-        let sites = IVerge::template().test_list.unwrap();
+        let sites = IClashSettings::template().test_list.unwrap();
         assert_eq!(sites.len(), 7);
         assert_eq!(sites[0].uid.as_deref(), Some("builtin-google"));
         assert_eq!(sites[4].url.as_deref(), Some("https://chatgpt.com"));
@@ -347,11 +359,11 @@ mod tests {
 
     #[test]
     fn settings_round_trip_preserves_current_user_values() {
-        let config: IVerge = serde_yaml::from_str(
+        let config: IClashSettings = serde_yaml::from_str(
             "default_latency_test: https://example.com/healthz\nauto_log_clean: 0",
         )
         .unwrap();
-        let loaded: IVerge =
+        let loaded: IClashSettings =
             serde_yaml::from_str(&serde_yaml::to_string(&config).unwrap()).unwrap();
         assert_eq!(
             loaded.default_latency_test.as_deref(),

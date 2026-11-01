@@ -16,7 +16,7 @@ import { ProxyHead } from "./proxy-head";
 import { ProxyItem } from "./proxy-item";
 import { ProxyItemMini } from "./proxy-item-mini";
 import type { IRenderItem } from "./use-render-list";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { utf8ToBase64 } from "@/utils/base64";
 import { textSizes } from "@/shared/typography";
 
@@ -33,8 +33,8 @@ export const ProxyRender = (props: RenderProps) => {
   const { indent, item, onLocation, onCheckAll, onHeadState, onChangeProxy } =
     props;
   const { type, group, headState, proxy, proxyCol } = item;
-  const { verge } = useVerge();
-  const enable_group_icon = verge?.enable_group_icon ?? true;
+  const { clashSettings } = useClashSettings();
+  const enable_group_icon = clashSettings?.enable_group_icon ?? true;
 
   if (type === 0 && !group.hidden) {
     return (

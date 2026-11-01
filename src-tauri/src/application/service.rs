@@ -17,12 +17,12 @@ pub async fn uninstall() -> Result<()> {
     super::dispatch(async {
         let _operation = super::operation().await?;
         anyhow::ensure!(
-            Config::verge().enable_tun_mode != Some(true),
+            Config::clash_settings().enable_tun_mode != Some(true),
             "Disable TUN mode before uninstalling the service."
         );
-        if Config::verge().enable_service_mode == Some(true) {
+        if Config::clash_settings().enable_service_mode == Some(true) {
             let mut change = super::configuration::Change::new();
-            change.next.verge.enable_service_mode = Some(false);
+            change.next.clash_settings.enable_service_mode = Some(false);
             super::configuration::apply_locked(change).await?;
         }
         win_service::uninstall_service()

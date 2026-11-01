@@ -44,17 +44,17 @@ async function fetchWithRetry(url, options = {}, context = {}) {
     5,
     Math.floor(
       readPositiveNumber(
-        configuredRetries ?? process.env.VERGE_DOWNLOAD_RETRY,
+        configuredRetries ?? process.env.CLASH_DOWNLOAD_RETRY,
         5
       )
     )
   );
   const retryDelayMs = readPositiveNumber(
-    configuredRetryDelayMs ?? process.env.VERGE_DOWNLOAD_RETRY_DELAY_MS,
+    configuredRetryDelayMs ?? process.env.CLASH_DOWNLOAD_RETRY_DELAY_MS,
     3000
   );
   const timeoutMs = readPositiveNumber(
-    configuredTimeoutMs ?? process.env.VERGE_DOWNLOAD_TIMEOUT_MS,
+    configuredTimeoutMs ?? process.env.CLASH_DOWNLOAD_TIMEOUT_MS,
     60000
   );
   const targetPathLog = targetPath ? ` targetPath="${targetPath}"` : "";

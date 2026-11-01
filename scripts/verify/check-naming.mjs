@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 const root = process.cwd();
@@ -131,6 +131,22 @@ expectEqual(
 const requiredSourceFragments = [
   ["src-tauri/src/utils/dirs.rs", `"${expected.identifier}"`],
   ["src-tauri/src/utils/dirs.rs", `"${expected.devIdentifier}"`],
+  ["src-tauri/src/utils/dirs.rs", '"clash-settings.yaml"'],
+  ["src-tauri/src/utils/dirs.rs", "pub fn clash_settings_path()"],
+  ["src-tauri/src/config/clash_settings.rs", "pub struct IClashSettings"],
+  ["src-tauri/src/config/config.rs", "pub clash_settings: IClashSettings"],
+  ["src-tauri/src/commands/clash_settings.rs", "pub fn get_clash_settings()"],
+  [
+    "src-tauri/src/commands/clash_settings.rs",
+    "pub async fn patch_clash_settings(",
+  ],
+  ["src-tauri/src/main.rs", "cmds::get_clash_settings"],
+  ["src-tauri/src/main.rs", "cmds::patch_clash_settings"],
+  ["src-tauri/Cargo.toml", "clash-dev = []"],
+  ["package.json", '"dev:diff": "tauri dev -f clash-dev"'],
+  ["src/infrastructure/ipc/clash-settings.ts", '"get_clash_settings"'],
+  ["src/infrastructure/ipc/clash-settings.ts", '"patch_clash_settings"'],
+  ["src/hooks/use-clash-settings.ts", "export const useClashSettings"],
   ["src-tauri/watchdog/src/main.rs", `"${expected.identifier}"`],
   ["src-tauri/watchdog/build.rs", `"${expected.watchdogExe}"`],
   [
@@ -185,26 +201,56 @@ for (const [relativePath, fragment] of requiredSourceFragments) {
   }
 }
 
-// portable.mjs 与 prepare-runtime.mjs 的清理列表必须保留旧名，故不参与旧名残留检查。
-const buildAndCiFiles = [
-  "scripts/build/build-watchdog.mjs",
-  "scripts/verify/test-watchdog.ps1",
-  ".github/workflows/release-windows.yml",
+const retiredProductName = /Verge|VERGE|(?<![A-Za-z])verge/;
+const ownSourceDirectories = [
+  "src",
+  "src-tauri/src",
+  "scripts",
+  "tests",
+  ".github",
+  "src-tauri/vendor-crates/auto-launch/src",
 ];
-const legacyPatterns = [
-  ["clash-verge-buty", /clash-verge-buty/],
-  ["Clash Verge Buty", /Clash Verge Buty/],
-  ["Clash_Verge_Buty", /Clash_Verge_Buty/],
-  ["Clash-Verge-Buty", /Clash-Verge-Buty/],
-  ["io.github.clash-verge-buty.data", /io\.github\.clash-verge-buty\.data/],
-];
-
-for (const relativePath of buildAndCiFiles) {
-  const text = await read(relativePath);
-  for (const [label, pattern] of legacyPatterns) {
-    if (pattern.test(text)) {
-      errors.push(`${relativePath}: uses legacy name ${label}`);
-    }
+const sourceFiles = async (directory) => {
+  const entries = await readdir(path.join(root, directory), {
+    withFileTypes: true,
+  });
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const relative = `${directory}/${entry.name}`;
+      return entry.isDirectory() ? sourceFiles(relative) : [relative];
+    })
+  );
+  return nested.flat();
+};
+const ownSourceFiles = (
+  await Promise.all(ownSourceDirectories.map(sourceFiles))
+).flat();
+ownSourceFiles.push("package.json", "src-tauri/Cargo.toml");
+for (const relativePath of ownSourceFiles) {
+  if (retiredProductName.test(relativePath))
+    errors.push(`${relativePath}: product name in source path`);
+  if (
+    !/\.(?:[cm]?[jt]s|[jt]sx|json|css|scss|rs|toml|ya?ml|ps1|sh)$/.test(
+      relativePath
+    )
+  )
+    continue;
+  // The naming guard necessarily contains its own forbidden-word expression.
+  if (relativePath === "scripts/verify/check-naming.mjs") continue;
+  const lines = (await read(relativePath)).split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    // Source attribution identifies the actual upstream and must remain factual.
+    if (
+      relativePath === "src-tauri/src/enhance/script.rs" &&
+      line.trimStart().startsWith("//") &&
+      line.includes("clash-verge-rev/clash-verge-rev")
+    )
+      continue;
+    if (retiredProductName.test(line))
+      errors.push(
+        `${relativePath}:${index + 1}: product name in application source`
+      );
   }
 }
 
@@ -220,19 +266,6 @@ for (const [relativePath, fragment] of forbiddenFragments) {
   const text = await read(relativePath);
   if (text.includes(fragment)) {
     errors.push(`${relativePath}: uses legacy file name ${fragment}`);
-  }
-}
-
-const linkFiles = [
-  "package.json",
-  "src-tauri/Cargo.toml",
-  "src/features/settings/SettingsPage.tsx",
-];
-const legacyRepository = /CarterLeeAlt\/Clash-Verge-Buty/;
-for (const relativePath of linkFiles) {
-  const text = await read(relativePath);
-  if (legacyRepository.test(text)) {
-    errors.push(`${relativePath}: uses legacy repository URL`);
   }
 }
 

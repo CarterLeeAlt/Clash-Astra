@@ -55,7 +55,7 @@ impl encode::Encode for RedactingEncoder {
 pub(crate) fn init_log() -> Result<()> {
     let log_dir = dirs::app_logs_dir()?;
 
-    let log_level = Config::verge().get_log_level();
+    let log_level = Config::clash_settings().get_log_level();
     if log_level == LevelFilter::Off {
         return Ok(());
     }
@@ -91,7 +91,7 @@ pub(crate) fn init_log() -> Result<()> {
     let log_more = log_level == LevelFilter::Trace || log_level == LevelFilter::Debug;
     let dependency_log_level = LevelFilter::Warn;
 
-    #[cfg(feature = "verge-dev")]
+    #[cfg(feature = "clash-dev")]
     {
         logger_builder = logger_builder.appenders(["file", "stdout"]);
         if log_more {
@@ -100,7 +100,7 @@ pub(crate) fn init_log() -> Result<()> {
             root_builder = root_builder.appenders(["stdout"]);
         }
     }
-    #[cfg(not(feature = "verge-dev"))]
+    #[cfg(not(feature = "clash-dev"))]
     {
         logger_builder = logger_builder.appenders(["file"]);
         if log_more {
@@ -121,7 +121,7 @@ pub(crate) fn init_log() -> Result<()> {
 
 /// 删除log文件
 pub fn delete_log() -> Result<()> {
-    let auto_log_clean = Config::verge().auto_log_clean.unwrap_or(1);
+    let auto_log_clean = Config::clash_settings().auto_log_clean.unwrap_or(1);
 
     let day = match auto_log_clean {
         0 => return Ok(()),

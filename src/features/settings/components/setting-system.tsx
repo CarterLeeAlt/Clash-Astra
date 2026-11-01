@@ -9,7 +9,7 @@ import {
   WarningAmberRounded,
 } from "@mui/icons-material";
 import { getSystemProxy, isElevated } from "@/services/cmds";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { DialogRef, Notice, Switch } from "@/components/base";
 import { SettingList, SettingItem } from "./mods/setting-comp";
 import { GuardState } from "./mods/guard-state";
@@ -34,7 +34,8 @@ const SYS_PROXY_WRITE_FAILED_TIP =
 const SettingSystem = ({ onError }: Props) => {
   const { t } = useTranslation();
 
-  const { verge, mutateVerge, patchVerge } = useVerge();
+  const { clashSettings, mutateClashSettings, patchClashSettings } =
+    useClashSettings();
 
   // 读取实际服务状态，与用户请求的运行模式分别展示。
   const { data: serviceStatus, mutate: mutateServiceStatus } =
@@ -50,8 +51,8 @@ const SettingSystem = ({ onError }: Props) => {
     enable_service_mode,
     enable_silent_start,
     enable_system_proxy,
-    verge_mixed_port,
-  } = verge ?? {};
+    clash_mixed_port,
+  } = clashSettings ?? {};
 
   const onSwitchFormat = (_e: any, value: boolean) => value;
   const [pendingSwitch, setPendingSwitch] = useState<
@@ -59,8 +60,8 @@ const SettingSystem = ({ onError }: Props) => {
   >(null);
   const switchesBusy = pendingSwitch !== null;
   const [proxyMismatch, setProxyMismatch] = useState(false);
-  const onChangeData = (patch: Partial<IVergeConfig>) => {
-    mutateVerge((current) => ({ ...current, ...patch }), false);
+  const onChangeData = (patch: Partial<IClashSettings>) => {
+    mutateClashSettings((current) => ({ ...current, ...patch }), false);
   };
   const onSwitchCatch = (err: Error) => {
     if (isSwitchOperationInProgressError(err)) return;
@@ -70,7 +71,7 @@ const SettingSystem = ({ onError }: Props) => {
   const verifySystemProxy = async () => {
     try {
       const actual = await getSystemProxy();
-      const port = verge_mixed_port ?? 7897;
+      const port = clash_mixed_port ?? 7897;
       const effective = actual.enable && actual.server === `127.0.0.1:${port}`;
       setProxyMismatch(!effective);
     } catch {
@@ -96,7 +97,7 @@ const SettingSystem = ({ onError }: Props) => {
       window.clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enable_system_proxy, verge_mixed_port]);
+  }, [enable_system_proxy, clash_mixed_port]);
 
   const serviceChecking = isWIN && serviceStatus == null;
   const serviceInstalled = !!serviceStatus?.installed;
@@ -117,7 +118,7 @@ const SettingSystem = ({ onError }: Props) => {
           enableTun={!!enable_tun_mode}
           onStatusChange={async () => {
             await mutateServiceStatus();
-            await mutateVerge();
+            await mutateClashSettings();
           }}
         />
       )}
@@ -174,11 +175,11 @@ const SettingSystem = ({ onError }: Props) => {
                   Notice.info("Checking service readiness.");
                 }
               }
-              await patchVerge({ enable_tun_mode: e });
-              await mutateVerge();
+              await patchClashSettings({ enable_tun_mode: e });
+              await mutateClashSettings();
               if (isWIN) await mutateServiceStatus();
             } catch (err) {
-              await mutateVerge();
+              await mutateClashSettings();
               if (isWIN) await mutateServiceStatus();
               throw err;
             } finally {
@@ -234,11 +235,11 @@ const SettingSystem = ({ onError }: Props) => {
                     );
                   }
                 }
-                await patchVerge({ enable_service_mode: e });
-                await mutateVerge();
+                await patchClashSettings({ enable_service_mode: e });
+                await mutateClashSettings();
                 if (isWIN) await mutateServiceStatus();
               } catch (err) {
-                await mutateVerge();
+                await mutateClashSettings();
                 if (isWIN) await mutateServiceStatus();
                 throw err;
               } finally {
@@ -306,10 +307,10 @@ const SettingSystem = ({ onError }: Props) => {
             }
             setPendingSwitch("sysproxy");
             try {
-              await patchVerge({ enable_system_proxy: e });
-              await mutateVerge();
+              await patchClashSettings({ enable_system_proxy: e });
+              await mutateClashSettings();
             } catch (err) {
-              await mutateVerge();
+              await mutateClashSettings();
               if (isWIN) await mutateServiceStatus();
               if (
                 err instanceof Error &&
@@ -334,7 +335,7 @@ const SettingSystem = ({ onError }: Props) => {
           onCatch={onError}
           onFormat={onSwitchFormat}
           onChange={(e) => onChangeData({ enable_auto_launch: e })}
-          onGuard={(e) => patchVerge({ enable_auto_launch: e })}
+          onGuard={(e) => patchClashSettings({ enable_auto_launch: e })}
         >
           <Switch edge="end" />
         </GuardState>
@@ -347,7 +348,7 @@ const SettingSystem = ({ onError }: Props) => {
           onCatch={onError}
           onFormat={onSwitchFormat}
           onChange={(e) => onChangeData({ enable_silent_start: e })}
-          onGuard={(e) => patchVerge({ enable_silent_start: e })}
+          onGuard={(e) => patchClashSettings({ enable_silent_start: e })}
         >
           <Switch edge="end" />
         </GuardState>

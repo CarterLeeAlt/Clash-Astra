@@ -11,7 +11,7 @@ import {
   restartSidecar,
   setWindowSizeLocked,
 } from "@/services/cmds";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { BasePage, formatNoticeMessage, Notice } from "@/components/base";
 import { ProxyGroups } from "./components/proxy-groups";
 import { ProviderButton } from "./components/provider-button";
@@ -44,9 +44,9 @@ const ProxyPage = () => {
     getClashConfig
   );
 
-  const { verge, mutateVerge } = useVerge();
+  const { clashSettings, mutateClashSettings } = useClashSettings();
 
-  const isSizeLocked = verge?.window_size_locked ?? false;
+  const isSizeLocked = clashSettings?.window_size_locked ?? false;
 
   const modeList = ["rule", "global", "direct"];
 
@@ -73,7 +73,7 @@ const ProxyPage = () => {
   const onToggleSizeLocked = useLockFn(async () => {
     try {
       await setWindowSizeLocked(!isSizeLocked);
-      await mutateVerge();
+      await mutateClashSettings();
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
     }

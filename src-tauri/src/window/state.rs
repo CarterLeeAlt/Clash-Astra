@@ -73,7 +73,7 @@ impl WindowBuildMode {
 }
 
 pub(crate) fn configured_reliable_mode() -> bool {
-    !Config::verge()
+    !Config::clash_settings()
         .enable_custom_frameless_window
         .unwrap_or(false)
 }

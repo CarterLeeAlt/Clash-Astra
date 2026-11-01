@@ -1,15 +1,15 @@
 pub mod clash;
+pub mod clash_settings;
 pub mod core;
 pub mod profile;
 pub mod system;
-pub mod verge;
 pub mod window;
 
 pub use clash::*;
+pub use clash_settings::*;
 pub use core::*;
 pub use profile::*;
 pub use system::*;
-pub use verge::*;
 pub use window::*;
 
 #[cfg(windows)]

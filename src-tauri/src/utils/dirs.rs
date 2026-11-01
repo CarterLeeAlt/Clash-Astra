@@ -4,13 +4,13 @@ use anyhow::Result;
 use std::path::PathBuf;
 use tauri::{api::path::resource_dir, Env};
 
-#[cfg(not(feature = "verge-dev"))]
+#[cfg(not(feature = "clash-dev"))]
 pub static APP_ID: &str = "io.github.clash-astra";
-#[cfg(feature = "verge-dev")]
+#[cfg(feature = "clash-dev")]
 pub static APP_ID: &str = "io.github.clash-astra.dev";
 
 static CLASH_CONFIG: &str = "config.yaml";
-static VERGE_CONFIG: &str = "verge.yaml";
+static CLASH_SETTINGS_FILE: &str = "clash-settings.yaml";
 static PROFILE_YAML: &str = "profiles.yaml";
 
 /// 当前可执行文件所在目录；程序创建的数据均放在该目录树中。
@@ -80,8 +80,8 @@ pub fn clash_path() -> Result<PathBuf> {
     Ok(app_home_dir()?.join(CLASH_CONFIG))
 }
 
-pub fn verge_path() -> Result<PathBuf> {
-    Ok(app_home_dir()?.join(VERGE_CONFIG))
+pub fn clash_settings_path() -> Result<PathBuf> {
+    Ok(app_home_dir()?.join(CLASH_SETTINGS_FILE))
 }
 
 pub fn profiles_path() -> Result<PathBuf> {

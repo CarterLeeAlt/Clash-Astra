@@ -317,7 +317,7 @@ pub async fn select_proxy(profile_uid: String, group: String, proxy: String) -> 
         selected.push(PrfSelected { name: Some(group), now: Some(proxy) });
         change.restore_selection = true;
         let old_node = target.now.clone();
-        let close_connections = change.next.verge.auto_close_connection.unwrap_or(false);
+        let close_connections = change.next.clash_settings.auto_close_connection.unwrap_or(false);
         super::configuration::apply_locked(change).await?;
         if close_connections {
             if let Some(old_node) = old_node {

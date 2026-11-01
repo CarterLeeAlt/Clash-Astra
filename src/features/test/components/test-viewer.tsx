@@ -3,17 +3,17 @@ import { useLockFn } from "ahooks";
 import { useTranslation } from "react-i18next";
 import { useForm, Controller } from "react-hook-form";
 import { TextField } from "@mui/material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { BaseDialog, formatNoticeMessage, Notice } from "@/components/base";
 import { nanoid } from "nanoid";
 
 interface Props {
-  onChange: (uid: string, patch?: Partial<IVergeTestItem>) => void;
+  onChange: (uid: string, patch?: Partial<IClashTestItem>) => void;
 }
 
 export interface TestViewerRef {
   create: () => void;
-  edit: (item: IVergeTestItem) => void;
+  edit: (item: IClashTestItem) => void;
 }
 
 // 创建或编辑站点检测条目。
@@ -22,9 +22,9 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
   const [open, setOpen] = useState(false);
   const [openType, setOpenType] = useState<"new" | "edit">("new");
   const [loading, setLoading] = useState(false);
-  const { verge, patchVerge } = useVerge();
-  const testList = verge?.test_list ?? [];
-  const { control, watch, register, ...formIns } = useForm<IVergeTestItem>({
+  const { clashSettings, patchClashSettings } = useClashSettings();
+  const testList = clashSettings?.test_list ?? [];
+  const { control, watch, register, ...formIns } = useForm<IClashTestItem>({
     defaultValues: {
       name: "",
       icon: "",
@@ -32,14 +32,14 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
     },
   });
 
-  const patchTestList = async (uid: string, patch: Partial<IVergeTestItem>) => {
+  const patchTestList = async (uid: string, patch: Partial<IClashTestItem>) => {
     const newList = testList.map((x) => {
       if (x.uid === uid) {
         return { ...x, ...patch };
       }
       return x;
     });
-    await patchVerge({ test_list: newList });
+    await patchClashSettings({ test_list: newList });
   };
 
   useImperativeHandle(ref, () => ({
@@ -72,14 +72,14 @@ export const TestViewer = forwardRef<TestViewerRef, Props>((props, ref) => {
       try {
         if (!form.name) throw new Error("Name is required.");
         if (!form.url) throw new Error("URL is required.");
-        let newList: IVergeTestItem[];
+        let newList: IClashTestItem[];
         let uid: string;
 
         if (openType === "new") {
           uid = nanoid();
           const item = { ...form, uid, builtIn: false };
           newList = [...testList, item];
-          await patchVerge({ test_list: newList });
+          await patchClashSettings({ test_list: newList });
           props.onChange(uid);
         } else {
           if (!form.uid) throw new Error("UID not found.");

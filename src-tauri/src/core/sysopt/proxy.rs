@@ -176,15 +176,15 @@ impl Sysopt {
             log::info!(target: "app", "recovered pending Windows proxy session from a previous unclean shutdown");
         }
 
-        let port = Config::verge()
-            .verge_mixed_port
+        let port = Config::clash_settings()
+            .clash_mixed_port
             .unwrap_or(Config::clash().get_mixed_port());
 
         let (enable, bypass) = {
-            let verge = Config::verge();
+            let clash_settings = Config::clash_settings();
             (
-                verge.enable_system_proxy.unwrap_or(false),
-                verge.system_proxy_bypass.clone(),
+                clash_settings.enable_system_proxy.unwrap_or(false),
+                clash_settings.system_proxy_bypass.clone(),
             )
         };
 
@@ -268,18 +268,20 @@ impl Sysopt {
     /// 根据已提交快照重新应用系统代理。
     pub fn update_sysproxy(&self) -> Result<()> {
         let snapshot = Config::snapshot();
-        self.apply_sysproxy(&snapshot.verge, &snapshot.clash)
+        self.apply_sysproxy(&snapshot.clash_settings, &snapshot.clash)
     }
 
     pub fn apply_sysproxy(
         &self,
-        verge: &crate::config::IVerge,
+        clash_settings: &crate::config::IClashSettings,
         clash: &crate::config::IClashTemp,
     ) -> Result<()> {
         let _operation = self.proxy_operation.lock();
-        let enable = verge.enable_system_proxy.unwrap_or(false);
-        let bypass = verge.system_proxy_bypass.clone();
-        let port = verge.verge_mixed_port.unwrap_or(clash.get_mixed_port());
+        let enable = clash_settings.enable_system_proxy.unwrap_or(false);
+        let bypass = clash_settings.system_proxy_bypass.clone();
+        let port = clash_settings
+            .clash_mixed_port
+            .unwrap_or(clash.get_mixed_port());
 
         let target_proxy = Sysproxy {
             enable,
@@ -485,12 +487,12 @@ impl Sysopt {
             return;
         };
         let (enable, bypass, port) = {
-            let verge = Config::verge();
+            let clash_settings = Config::clash_settings();
             (
-                verge.enable_system_proxy.unwrap_or(false),
-                verge.system_proxy_bypass.clone(),
-                verge
-                    .verge_mixed_port
+                clash_settings.enable_system_proxy.unwrap_or(false),
+                clash_settings.system_proxy_bypass.clone(),
+                clash_settings
+                    .clash_mixed_port
                     .unwrap_or(Config::clash().get_mixed_port()),
             )
         };

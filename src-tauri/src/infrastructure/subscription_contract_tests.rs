@@ -173,7 +173,7 @@ async fn generated_subscription_download_compile_and_complete_load() {
         runtime_revision: 0,
         profile_versions: Default::default(),
         clash: IClashTemp::template(),
-        verge: IVerge::template(),
+        clash_settings: IClashSettings::template(),
         profiles: IProfiles::template(),
         runtime: IRuntime::default(),
     };

@@ -126,7 +126,7 @@ impl CoreManager {
         let config_path = snapshot.write_runtime(ConfigType::Check)?;
         let config_path = dirs::path_to_str(&config_path)?;
 
-        let clash_core = snapshot.verge.clash_core.clone();
+        let clash_core = snapshot.clash_settings.clash_core.clone();
         let clash_core = clash_core.unwrap_or_else(|| MIHOMO_CORE.into());
 
         let app_dir = dirs::app_home_dir()?;

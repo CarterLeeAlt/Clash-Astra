@@ -10,7 +10,7 @@ import { RequestEpoch } from "@/shared/async/request-epoch";
 /**
  * 手动与自动测速共用同一套延迟状态：
  * 1. 手动测速直接写延迟缓存，所有分组通过同名监听同步；
- * 2. 后端自动测速完成后推送 verge://auto-delay-finished，前端立即拉取快照写入缓存；
+ * 2. 后端自动测速完成后推送 clash://auto-delay-finished，前端立即拉取快照写入缓存；
  * 3. 窗口重新可见时也做一次同样的刷新。
  */
 export const useDelayRefresh = () => {
@@ -58,7 +58,7 @@ export const useDelayRefresh = () => {
     };
 
     const unlistenTasks = [
-      listen("verge://auto-delay-finished", () => {
+      listen("clash://auto-delay-finished", () => {
         void refresh();
       }),
     ];

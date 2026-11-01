@@ -5,7 +5,7 @@ import { Button, Stack, Typography } from "@mui/material";
 import {
   installService,
   uninstallService,
-  patchVergeConfig,
+  patchClashSettings,
 } from "@/services/cmds";
 import {
   BaseDialog,
@@ -128,10 +128,10 @@ export const ServiceViewer = forwardRef<DialogRef, Props>((props, ref) => {
   // 服务操作失败由统一提示入口呈现。
   const onDisable = useLockFn(async () => {
     try {
-      await patchVergeConfig({
+      await patchClashSettings({
         enable_service_mode: false,
         enable_tun_mode: false,
-      } as IVergeConfig);
+      } as IClashSettings);
       await mutateCheck();
       await onStatusChange?.();
       setOpen(false);

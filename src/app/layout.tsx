@@ -9,7 +9,7 @@ import { CSSTransition, TransitionGroup } from "react-transition-group";
 import { List, Paper, ThemeProvider } from "@mui/material";
 import { appWindow } from "@tauri-apps/api/window";
 import { routers } from "./routes";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import brandIcon from "@/assets/image/brand-icon.png";
 import { metadata } from "@root/package.json";
 import { BaseErrorBoundary, NoticeManager } from "@/components/base";
@@ -33,8 +33,8 @@ const Layout = () => {
   const { t } = useTranslation();
   const { theme } = useCustomTheme();
 
-  const { verge } = useVerge();
-  const { language, start_page } = verge || {};
+  const { clashSettings } = useClashSettings();
+  const { language, start_page } = clashSettings || {};
   const windowStyle = useAppEvents();
   useDelayRefresh();
   const nativeDecorations = windowStyle.nativeDecorations;

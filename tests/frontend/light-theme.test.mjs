@@ -38,7 +38,7 @@ test("application source has no theme selector, mode state or system-theme liste
     /mode:\s*"light"/
   );
   assert.match(
-    read("src/features/settings/components/setting-verge.tsx"),
+    read("src/features/settings/components/setting-application.tsx"),
     /Theme Setting/
   );
 });
@@ -59,7 +59,7 @@ test("native windows, browser controls and both editors explicitly use the light
     assert.match(read(name), /theme:\s*"vs"/);
   }
   assert.doesNotMatch(
-    read("src-tauri/src/config/verge.rs"),
+    read("src-tauri/src/config/clash_settings.rs"),
     /pub\s+theme_mode\s*:/
   );
 });

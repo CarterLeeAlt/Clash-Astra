@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import { getSchedulerState, getSystemProxy } from "@/services/cmds";
 import { textSizes } from "@/shared/typography";
 import {
@@ -27,7 +27,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((_props, ref) => {
 
   const [open, setOpen] = useState(false);
 
-  const { verge, patchVerge } = useVerge();
+  const { clashSettings, patchClashSettings } = useClashSettings();
 
   type SysProxy = Awaited<ReturnType<typeof getSystemProxy>>;
   const [sysproxy, setSysproxy] = useState<SysProxy>();
@@ -38,7 +38,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((_props, ref) => {
     enable_proxy_guard,
     system_proxy_bypass,
     proxy_guard_duration,
-  } = verge ?? {};
+  } = clashSettings ?? {};
 
   const [value, setValue] = useState({
     guard: enable_proxy_guard,
@@ -79,7 +79,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((_props, ref) => {
       return;
     }
 
-    const patch: Partial<IVergeConfig> = {};
+    const patch: Partial<IClashSettings> = {};
 
     if (value.guard !== enable_proxy_guard) {
       patch.enable_proxy_guard = value.guard;
@@ -92,7 +92,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((_props, ref) => {
     }
 
     try {
-      await patchVerge(patch);
+      await patchClashSettings(patch);
       setOpen(false);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));

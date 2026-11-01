@@ -7,7 +7,7 @@ export const queryKeys = {
   proxyProviders: "getProxyProviders",
   rules: "getRules",
   ruleProviders: "getRuleProviders",
-  vergeConfig: "getVergeConfig",
+  clashSettings: "getClashSettings",
   profiles: "getProfiles",
   runtimeLogs: "getRuntimeLogs",
   checkService: "checkService",

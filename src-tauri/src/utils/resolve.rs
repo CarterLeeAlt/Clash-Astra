@@ -94,8 +94,11 @@ pub fn resolve_setup(app: &mut App) {
 
     let recovered_visible = crate::utils::watchdog::show_after_recovery();
     let recovered_hidden = crate::utils::watchdog::hide_after_recovery();
-    let silent_start = ({ Config::verge().enable_silent_start.unwrap_or(false) }
-        || recovered_hidden)
+    let silent_start = ({
+        Config::clash_settings()
+            .enable_silent_start
+            .unwrap_or(false)
+    } || recovered_hidden)
         && !recovered_visible;
     let show_when_ready = !silent_start;
     reset_watchdog_files();

@@ -15,7 +15,7 @@ use tokio::time::{sleep, Duration, Instant};
 
 /// 根据当前已提交端口生成终端代理环境变量，并复制到剪贴板。
 pub fn copy_clash_env(app_handle: &AppHandle) {
-    let port = Config::verge().verge_mixed_port.unwrap_or(7897);
+    let port = Config::clash_settings().clash_mixed_port.unwrap_or(7897);
     let http_proxy = format!("http://127.0.0.1:{}", port);
     let socks5_proxy = format!("socks5://127.0.0.1:{}", port);
 
@@ -26,7 +26,7 @@ pub fn copy_clash_env(app_handle: &AppHandle) {
 
     let mut cliboard = app_handle.clipboard_manager();
 
-    let env_type = Config::verge().env_type;
+    let env_type = Config::clash_settings().env_type;
     let env_type = match env_type {
         Some(env_type) => env_type,
         None => "powershell".to_string(),
@@ -180,8 +180,11 @@ async fn run_auto_delay_round() -> Result<()> {
     const GLOBAL_CONCURRENCY: usize = 16;
 
     let (test_url, timeout) = (
-        snapshot.verge.default_latency_test.clone(),
-        snapshot.verge.default_latency_timeout.unwrap_or(5000),
+        snapshot.clash_settings.default_latency_test.clone(),
+        snapshot
+            .clash_settings
+            .default_latency_timeout
+            .unwrap_or(5000),
     );
 
     let proxies = match clash_api::get_proxies_for(controller.clone()).await {
@@ -302,12 +305,12 @@ async fn run_site_test_round() -> Result<()> {
     let generation = CoreManager::global().generation();
     let run_id = SITE_TEST_SEQUENCE.fetch_add(1, Ordering::SeqCst) + 1;
     let mixed_port = config.clash.get_mixed_port();
-    let tun_mode = config.verge.enable_tun_mode.unwrap_or(false);
+    let tun_mode = config.clash_settings.enable_tun_mode.unwrap_or(false);
 
     let urls: Vec<String> = {
-        let verge = &config.verge;
+        let clash_settings = &config.clash_settings;
         let mut seen = HashSet::new();
-        verge
+        clash_settings
             .test_list
             .clone()
             .unwrap_or_default()
@@ -420,7 +423,7 @@ pub async fn test_delay(url: String) -> Result<TestDelayResult> {
     let result = test_delay_with(
         url,
         config.clash.get_mixed_port(),
-        config.verge.enable_tun_mode.unwrap_or(false),
+        config.clash_settings.enable_tun_mode.unwrap_or(false),
     )
     .await?;
     anyhow::ensure!(

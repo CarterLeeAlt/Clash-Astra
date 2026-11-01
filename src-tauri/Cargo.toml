@@ -54,7 +54,7 @@ windows = { version = "0.39.0", features = ["Win32_System_WinRT"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-verge-dev = []
+clash-dev = []
 
 [patch.crates-io]
 # tao 0.16.7 生成 Windows 图标时 AND 掩码格式错误（每像素 1 字节而非 1 位），

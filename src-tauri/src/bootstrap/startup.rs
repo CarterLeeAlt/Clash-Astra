@@ -8,8 +8,11 @@ const STARTUP_SCRIPT_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 
 pub fn startup_script() -> Result<()> {
     let path = {
-        let verge = Config::verge();
-        verge.startup_script.clone().unwrap_or("".to_string())
+        let clash_settings = Config::clash_settings();
+        clash_settings
+            .startup_script
+            .clone()
+            .unwrap_or("".to_string())
     };
 
     if !path.is_empty() {

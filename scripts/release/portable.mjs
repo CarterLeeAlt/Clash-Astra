@@ -110,21 +110,31 @@ async function resolvePortable() {
     throw new Error(`Folder not found: ${resourcesPath}`);
   }
 
-  const obsoleteResourceNames = [
-    "clash-verge-service.exe",
-    "install-service.exe",
-    "uninstall-service.exe",
-    "firewall-helper.exe",
-    "clash-verge-buty-service.exe",
-    "clash-verge-buty-service-install.exe",
-    "clash-verge-buty-service-uninstall.exe",
-    "clash-verge-buty-firewall-helper.exe",
+  const resourceNames = [
+    "Country.mmdb",
+    "geoip.dat",
+    "geosite.dat",
+    "enableLoopback.exe",
+    "clash-astra-service.exe",
+    "clash-astra-service-install.exe",
+    "clash-astra-service-uninstall.exe",
+    "clash-astra-firewall-helper.exe",
   ];
-  for (const name of obsoleteResourceNames) {
-    if (await fs.pathExists(path.join(resourcesPath, name))) {
-      throw new Error(
-        `Obsolete resource must be removed before packaging: ${name}`
-      );
+  const unexpectedResources = (await fs.readdir(resourcesPath)).filter(
+    (name) => !resourceNames.includes(name)
+  );
+  if (unexpectedResources.length) {
+    throw new Error(
+      `Unexpected runtime resources: ${unexpectedResources.join(", ")}`
+    );
+  }
+  for (const name of resourceNames) {
+    const resource = path.join(resourcesPath, name);
+    if (
+      !(await fs.pathExists(resource)) ||
+      !(await fs.stat(resource)).isFile()
+    ) {
+      throw new Error(`Runtime resource is missing or not a file: ${resource}`);
     }
   }
 
@@ -149,7 +159,9 @@ async function resolvePortable() {
     "build-info.json",
     Buffer.from(JSON.stringify(buildInfo, null, 2) + "\n")
   );
-  zip.addLocalFolder(resourcesPath, "resources");
+  for (const name of resourceNames) {
+    zip.addLocalFile(path.join(resourcesPath, name), "resources");
+  }
 
   const unsignedSuffix = process.env.UNSIGNED_BUILD === "1" ? "_unsigned" : "";
   const labelSuffix = label ? `_${label}` : "";

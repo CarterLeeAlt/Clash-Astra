@@ -1,11 +1,11 @@
 import { invoke } from "./client";
 
-export async function getVergeConfig() {
-  return invoke<IVergeConfig>("get_verge_config");
+export async function getClashSettings() {
+  return invoke<IClashSettings>("get_clash_settings");
 }
 
-export async function patchVergeConfig(payload: IVergeConfig) {
-  return invoke<void>("patch_verge_config", { payload });
+export async function patchClashSettings(payload: IClashSettings) {
+  return invoke<void>("patch_clash_settings", { payload });
 }
 
 interface SchedulerOneShotTaskInfo {

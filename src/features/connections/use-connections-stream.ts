@@ -144,9 +144,9 @@ export const useConnectionsStream = () => {
     const onRefresh = () => {
       void syncConnectionsRef.current().catch(() => undefined);
     };
-    window.addEventListener("verge://connections-refresh", onRefresh);
+    window.addEventListener("clash://connections-refresh", onRefresh);
     return () =>
-      window.removeEventListener("verge://connections-refresh", onRefresh);
+      window.removeEventListener("clash://connections-refresh", onRefresh);
   }, []);
 
   const resetConnections = useCallback(() => {

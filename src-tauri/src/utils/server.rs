@@ -1,7 +1,7 @@
 extern crate warp;
 
 use super::resolve;
-use crate::config::IVerge;
+use crate::config::IClashSettings;
 use anyhow::{bail, Result};
 use once_cell::sync::OnceCell;
 use port_scanner::local_port_available;
@@ -76,7 +76,7 @@ fn singleton_http_client() -> reqwest::Result<reqwest::Client> {
 ///
 /// 存在既有实例时返回 Err("app exists")，并尽量唤起它的主窗口。
 pub fn check_singleton() -> Result<()> {
-    let port = IVerge::get_singleton_port();
+    let port = IClashSettings::get_singleton_port();
     let port_taken = !local_port_available(port);
 
     // 端口已被占用时，先确认占用者是否为本应用的单例服务。
@@ -131,7 +131,7 @@ pub fn check_singleton() -> Result<()> {
 
 /// 内嵌服务器负责单实例唤起通信。
 pub fn embed_server(app_handle: AppHandle) {
-    let port = IVerge::get_singleton_port();
+    let port = IClashSettings::get_singleton_port();
 
     tauri::async_runtime::spawn(async move {
         let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));

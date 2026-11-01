@@ -19,7 +19,7 @@ pub struct Tray {}
 
 impl Tray {
     pub fn tray_menu(app_handle: &AppHandle) -> SystemTrayMenu {
-        let zh = Config::verge().language == Some("zh".into());
+        let zh = Config::clash_settings().language == Some("zh".into());
 
         let version = app_handle.package_info().version.to_string();
 
@@ -109,7 +109,7 @@ impl Tray {
     }
 
     pub fn update_part(app_handle: &AppHandle) -> Result<()> {
-        let zh = Config::verge().language == Some("zh".into());
+        let zh = Config::clash_settings().language == Some("zh".into());
 
         let version = app_handle.package_info().version.to_string();
 
@@ -138,12 +138,15 @@ impl Tray {
         let _ = tray.get_item("global_mode").set_selected(mode == "global");
         let _ = tray.get_item("direct_mode").set_selected(mode == "direct");
 
-        let verge = Config::verge();
-        let system_proxy = verge.enable_system_proxy.as_ref().unwrap_or(&false);
-        let tun_mode = verge.enable_tun_mode.as_ref().unwrap_or(&false);
-        let common_tray_icon = verge.common_tray_icon.as_ref().unwrap_or(&false);
-        let sysproxy_tray_icon = verge.sysproxy_tray_icon.as_ref().unwrap_or(&false);
-        let tun_tray_icon = verge.tun_tray_icon.as_ref().unwrap_or(&false);
+        let clash_settings = Config::clash_settings();
+        let system_proxy = clash_settings
+            .enable_system_proxy
+            .as_ref()
+            .unwrap_or(&false);
+        let tun_mode = clash_settings.enable_tun_mode.as_ref().unwrap_or(&false);
+        let common_tray_icon = clash_settings.common_tray_icon.as_ref().unwrap_or(&false);
+        let sysproxy_tray_icon = clash_settings.sysproxy_tray_icon.as_ref().unwrap_or(&false);
+        let tun_tray_icon = clash_settings.tun_tray_icon.as_ref().unwrap_or(&false);
 
         let mut indication_icon = if *system_proxy {
             let mut icon = include_bytes!("../../icons/tray-icon-sys.png").to_vec();

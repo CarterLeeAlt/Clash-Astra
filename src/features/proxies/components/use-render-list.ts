@@ -1,7 +1,7 @@
 import useSWR from "swr";
 import { useMemo } from "react";
 import { getProxies } from "@/services/api";
-import { useVerge } from "@/hooks/use-verge";
+import { useClashSettings } from "@/hooks/use-clash-settings";
 import delayManager, { type DelayProxyRef } from "@/services/delay";
 import { filterSort } from "./use-filter-sort";
 import { useWindowWidth } from "./use-window-width";
@@ -29,10 +29,10 @@ export const useRenderList = (mode: string) => {
     { refreshInterval: 45000 }
   );
 
-  const { verge } = useVerge();
+  const { clashSettings } = useClashSettings();
   const { width } = useWindowWidth();
 
-  let col = Math.floor(verge?.proxy_layout_column || 6);
+  let col = Math.floor(clashSettings?.proxy_layout_column || 6);
 
   // 自适应
   if (col >= 6 || col <= 0) {

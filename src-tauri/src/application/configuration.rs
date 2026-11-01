@@ -90,7 +90,8 @@ impl Driver {
     }
 
     async fn apply_proxy(snapshot: ConfigSnapshot) -> Result<()> {
-        blocking(move || Sysopt::global().apply_sysproxy(&snapshot.verge, &snapshot.clash)).await
+        blocking(move || Sysopt::global().apply_sysproxy(&snapshot.clash_settings, &snapshot.clash))
+            .await
     }
 }
 
@@ -106,8 +107,9 @@ fn runtime_action(change: &Change, core_ready: bool) -> RuntimeAction {
     ]
     .iter()
     .any(|key| change.before.clash.0.get(*key) != change.next.clash.0.get(*key))
-        || change.before.verge.clash_core != change.next.verge.clash_core
-        || change.before.verge.enable_service_mode != change.next.verge.enable_service_mode;
+        || change.before.clash_settings.clash_core != change.next.clash_settings.clash_core
+        || change.before.clash_settings.enable_service_mode
+            != change.next.clash_settings.enable_service_mode;
     if restart || ((change.reload || change.core_patch.is_some()) && !core_ready) {
         RuntimeAction::Restart
     } else if change.reload {
@@ -121,8 +123,8 @@ fn runtime_action(change: &Change, core_ready: bool) -> RuntimeAction {
 
 impl TransactionDriver for Driver {
     async fn prepare(&mut self) -> Result<()> {
-        let before = &self.change.before.verge;
-        let next = &self.change.next.verge;
+        let before = &self.change.before.clash_settings;
+        let next = &self.change.next.clash_settings;
         if let Some(hotkeys) = &next.hotkeys {
             if before.hotkeys != next.hotkeys {
                 crate::domain::hotkeys::parse(hotkeys)?;
@@ -239,21 +241,21 @@ impl TransactionDriver for Driver {
             self.selection_attempted = true;
             super::profiles::restore_selected(next).await?;
         }
-        if before.verge.enable_system_proxy != next.verge.enable_system_proxy
-            || before.verge.system_proxy_bypass != next.verge.system_proxy_bypass
+        if before.clash_settings.enable_system_proxy != next.clash_settings.enable_system_proxy
+            || before.clash_settings.system_proxy_bypass != next.clash_settings.system_proxy_bypass
             || before.clash.get_mixed_port() != next.clash.get_mixed_port()
         {
             self.proxy_attempted = true;
             Self::apply_proxy(next.clone()).await?;
         }
-        if before.verge.enable_auto_launch != next.verge.enable_auto_launch {
+        if before.clash_settings.enable_auto_launch != next.clash_settings.enable_auto_launch {
             self.launch_attempted = true;
-            let enabled = next.verge.enable_auto_launch.unwrap_or(false);
+            let enabled = next.clash_settings.enable_auto_launch.unwrap_or(false);
             blocking(move || Sysopt::global().apply_launch(enabled)).await?;
         }
-        if before.verge.hotkeys != next.verge.hotkeys {
+        if before.clash_settings.hotkeys != next.clash_settings.hotkeys {
             self.hotkeys_attempted = true;
-            Hotkey::global().update(next.verge.hotkeys.clone().unwrap_or_default())?;
+            Hotkey::global().update(next.clash_settings.hotkeys.clone().unwrap_or_default())?;
         }
         if changed(&before.profiles, &next.profiles) {
             self.timer_attempted = true;
@@ -327,14 +329,14 @@ impl TransactionDriver for Driver {
             }
         }
         if self.launch_attempted {
-            let enabled = before.verge.enable_auto_launch.unwrap_or(false);
+            let enabled = before.clash_settings.enable_auto_launch.unwrap_or(false);
             if let Err(error) = blocking(move || Sysopt::global().apply_launch(enabled)).await {
                 errors.push(format!("restore auto-launch: {error:#}"));
             }
         }
         if self.hotkeys_attempted {
             if let Err(error) =
-                Hotkey::global().update(before.verge.hotkeys.clone().unwrap_or_default())
+                Hotkey::global().update(before.clash_settings.hotkeys.clone().unwrap_or_default())
             {
                 errors.push(format!("restore hotkeys: {error:#}"));
             }
@@ -360,21 +362,23 @@ impl TransactionDriver for Driver {
             self.change.next.runtime_revision = self.change.before.runtime_revision + 1;
         }
         let profiles_changed = changed(&self.change.before.profiles, &self.change.next.profiles);
-        let mut before_preferences = self.change.before.verge.clone();
-        let mut next_preferences = self.change.next.verge.clone();
+        let mut before_preferences = self.change.before.clash_settings.clone();
+        let mut next_preferences = self.change.next.clash_settings.clone();
         before_preferences.window_size_position = None;
         before_preferences.window_is_maximized = None;
         next_preferences.window_size_position = None;
         next_preferences.window_is_maximized = None;
         let settings_changed = changed(&before_preferences, &next_preferences);
         let revision = Config::publish(self.change.next.clone());
-        if self.change.before.verge.clash_core != self.change.next.verge.clash_core {
+        if self.change.before.clash_settings.clash_core
+            != self.change.next.clash_settings.clash_core
+        {
             crate::logging::buffer::Logger::global().clear_log();
         }
         if runtime_changed || settings_changed {
             Sysopt::global().guard_proxy();
         }
-        if self.change.before.verge.language != self.change.next.verge.language {
+        if self.change.before.clash_settings.language != self.change.next.clash_settings.language {
             crate::log_err!(Handle::update_systray());
         } else if runtime_changed || settings_changed {
             crate::log_err!(Handle::update_systray_part());
@@ -421,8 +425,8 @@ pub async fn apply_locked(mut change: Change) -> Result<()> {
     }
     change.next.profile_versions = versions;
     let close_connections = change.close_connections;
-    let stop_idle_service = change.before.verge.enable_service_mode == Some(true)
-        && change.next.verge.enable_service_mode != Some(true);
+    let stop_idle_service = change.before.clash_settings.enable_service_mode == Some(true)
+        && change.next.clash_settings.enable_service_mode != Some(true);
     let controller = change.next.clash.get_client_info();
     transaction::execute(&mut Driver::new(change)).await?;
     if stop_idle_service {
@@ -459,7 +463,11 @@ fn edit_clash(change: &mut Change, patch: Mapping) -> Result<()> {
     change.close_connections = patch
         .get("mode")
         .is_some_and(|mode| change.before.clash.0.get("mode") != Some(mode))
-        && change.before.verge.auto_close_connection.unwrap_or(false);
+        && change
+            .before
+            .clash_settings
+            .auto_close_connection
+            .unwrap_or(false);
     for (key, value) in &patch {
         if key.as_str() == Some("tun") {
             let mut tun = change
@@ -479,14 +487,14 @@ fn edit_clash(change: &mut Change, patch: Mapping) -> Result<()> {
         }
     }
     if patch.get("mixed-port").is_some() {
-        change.next.verge.verge_mixed_port = Some(change.next.clash.get_mixed_port());
+        change.next.clash_settings.clash_mixed_port = Some(change.next.clash.get_mixed_port());
     }
     if patch.get("socks-port").is_some() {
-        change.next.verge.verge_socks_port =
+        change.next.clash_settings.clash_socks_port =
             Some(IClashTemp::guard_socks_port(&change.next.clash.0));
     }
     if patch.get("port").is_some() {
-        change.next.verge.verge_port = Some(IClashTemp::guard_port(&change.next.clash.0));
+        change.next.clash_settings.clash_port = Some(IClashTemp::guard_port(&change.next.clash.0));
     }
     let ports = crate::domain::network::PortSettings {
         mixed: change.next.clash.get_mixed_port(),
@@ -508,7 +516,7 @@ pub async fn patch_ports(ports: crate::domain::network::PortSettings) -> Result<
     patch_clash(ports.validate()?.mapping()).await
 }
 
-pub async fn patch_verge(patch: IVerge) -> Result<()> {
+pub async fn patch_clash_settings(patch: IClashSettings) -> Result<()> {
     if let Some(core) = &patch.clash_core {
         anyhow::ensure!(
             VALID_MIHOMO_CORES.contains(&core.as_str()),
@@ -518,15 +526,15 @@ pub async fn patch_verge(patch: IVerge) -> Result<()> {
     mutate(move |change| {
         change.reload = patch.enable_tun_mode.is_some();
         for (key, port) in [
-            ("mixed-port", patch.verge_mixed_port),
-            ("socks-port", patch.verge_socks_port),
-            ("port", patch.verge_port),
+            ("mixed-port", patch.clash_mixed_port),
+            ("socks-port", patch.clash_socks_port),
+            ("port", patch.clash_port),
         ] {
             if let Some(port) = port {
                 change.next.clash.0.insert(key.into(), port.into());
             }
         }
-        change.next.verge.patch_config(patch);
+        change.next.clash_settings.patch_config(patch);
         crate::domain::network::validate_patch(&change.next.clash.0)?;
         Ok(())
     })
@@ -556,17 +564,17 @@ pub async fn repair_system_proxy() -> Result<()> {
 /// 在异步业务入口开放前，完成启动配置生成与持久化。
 pub fn initialize() -> Result<()> {
     let mut snapshot = (*Config::snapshot()).clone();
-    let port = if snapshot.verge.enable_random_port == Some(true) {
+    let port = if snapshot.clash_settings.enable_random_port == Some(true) {
         std::net::TcpListener::bind("127.0.0.1:0")?
             .local_addr()?
             .port()
     } else {
         snapshot
-            .verge
-            .verge_mixed_port
+            .clash_settings
+            .clash_mixed_port
             .unwrap_or(snapshot.clash.get_mixed_port())
     };
-    snapshot.verge.verge_mixed_port = Some(port);
+    snapshot.clash_settings.clash_mixed_port = Some(port);
     snapshot.clash.0.insert("mixed-port".into(), port.into());
     snapshot.runtime = repository::compile(&snapshot, &ProfileFiles::new())?;
     let mut files = repository::prepare(&snapshot, &ProfileFiles::new())?;
@@ -589,9 +597,9 @@ pub fn save_window_state(position: Option<Vec<f64>>, maximized: bool) {
 
 pub async fn persist_window_state(position: Option<Vec<f64>>, maximized: bool) -> Result<()> {
     mutate(move |change| {
-        change.next.verge.window_is_maximized = Some(maximized);
+        change.next.clash_settings.window_is_maximized = Some(maximized);
         if let Some(position) = position {
-            change.next.verge.window_size_position = Some(position);
+            change.next.clash_settings.window_size_position = Some(position);
         }
         Ok(())
     })
@@ -602,7 +610,7 @@ pub fn clear_window_position() {
     tauri::async_runtime::spawn(async {
         crate::log_err!(
             mutate(|change| {
-                change.next.verge.window_size_position = None;
+                change.next.clash_settings.window_size_position = None;
                 Ok(())
             })
             .await
@@ -620,7 +628,7 @@ mod tests {
             runtime_revision: 3,
             profile_versions: Default::default(),
             clash: IClashTemp::template(),
-            verge: IVerge::template(),
+            clash_settings: IClashSettings::template(),
             profiles: IProfiles::template(),
             runtime: IRuntime::default(),
         })
@@ -642,18 +650,24 @@ mod tests {
             (target.mixed_port, target.socks_port, target.port),
             (18001, 18002, 18003)
         );
-        assert_eq!(change.next.verge.verge_mixed_port, Some(target.mixed_port));
-        assert_eq!(change.next.verge.verge_socks_port, Some(target.socks_port));
-        assert_eq!(change.next.verge.verge_port, Some(target.port));
+        assert_eq!(
+            change.next.clash_settings.clash_mixed_port,
+            Some(target.mixed_port)
+        );
+        assert_eq!(
+            change.next.clash_settings.clash_socks_port,
+            Some(target.socks_port)
+        );
+        assert_eq!(change.next.clash_settings.clash_port, Some(target.port));
         assert_eq!(change.before.clash.get_mixed_port(), 7897);
-        assert_eq!(change.before.verge.verge_mixed_port, Some(7897));
+        assert_eq!(change.before.clash_settings.clash_mixed_port, Some(7897));
         assert_eq!(change.before.revision, 7);
     }
 
     #[test]
     fn metadata_does_not_restart_and_reload_dominates_a_live_patch() {
         let mut change = fixture();
-        change.next.verge.language = Some("en".into());
+        change.next.clash_settings.language = Some("en".into());
         assert_eq!(runtime_action(&change, true), RuntimeAction::None);
         assert_eq!(runtime_action(&change, false), RuntimeAction::None);
         edit_clash(&mut change, serde_yaml::from_str("mode: global").unwrap()).unwrap();

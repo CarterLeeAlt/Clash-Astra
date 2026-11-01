@@ -1,4 +1,4 @@
-use super::{IClashTemp, IProfiles, IRuntime, IVerge};
+use super::{IClashSettings, IClashTemp, IProfiles, IRuntime};
 use crate::utils::{dirs, help};
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
@@ -15,7 +15,7 @@ pub struct ConfigSnapshot {
     pub runtime_revision: u64,
     pub profile_versions: std::collections::BTreeMap<String, u64>,
     pub clash: IClashTemp,
-    pub verge: IVerge,
+    pub clash_settings: IClashSettings,
     pub profiles: IProfiles,
     pub runtime: IRuntime,
 }
@@ -50,7 +50,7 @@ impl Config {
                 runtime_revision: 0,
                 profile_versions: Default::default(),
                 clash: IClashTemp::new(),
-                verge: IVerge::new(),
+                clash_settings: IClashSettings::new(),
                 profiles: crate::infrastructure::profile_catalog::load(),
                 runtime: IRuntime::new(),
             }))
@@ -63,8 +63,8 @@ impl Config {
     pub fn clash() -> IClashTemp {
         Self::snapshot().clash.clone()
     }
-    pub fn verge() -> IVerge {
-        Self::snapshot().verge.clone()
+    pub fn clash_settings() -> IClashSettings {
+        Self::snapshot().clash_settings.clone()
     }
     pub fn profiles() -> IProfiles {
         Self::snapshot().profiles.clone()

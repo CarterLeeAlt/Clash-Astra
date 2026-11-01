@@ -1,6 +1,6 @@
 //! 在工作区独立目录运行真实内核，仅验证控制接口，不修改 Windows 系统代理或服务。
 use crate::application::transaction::{self, TransactionDriver};
-use crate::config::{ConfigSnapshot, IClashTemp, IProfiles, IRuntime, IVerge, PrfItem};
+use crate::config::{ConfigSnapshot, IClashSettings, IClashTemp, IProfiles, IRuntime, PrfItem};
 use crate::core::clash_api;
 use crate::infrastructure::config_repository::{self, FileTransaction, ProfileFiles};
 use std::os::windows::process::CommandExt;
@@ -118,7 +118,7 @@ async fn subscription_compile_reload_and_http_rejection() {
         runtime_revision: 0,
         profile_versions: Default::default(),
         clash: IClashTemp::template(),
-        verge: IVerge::template(),
+        clash_settings: IClashSettings::template(),
         runtime: IRuntime::default(),
         profiles: IProfiles {
             current: Some("fixture".into()),
