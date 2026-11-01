@@ -33,7 +33,7 @@ export const LayoutItem = (props: Props) => {
             marginRight: 1.25,
             "& .MuiListItemText-primary": {
               color: "text.primary",
-              fontSize: textSizes.title,
+              fontSize: textSizes.sectionTitle,
               fontWeight: 600,
             },
           },
@@ -50,7 +50,9 @@ export const LayoutItem = (props: Props) => {
         ]}
         onClick={() => navigate(to)}
       >
-        <ListItemIcon>{icon}</ListItemIcon>
+        <ListItemIcon sx={{ "& svg": { width: 32, height: 32 } }}>
+          {icon}
+        </ListItemIcon>
         <ListItemText
           sx={{ textAlign: "center", marginLeft: "-35px" }}
           primary={children}
