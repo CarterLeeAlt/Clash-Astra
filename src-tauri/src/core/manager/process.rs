@@ -10,7 +10,7 @@ use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::api::process::{Command, CommandEvent};
+use tauri::api::process::CommandEvent;
 use tokio::time::sleep;
 
 #[cfg(target_os = "windows")]
@@ -31,16 +31,51 @@ impl CoreManager {
 
     pub async fn run_core_with(&self, snapshot: &ConfigSnapshot) -> Result<()> {
         self.desired_running.store(true, Ordering::SeqCst);
-        let result = self.run_core_inner(snapshot).await;
+        let result = self.run_core_inner(snapshot, None).await;
         if result.is_err() && self.desired_running.load(Ordering::SeqCst) && !self.is_core_ready() {
             Self::global().schedule_core_recovery();
         }
         result
     }
 
-    async fn run_core_inner(&self, snapshot: &ConfigSnapshot) -> Result<()> {
+    pub async fn run_core_with_until(
+        &self,
+        snapshot: &ConfigSnapshot,
+        deadline: tokio::time::Instant,
+    ) -> Result<()> {
+        // This attempt is owned by the switch. The process monitor must not
+        // enqueue an additional recovery of an older committed snapshot.
+        self.desired_running.store(false, Ordering::SeqCst);
+        let result =
+            tokio::time::timeout_at(deadline, self.run_core_inner(snapshot, Some(deadline))).await;
+        match result {
+            Ok(Ok(())) => {
+                self.desired_running.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+            Ok(Err(error)) => {
+                self.stop_core_async().await?;
+                Err(error)
+            }
+            Err(_) => {
+                self.desired_running.store(false, Ordering::SeqCst);
+                self.core_ready.store(false, Ordering::SeqCst);
+                self.active_generation.store(0, Ordering::SeqCst);
+                // Keep the application operation gate while cleaning up a timed-out
+                // start. This must not schedule an old snapshot for later recovery.
+                self.stop_core_async().await?;
+                bail!("automatic core recovery exceeded the shared switch deadline")
+            }
+        }
+    }
+
+    async fn run_core_inner(
+        &self,
+        snapshot: &ConfigSnapshot,
+        deadline: Option<tokio::time::Instant>,
+    ) -> Result<()> {
         let _operation = self.core_operation.lock().await;
-        self.start_core_locked(snapshot).await
+        self.start_core_locked(snapshot, deadline).await
     }
 
     async fn recover_core_if_needed(&self) -> Result<bool> {
@@ -49,14 +84,28 @@ impl CoreManager {
         if !self.desired_running.load(Ordering::SeqCst) || self.is_core_ready() {
             return Ok(false);
         }
-        self.start_core_locked(&Config::snapshot()).await?;
+        self.start_core_locked(&Config::snapshot(), None).await?;
         crate::core::handle::Handle::refresh_clash();
         Ok(true)
     }
 
-    pub(super) async fn start_core_locked(&self, snapshot: &ConfigSnapshot) -> Result<()> {
+    pub(super) async fn start_core_locked(
+        &self,
+        snapshot: &ConfigSnapshot,
+        deadline: Option<tokio::time::Instant>,
+    ) -> Result<()> {
+        let check_deadline = || -> Result<()> {
+            anyhow::ensure!(
+                deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline),
+                "core start deadline expired"
+            );
+            Ok(())
+        };
+        check_deadline()?;
         crate::core::mihomo::verify_bundled()?;
+        check_deadline()?;
         let config_path = snapshot.write_runtime(ConfigType::Run)?;
+        check_deadline()?;
 
         self.core_ready.store(false, Ordering::SeqCst);
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
@@ -64,10 +113,22 @@ impl CoreManager {
         log::info!(target: "app", "starting core with runtime config: {}", dirs::path_to_str(&config_path)?);
         self.log_tun_prerequisites(snapshot);
 
-        let killed_sidecar = match self.sidecar.lock().take() {
+        let previous_sidecar = self.sidecar.lock().take();
+        let killed_sidecar = match previous_sidecar {
             Some(child) => {
+                let pid = child.pid();
                 log::debug!(target: "app", "stop the core by sidecar");
-                let _ = child.kill();
+                child.kill()?;
+                let mut system = sysinfo::System::new();
+                let mut exited = false;
+                for _ in 0..20 {
+                    if !system.refresh_process(sysinfo::Pid::from_u32(pid)) {
+                        exited = true;
+                        break;
+                    }
+                    sleep(Duration::from_millis(25)).await;
+                }
+                anyhow::ensure!(exited, "previous Mihomo process {pid} has not exited");
                 true
             }
             None => false,
@@ -76,7 +137,7 @@ impl CoreManager {
         #[cfg(target_os = "windows")]
         let should_kill = if *self.use_service_mode.lock() {
             log::debug!(target: "app", "stop the core by service");
-            log_err!(win_service::stop_core_by_service().await);
+            win_service::stop_core_by_service().await?;
             true
         } else {
             killed_sidecar
@@ -84,7 +145,7 @@ impl CoreManager {
 
         // 这里得等一会儿
         if should_kill {
-            sleep(Duration::from_millis(500)).await;
+            sleep(Duration::from_millis(50)).await;
         }
 
         #[cfg(target_os = "windows")]
@@ -98,6 +159,7 @@ impl CoreManager {
             *self.use_service_mode.lock() = enable;
 
             if enable {
+                check_deadline()?;
                 // 服务模式启动失败直接报错，避免误判为服务托管
                 log::debug!(target: "app", "try to run core in service mode");
                 let tun_enabled = snapshot.clash_settings.enable_tun_mode.unwrap_or(false);
@@ -109,6 +171,9 @@ impl CoreManager {
                 .await
                 {
                     Ok(_) => {
+                        crate::application::profiles::restore_selected(snapshot).await?;
+                        clash_api::verify_runtime(snapshot).await?;
+                        clash_api::verify_tun_state(snapshot).await?;
                         self.core_ready.store(true, Ordering::SeqCst);
                         Self::global().start_service_monitor(generation);
                         return Ok(());
@@ -142,7 +207,8 @@ impl CoreManager {
         let args = vec!["-d", app_dir, "-f", config_path];
 
         let spawn_result = (|| -> Result<_> {
-            let cmd = Command::new_sidecar(clash_core)?;
+            check_deadline()?;
+            let cmd = crate::core::mihomo::command(clash_core)?;
             Ok(cmd.args(args).spawn()?)
         })();
         let (mut rx, cmd_child) = match spawn_result {
@@ -202,7 +268,10 @@ impl CoreManager {
                 Duration::from_secs(12),
             )
             .await?;
-            clash_api::wait_subscription_ready(snapshot).await
+            clash_api::wait_subscription_ready(snapshot).await?;
+            crate::application::profiles::restore_selected(snapshot).await?;
+            clash_api::verify_runtime(snapshot).await?;
+            clash_api::verify_tun_state(snapshot).await
         }
         .await
         {

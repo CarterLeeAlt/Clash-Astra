@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::{Pid, System};
-use tauri::api::process::{Command, CommandChild};
+use tauri::api::process::CommandChild;
 use tokio::sync::Mutex as TokioMutex;
 use tokio::time::sleep;
 
@@ -132,7 +132,7 @@ impl CoreManager {
         let app_dir = dirs::app_home_dir()?;
         let app_dir = dirs::path_to_str(&app_dir)?;
 
-        let output = Command::new_sidecar(clash_core)?
+        let output = crate::core::mihomo::command(clash_core)?
             .args(["-t", "-d", app_dir, "-f", config_path])
             .output()?;
 

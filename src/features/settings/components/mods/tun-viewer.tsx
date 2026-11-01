@@ -23,7 +23,7 @@ import { StackModeSwitch } from "./stack-mode-switch";
 export const TunViewer = forwardRef<DialogRef>((_props, ref) => {
   const { t } = useTranslation();
 
-  const { clash, mutateClash, patchClash } = useClash();
+  const { clash, patchClash } = useClash();
 
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState({
@@ -67,13 +67,6 @@ export const TunViewer = forwardRef<DialogRef>((_props, ref) => {
         mtu: Number.isFinite(values.mtu) && values.mtu > 0 ? values.mtu : 9000,
       };
       await patchClash({ tun });
-      await mutateClash(
-        (old) => ({
-          ...(old! || {}),
-          tun,
-        }),
-        false
-      );
       setOpen(false);
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err));
@@ -109,13 +102,6 @@ export const TunViewer = forwardRef<DialogRef>((_props, ref) => {
                 mtu: 9000,
               });
               await patchClash({ tun });
-              await mutateClash(
-                (old) => ({
-                  ...(old! || {}),
-                  tun,
-                }),
-                false
-              );
             }}
           >
             {t("Reset to Default")}

@@ -5,4 +5,7 @@ pub mod external_process;
 mod mihomo_integration;
 pub mod profile_catalog;
 #[cfg(test)]
+mod routing_switch_tests;
+#[cfg(test)]
 mod subscription_contract_tests;
+pub mod tun_state;

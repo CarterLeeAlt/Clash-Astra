@@ -1,5 +1,7 @@
-import { forwardRef, useRef } from "react";
-import { useLockFn } from "ahooks";
+import { forwardRef, useRef, useState } from "react";
+import { LatestOperation } from "@/shared/async/latest-operation";
+import { invalidateClashRuntime } from "@/shared/query/invalidate";
+import { clearSiteTestResults } from "@/features/test/site-test-results";
 import {
   Virtuoso,
   type ScrollerProps,
@@ -58,20 +60,42 @@ export const ProxyGroups = (props: Props) => {
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  const handleChangeProxy = useLockFn(
-    async (group: IProxyGroupItem, proxy: IProxyItem) => {
-      if (group.type !== "Selector" && group.type !== "Fallback") return;
-
-      try {
-        if (!current) throw new Error("No current subscription");
-        await selectProxy(current.uid, group.name, proxy.name);
-        onProxies();
-        window.dispatchEvent(new CustomEvent("clash://connections-refresh"));
-      } catch (error) {
-        Notice.error(formatNoticeMessage(error));
-      }
+  type Selection = { profileUid: string; group: string; node: string };
+  const [switching, setSwitching] = useState<Selection>();
+  const selectionQueue = useRef<LatestOperation<Selection>>();
+  if (!selectionQueue.current)
+    selectionQueue.current = new LatestOperation<Selection>(
+      async (selection, _remaining, deadlineUnixMs) => {
+        try {
+          await selectProxy(
+            selection.profileUid,
+            selection.group,
+            selection.node,
+            deadlineUnixMs
+          );
+        } finally {
+          clearSiteTestResults();
+          invalidateClashRuntime();
+          void onProxies();
+          window.dispatchEvent(new CustomEvent("clash://connections-refresh"));
+        }
+      },
+      setSwitching
+    );
+  const handleChangeProxy = (group: IProxyGroupItem, proxy: IProxyItem) => {
+    if (group.type !== "Selector" && group.type !== "Fallback") return;
+    if (!current) {
+      Notice.error("No current subscription");
+      return;
     }
-  );
+    void selectionQueue
+      .current!.submit({
+        profileUid: current.uid,
+        group: group.name,
+        node: proxy.name,
+      })
+      .catch((error) => Notice.error(formatNoticeMessage(error)));
+  };
 
   const handleCheckAll = async (groupName: string) => {
     const task = delayManager.startGroupCheck(groupName);
@@ -159,6 +183,7 @@ export const ProxyGroups = (props: Props) => {
             onCheckAll={handleCheckAll}
             onHeadState={onHeadState}
             onChangeProxy={handleChangeProxy}
+            pendingSelection={switching}
           />
         );
       }}

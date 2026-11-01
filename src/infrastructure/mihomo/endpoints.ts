@@ -1,4 +1,8 @@
 import { getAxios } from "./client";
+import {
+  applyProviderUpdate,
+  applyGeoUpdate,
+} from "@/infrastructure/ipc/clash";
 
 /// 读取内核版本。
 export const getVersion = async () => {
@@ -16,8 +20,7 @@ export const getClashConfig = async () => {
 
 /// 请求内核更新地理规则数据。
 export const updateGeoData = async () => {
-  const instance = await getAxios();
-  return instance.post("/configs/geo");
+  return applyGeoUpdate();
 };
 
 /// 读取实际规则列表。
@@ -144,13 +147,11 @@ export const providerHealthCheck = async (name: string) => {
 };
 
 export const proxyProviderUpdate = async (name: string) => {
-  const instance = await getAxios();
-  return instance.put(`/providers/proxies/${encodeURIComponent(name)}`);
+  return applyProviderUpdate("proxies", name);
 };
 
 export const ruleProviderUpdate = async (name: string) => {
-  const instance = await getAxios();
-  return instance.put(`/providers/rules/${encodeURIComponent(name)}`);
+  return applyProviderUpdate("rules", name);
 };
 
 export const getConnections = async () => {

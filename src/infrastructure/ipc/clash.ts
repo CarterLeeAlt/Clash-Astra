@@ -42,8 +42,11 @@ export async function getRuntimeLogs() {
   return invoke<Record<string, [string, string][]>>("get_runtime_logs");
 }
 
-export async function patchClashConfig(payload: Partial<IConfigData>) {
-  return invoke<void>("patch_clash_config", { payload });
+export async function patchClashConfig(
+  payload: Partial<IConfigData>,
+  deadlineUnixMs?: number
+) {
+  return invoke<void>("patch_clash_config", { payload, deadlineUnixMs });
 }
 
 export async function patchPorts(ports: {
@@ -57,6 +60,10 @@ export async function patchPorts(ports: {
 export async function restartSidecar() {
   return invoke<void>("restart_sidecar");
 }
+
+export const applyProviderUpdate = (kind: "proxies" | "rules", name: string) =>
+  invoke<void>("refresh_provider", { kind, name });
+export const applyGeoUpdate = () => invoke<void>("refresh_geo_data");
 
 export async function cmdGetProxyDelay(
   name: string,

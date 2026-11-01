@@ -104,8 +104,9 @@ pub(super) fn set_system_proxy_with_retry(
                     last_err = Some(err);
                 }
                 Err(err) => {
-                    log::warn!(target: "app", "{action}: readback failed after set succeeded, accept success: {err}");
-                    return Ok(());
+                    last_err = Some(anyhow!(
+                        "{action}: actual Windows proxy state could not be verified: {err}"
+                    ));
                 }
             },
             Err(err) => {

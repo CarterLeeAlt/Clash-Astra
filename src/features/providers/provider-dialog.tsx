@@ -23,7 +23,7 @@ import {
   proxyProviderUpdate,
   ruleProviderUpdate,
 } from "@/services/api";
-import { BaseDialog } from "@/components/base";
+import { BaseDialog, Notice, formatNoticeMessage } from "@/components/base";
 import parseTraffic from "@/utils/parse-traffic";
 import { queryKeys } from "@/shared/query/keys";
 import { textSizes } from "@/shared/typography";
@@ -71,6 +71,8 @@ export const ProviderDialog = ({ kind }: Props) => {
     setUpdating((prev) => ({ ...prev, [key]: true }));
     try {
       await meta.update(key);
+    } catch (error) {
+      Notice.error(formatNoticeMessage(error));
     } finally {
       await mutate(meta.refreshKey);
       await mutate(meta.dataKey);
@@ -81,7 +83,9 @@ export const ProviderDialog = ({ kind }: Props) => {
   if (!hasProvider) return null;
 
   const updateAll = () =>
-    Promise.all(Object.keys(providers).map((key) => handleUpdate(key)));
+    (async () => {
+      for (const key of Object.keys(providers)) await handleUpdate(key);
+    })();
 
   return (
     <>

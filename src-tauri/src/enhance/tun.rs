@@ -29,20 +29,31 @@ pub fn use_tun(
     let tun_existed = tun_val.is_some();
     log::info!(target: "app", "tun existed before sync: {tun_existed}, tun existed in source: {source_has_tun}, tun enabled by ui: {enable}");
     diagnostics.push(format!("[tun] sync start: existed_before={tun_existed}, existed_in_source={source_has_tun}, enabled_by_ui={enable}"));
+    let mut effective_tun = tun_val
+        .and_then(Value::as_mapping)
+        .cloned()
+        .unwrap_or_else(|| default_tun.clone());
+    for key in [
+        "stack",
+        "device",
+        "mtu",
+        "auto-route",
+        "strict-route",
+        "auto-detect-interface",
+        "dns-hijack",
+    ] {
+        if let Some(value) = default_tun.get(key) {
+            effective_tun.insert(key.into(), value.clone());
+        }
+    }
 
     if enable {
-        let mut tun_val = tun_val
-            .and_then(Value::as_mapping)
-            .cloned()
-            .unwrap_or_else(|| default_tun.clone());
+        let mut tun_val = effective_tun;
         revise!(tun_val, "enable", true);
         revise!(config, "tun", tun_val);
         diagnostics.push("[tun] action: inject/update tun and set enable=true".into());
     } else if tun_existed || source_has_tun {
-        let mut tun_val = tun_val
-            .and_then(Value::as_mapping)
-            .cloned()
-            .unwrap_or_else(|| default_tun.clone());
+        let mut tun_val = effective_tun;
         revise!(tun_val, "enable", false);
         revise!(config, "tun", tun_val);
         diagnostics.push("[tun] action: keep tun and set enable=false".into());
@@ -99,4 +110,19 @@ fn use_dns_for_tun(mut config: Mapping) -> Mapping {
     );
     revise!(config, "dns", dns_val);
     config
+}
+
+#[test]
+fn ui_managed_tun_fields_override_source_but_preserve_unmanaged_fields() {
+    let source = serde_yaml::from_str(
+        "tun: {stack: system, mtu: 1200, device: source-device, inet4-address: [198.18.0.1/30]}",
+    )
+    .unwrap();
+    let settings = serde_yaml::from_str("stack: gvisor\nmtu: 1400\ndevice: app-device").unwrap();
+    let result = use_tun(source, true, true, settings, &mut Vec::new());
+    let tun = result.get("tun").unwrap();
+    assert_eq!(tun.get("stack").unwrap().as_str(), Some("gvisor"));
+    assert_eq!(tun.get("mtu").unwrap().as_i64(), Some(1400));
+    assert_eq!(tun.get("device").unwrap().as_str(), Some("app-device"));
+    assert!(tun.get("inet4-address").is_some());
 }

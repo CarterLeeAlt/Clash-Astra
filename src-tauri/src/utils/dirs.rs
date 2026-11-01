@@ -26,6 +26,12 @@ pub fn executable_dir() -> Result<PathBuf> {
 
 /// 应用配置根目录。
 pub fn app_home_dir() -> Result<PathBuf> {
+    #[cfg(test)]
+    return Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../.tmp/configuration-tests")
+        .join(std::process::id().to_string())
+        .join(APP_ID));
+    #[cfg(not(test))]
     Ok(executable_dir()?.join(".config").join(APP_ID))
 }
 

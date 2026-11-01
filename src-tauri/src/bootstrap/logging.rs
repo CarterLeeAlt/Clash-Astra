@@ -13,10 +13,14 @@ use log4rs::append::rolling_file::{
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::encode::{self, writer::simple::SimpleWriter};
+use once_cell::sync::OnceCell;
 use std::fmt;
 use std::fs::{self, DirEntry};
 use std::path::PathBuf;
 use std::time::SystemTime;
+
+static LOG_HANDLE: OnceCell<log4rs::Handle> = OnceCell::new();
+static LOG_PATH: OnceCell<PathBuf> = OnceCell::new();
 
 struct RedactingEncoder {
     inner: PatternEncoder,
@@ -56,13 +60,33 @@ pub(crate) fn init_log() -> Result<()> {
     let log_dir = dirs::app_logs_dir()?;
 
     let log_level = Config::clash_settings().get_log_level();
-    if log_level == LevelFilter::Off {
-        return Ok(());
-    }
 
     let local_time = Local::now().format("%Y-%m-%d-%H%M").to_string();
     let log_file = format!("{}.log", local_time);
     let log_file = log_dir.join(log_file);
+    LOG_PATH
+        .set(log_file)
+        .map_err(|_| anyhow::anyhow!("application logger already initialized"))?;
+    let handle = log4rs::init_config(build_log_config(log_level)?)?;
+    LOG_HANDLE
+        .set(handle)
+        .map_err(|_| anyhow::anyhow!("application logger already initialized"))?;
+    Ok(())
+}
+
+pub(crate) fn set_log_level(level: LevelFilter) -> Result<()> {
+    let config = build_log_config(level)?;
+    LOG_HANDLE
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("application logger is not initialized"))?
+        .set_config(config);
+    Ok(())
+}
+
+fn build_log_config(log_level: LevelFilter) -> Result<log4rs::Config> {
+    let log_file = LOG_PATH
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("application log path is not initialized"))?;
 
     let log_pattern = match log_level {
         LevelFilter::Trace => "{d(%Y-%m-%d %H:%M:%S)} {l} [{M}] - {m}{n}",
@@ -89,7 +113,11 @@ pub(crate) fn init_log() -> Result<()> {
     let mut root_builder = Root::builder();
 
     let log_more = log_level == LevelFilter::Trace || log_level == LevelFilter::Debug;
-    let dependency_log_level = LevelFilter::Warn;
+    let dependency_log_level = if log_level == LevelFilter::Off {
+        LevelFilter::Off
+    } else {
+        LevelFilter::Warn
+    };
 
     #[cfg(feature = "clash-dev")]
     {
@@ -114,9 +142,7 @@ pub(crate) fn init_log() -> Result<()> {
         .logger(logger_builder.additive(false).build("app", log_level))
         .build_lossy(root_builder.build(dependency_log_level));
 
-    log4rs::init_config(config)?;
-
-    Ok(())
+    Ok(config)
 }
 
 /// 删除log文件

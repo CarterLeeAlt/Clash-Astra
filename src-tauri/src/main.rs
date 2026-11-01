@@ -92,6 +92,8 @@ fn main() -> std::io::Result<()> {
             cmds::get_auto_delay_results,
             cmds::patch_clash_config,
             cmds::patch_ports,
+            cmds::refresh_provider,
+            cmds::refresh_geo_data,
             cmds::get_runtime_config,
             cmds::get_runtime_yaml,
             cmds::get_runtime_logs,

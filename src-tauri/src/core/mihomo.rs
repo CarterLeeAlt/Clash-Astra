@@ -15,7 +15,30 @@ pub fn verify(path: &Path) -> Result<()> {
 }
 
 pub fn verify_bundled() -> Result<()> {
+    #[cfg(test)]
+    return verify(&test_binary());
+    #[cfg(not(test))]
     verify(&crate::utils::dirs::executable_dir()?.join("mihomo.exe"))
+}
+
+pub fn command(name: String) -> Result<tauri::api::process::Command> {
+    #[cfg(test)]
+    {
+        let _ = name;
+        Ok(tauri::api::process::Command::new(
+            test_binary().to_str().context("test core path")?,
+        ))
+    }
+    #[cfg(not(test))]
+    {
+        Ok(tauri::api::process::Command::new_sidecar(name)?)
+    }
+}
+
+#[cfg(test)]
+fn test_binary() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("sidecar/mihomo-x86_64-pc-windows-msvc.exe")
 }
 
 #[cfg(test)]

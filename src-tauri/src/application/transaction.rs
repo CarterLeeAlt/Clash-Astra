@@ -27,6 +27,9 @@ pub trait TransactionDriver {
     async fn prepare(&mut self) -> Result<()>;
     async fn apply(&mut self) -> Result<()>;
     async fn commit(&mut self) -> Result<()>;
+    async fn complete(&mut self) -> Result<()> {
+        Ok(())
+    }
     async fn rollback(&mut self) -> Result<()>;
     fn publish(&mut self);
 }
@@ -44,8 +47,9 @@ pub async fn execute(driver: &mut impl TransactionDriver) -> Result<()> {
     .await;
     match result {
         Ok(()) => {
+            let completion = driver.complete().await;
             driver.publish();
-            Ok(())
+            completion.map_err(|error| CompletionFailure(format!("{error:#}")).into())
         }
         Err(error) => Err(OperationFailure {
             stage,
@@ -59,6 +63,20 @@ pub async fn execute(driver: &mut impl TransactionDriver) -> Result<()> {
         .into()),
     }
 }
+
+#[derive(Debug)]
+pub struct CompletionFailure(pub String);
+
+impl std::fmt::Display for CompletionFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "configuration committed but automatic application could not be verified: {}",
+            self.0
+        )
+    }
+}
+impl std::error::Error for CompletionFailure {}
 
 #[cfg(test)]
 mod tests {
@@ -84,6 +102,13 @@ mod tests {
         async fn commit(&mut self) -> Result<()> {
             self.persisted = 2;
             anyhow::ensure!(self.fail != "commit", "disk full");
+            Ok(())
+        }
+        async fn complete(&mut self) -> Result<()> {
+            anyhow::ensure!(
+                self.fail != "complete",
+                "automatic recovery could not be verified"
+            );
             Ok(())
         }
         async fn rollback(&mut self) -> Result<()> {
@@ -147,5 +172,23 @@ mod tests {
             .as_ref()
             .unwrap()
             .contains("disk unavailable"));
+    }
+
+    #[tokio::test]
+    async fn completion_failure_publishes_committed_intent_but_returns_incomplete_application() {
+        let mut driver = Fake {
+            fail: "complete",
+            external: 1,
+            committed: 1,
+            persisted: 1,
+            restored: false,
+        };
+        let error = execute(&mut driver).await.unwrap_err();
+        assert!(error.is::<CompletionFailure>());
+        assert_eq!(
+            (driver.external, driver.persisted, driver.committed),
+            (2, 2, 2)
+        );
+        assert!(!driver.restored);
     }
 }

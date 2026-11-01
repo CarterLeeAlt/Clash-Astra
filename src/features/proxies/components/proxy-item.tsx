@@ -20,6 +20,7 @@ import { useProxyDelay } from "@/features/proxies/use-proxy-delay";
 import { textSizes } from "@/shared/typography";
 
 interface Props {
+  switching?: boolean;
   groupName: string;
   proxy: IProxyItem;
   selected: boolean;
@@ -55,6 +56,7 @@ export const ProxyItem = (props: Props) => {
   return (
     <ListItem sx={sx}>
       <ListItemButton
+        aria-busy={props.switching || undefined}
         dense
         selected={selected}
         onClick={() => onClick?.(proxy.name)}
@@ -109,13 +111,13 @@ export const ProxyItem = (props: Props) => {
         <ListItemIcon
           sx={{ justifyContent: "flex-end", color: "primary.main" }}
         >
-          {delay === DELAY_PENDING && (
+          {(props.switching || delay === DELAY_PENDING) && (
             <Widget>
               <BaseLoading />
             </Widget>
           )}
 
-          {!proxy.provider && delay !== DELAY_PENDING && (
+          {!props.switching && !proxy.provider && delay !== DELAY_PENDING && (
             <Widget
               className="the-check"
               onClick={(e) => {
@@ -132,7 +134,7 @@ export const ProxyItem = (props: Props) => {
             </Widget>
           )}
 
-          {hasDelayResult(delay) && (
+          {!props.switching && hasDelayResult(delay) && (
             <Widget
               className="the-delay"
               onClick={(e) => {
@@ -152,7 +154,7 @@ export const ProxyItem = (props: Props) => {
             </Widget>
           )}
 
-          {delay === DELAY_UNKNOWN && selected && (
+          {!props.switching && delay === DELAY_UNKNOWN && selected && (
             <CheckCircleOutlineRounded
               className="the-icon"
               sx={{ fontSize: 16 }}

@@ -89,9 +89,6 @@ pub struct IClashSettings {
     /// 快捷键列表，格式为「操作名,快捷键」。
     pub hotkeys: Option<Vec<String>>,
 
-    /// 切换代理时自动关闭连接
-    pub auto_close_connection: Option<bool>,
-
     /// 默认的延迟测试连接
     pub default_latency_test: Option<String>,
 
@@ -201,7 +198,6 @@ impl IClashSettings {
             clash_port: Some(7899),
             enable_proxy_guard: Some(false),
             proxy_guard_duration: Some(30),
-            auto_close_connection: Some(true),
             auto_log_clean: Some(1),
             default_latency_test: Some(DEFAULT_LATENCY_TEST_URL.into()),
             test_list: Some(
@@ -269,7 +265,6 @@ impl IClashSettings {
         patch!(clash_core);
         patch!(hotkeys);
 
-        patch!(auto_close_connection);
         patch!(default_latency_test);
         patch!(default_latency_timeout);
         patch!(proxy_layout_column);

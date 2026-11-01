@@ -5,7 +5,7 @@ use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Mapping;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use tokio::time::Duration;
 
@@ -33,7 +33,11 @@ pub async fn put_configs_for(info: ClashInfo, path: &str) -> Result<()> {
         .connect_timeout(Duration::from_secs(2))
         .timeout(Duration::from_secs(8))
         .build()?;
-    let builder = client.put(&url).headers(headers).json(&data);
+    let builder = client
+        .put(&url)
+        .query(&[("force", "true")])
+        .headers(headers)
+        .json(&data);
     let response = builder.send().await?;
 
     match response.status().as_u16() {
@@ -70,6 +74,8 @@ pub struct ProxyItemRes {
     pub now: Option<String>,
     #[serde(default)]
     pub selected: Option<String>,
+    #[serde(default)]
+    pub fixed: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -109,8 +115,15 @@ pub struct ConnectionItemRes {
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct ConnectionsRes {
-    #[serde(default)]
+    #[serde(deserialize_with = "connection_list")]
     pub connections: Vec<ConnectionItemRes>,
+}
+
+// Mihomo v1.19.33 serializes an empty tracker slice as null.
+fn connection_list<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Vec<ConnectionItemRes>, D::Error> {
+    Ok(Option::<Vec<ConnectionItemRes>>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -321,39 +334,13 @@ pub async fn select_proxy_for(info: ClashInfo, group: &str, proxy: &str) -> Resu
     Ok(())
 }
 
-pub async fn close_connections_for_node(node: &str) -> Result<()> {
-    let (url, headers) = clash_client_info()?;
-    for connection in get_connections()
-        .await?
-        .connections
-        .into_iter()
-        .filter(|connection| connection.chains.iter().any(|name| name == node))
-    {
-        let id = utf8_percent_encode(&connection.id, NON_ALPHANUMERIC);
-        API_CLIENT
-            .delete(format!("{url}/connections/{id}"))
-            .headers(headers.clone())
-            .send()
-            .await?
-            .error_for_status()?;
-    }
-    Ok(())
-}
-
-pub async fn close_all_connections_for(info: ClashInfo) -> Result<()> {
-    let (url, headers) = build_clash_client_info(info)?;
-    API_CLIENT
-        .delete(format!("{url}/connections"))
-        .headers(headers)
-        .send()
-        .await?
-        .error_for_status()?;
-    Ok(())
-}
-
 /// GET /connections
 pub async fn get_connections() -> Result<ConnectionsRes> {
-    let (url, headers) = clash_client_info()?;
+    get_connections_for(Config::clash().get_client_info()).await
+}
+
+pub async fn get_connections_for(info: ClashInfo) -> Result<ConnectionsRes> {
+    let (url, headers) = build_clash_client_info(info)?;
     let url = format!("{url}/connections");
 
     let response = API_CLIENT.get(&url).headers(headers).send().await?;
@@ -362,6 +349,476 @@ pub async fn get_connections() -> Result<ConnectionsRes> {
         .error_for_status()?
         .json::<ConnectionsRes>()
         .await?)
+}
+
+pub async fn get_configs_for(info: ClashInfo) -> Result<serde_json::Value> {
+    let (url, headers) = build_clash_client_info(info)?;
+    let mut actual: serde_json::Value = API_CLIENT
+        .get(format!("{url}/configs"))
+        .headers(headers)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    // The pinned API marshals TUN enums as gVisor/System/Mixed and omits false
+    // strict-route. Expose the same canonical values used by the config editor.
+    if let Some(tun) = actual
+        .get_mut("tun")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        if let Some(stack) = tun.get("stack").and_then(serde_json::Value::as_str) {
+            tun.insert("stack".into(), stack.to_ascii_lowercase().into());
+        }
+        tun.entry("strict-route").or_insert(false.into());
+    }
+    Ok(actual)
+}
+
+pub async fn update_provider(info: ClashInfo, kind: &str, name: &str) -> Result<()> {
+    anyhow::ensure!(matches!(kind, "proxies" | "rules"), "invalid provider kind");
+    let (url, headers) = build_clash_client_info(info)?;
+    let name = utf8_percent_encode(name, NON_ALPHANUMERIC);
+    API_CLIENT
+        .put(format!("{url}/providers/{kind}/{name}"))
+        .headers(headers)
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
+}
+
+pub async fn update_geo_data(info: ClashInfo) -> Result<()> {
+    let (url, headers) = build_clash_client_info(info)?;
+    API_CLIENT
+        .post(format!("{url}/configs/geo"))
+        .headers(headers)
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
+}
+
+pub async fn select_proxy_verified(info: ClashInfo, group: &str, node: &str) -> Result<()> {
+    select_proxy_for(info.clone(), group, node).await?;
+    verify_selection(info, group, node).await
+}
+
+/// A fallback Set may run a health check inside Mihomo. Wait for that request
+/// rather than repeatedly submitting concurrent setters after 600 ms.
+pub async fn select_proxy_until(
+    info: ClashInfo,
+    group: &str,
+    node: &str,
+    deadline: tokio::time::Instant,
+) -> Result<()> {
+    let mut attempt = 0;
+    loop {
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "selection API budget expired"
+        );
+        let result =
+            tokio::time::timeout_at(deadline, select_proxy_verified(info.clone(), group, node))
+                .await;
+        match result {
+            Ok(Ok(())) => return Ok(()),
+            Err(_) => bail!("selection request did not finish before recovery was required"),
+            Ok(Err(error)) => {
+                let wait = crate::application::routing::retry_delay(attempt);
+                if tokio::time::Instant::now() + wait >= deadline {
+                    return Err(error);
+                }
+                tokio::time::sleep(wait).await;
+                attempt += 1;
+            }
+        }
+    }
+}
+
+pub async fn verify_selection(info: ClashInfo, group: &str, node: &str) -> Result<()> {
+    let proxies = get_proxies_for(info).await?;
+    let actual = proxies
+        .proxies
+        .get(group)
+        .ok_or_else(|| anyhow::anyhow!("proxy group disappeared: {group}"))?;
+    anyhow::ensure!(actual.now.as_deref() == Some(node), "requested {group} -> {node}, actual selection is {}; an automatic group may have fallen back", actual.now.as_deref().unwrap_or("unknown"));
+    Ok(())
+}
+
+/// Track IDs plus the old edge in a group chain; never close every connection
+/// merely because another group happens to use the same leaf proxy.
+#[derive(Clone, Debug, Default)]
+pub struct ConnectionCleanup {
+    ids: HashSet<String>,
+    old_edge: Option<(String, String)>,
+    started_before: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl ConnectionCleanup {
+    pub fn include_started_before_now(&mut self) {
+        self.started_before = Some(chrono::Utc::now());
+    }
+    pub fn set_old_edge(&mut self, group: String, node: String) {
+        self.old_edge = Some((group, node));
+    }
+    pub fn capture(connections: &ConnectionsRes, edge: Option<(String, String)>) -> Self {
+        let ids = connections
+            .connections
+            .iter()
+            .filter(|connection| {
+                edge.as_ref()
+                    .is_none_or(|(group, _)| connection.chains.contains(group))
+            })
+            .map(|connection| connection.id.clone())
+            .collect();
+        Self {
+            ids,
+            old_edge: edge,
+            started_before: None,
+        }
+    }
+
+    fn matches(&self, connection: &ConnectionItemRes) -> bool {
+        self.ids.contains(&connection.id)
+            || self.started_before.is_some_and(|cutoff| {
+                chrono::DateTime::parse_from_rfc3339(&connection.start)
+                    .is_ok_and(|start| start <= cutoff)
+            })
+            || self.old_edge.as_ref().is_some_and(|(group, old)| {
+                connection
+                    .chains
+                    .windows(2)
+                    .any(|edge| edge[0] == *old && edge[1] == *group)
+            })
+    }
+
+    pub async fn finish(&self, info: ClashInfo, deadline: tokio::time::Instant) -> Result<()> {
+        let mut attempt = 0;
+        let mut last_error = String::new();
+        loop {
+            let round = async {
+                let pending: Vec<_> = get_connections_for(info.clone())
+                    .await?
+                    .connections
+                    .into_iter()
+                    .filter(|connection| self.matches(connection))
+                    .collect();
+                if pending.is_empty() {
+                    return Ok::<_, anyhow::Error>(true);
+                }
+                let (url, headers) = build_clash_client_info(info.clone())?;
+                for chunk in pending.chunks(16) {
+                    let mut tasks = tokio::task::JoinSet::new();
+                    for connection in chunk {
+                        let mut endpoint = reqwest::Url::parse(&format!("{url}/connections/"))?;
+                        endpoint
+                            .path_segments_mut()
+                            .map_err(|_| anyhow::anyhow!("invalid controller URL"))?
+                            .pop_if_empty()
+                            .push(&connection.id);
+                        let request = API_CLIENT.delete(endpoint).headers(headers.clone());
+                        tasks.spawn(async move {
+                            request.send().await?.error_for_status()?;
+                            Ok::<_, reqwest::Error>(())
+                        });
+                    }
+                    while let Some(result) = tasks.join_next().await {
+                        // A failed DELETE is retried only if a readback still finds the ID.
+                        if let Err(error) = result
+                            .map_err(anyhow::Error::from)
+                            .and_then(|result| result.map_err(anyhow::Error::from))
+                        {
+                            last_error = error.to_string();
+                        }
+                    }
+                }
+                Ok(false)
+            };
+            match tokio::time::timeout_at(deadline, round).await {
+                Ok(Ok(true)) => return Ok(()),
+                Ok(Ok(false)) => {},
+                Ok(Err(error)) => last_error = error.to_string(),
+                Err(_) => bail!("old connections could not be verified closed before the deadline: {last_error}"),
+            }
+            let wake =
+                tokio::time::Instant::now() + crate::application::routing::retry_delay(attempt);
+            if wake >= deadline {
+                bail!("old connections remain after automatic retries: {last_error}");
+            }
+            tokio::time::sleep_until(wake).await;
+            attempt += 1;
+        }
+    }
+}
+
+pub async fn verify_runtime(snapshot: &crate::config::ConfigSnapshot) -> Result<()> {
+    let actual = get_configs_for(snapshot.clash.get_client_info()).await?;
+    let expected = snapshot
+        .runtime
+        .config
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("runtime configuration is missing"))?;
+    for key in [
+        "mode",
+        "log-level",
+        "ipv6",
+        "allow-lan",
+        "mixed-port",
+        "socks-port",
+        "port",
+    ] {
+        if let Some(value) = expected.get(key) {
+            anyhow::ensure!(
+                actual[key] == serde_json::to_value(value)?,
+                "Mihomo did not apply {key}: expected {value:?}, actual {}",
+                actual[key]
+            );
+        }
+    }
+    for key in ["mixed-port", "socks-port", "port"] {
+        if let Some(port) = expected
+            .get(key)
+            .and_then(serde_yaml::Value::as_u64)
+            .filter(|port| *port > 0)
+        {
+            tokio::time::timeout(
+                Duration::from_millis(500),
+                tokio::net::TcpStream::connect(("127.0.0.1", port as u16)),
+            )
+            .await
+            .map_err(|_| anyhow::anyhow!("{key} listener readiness timed out"))??;
+        }
+    }
+    if let Some(tun) = expected.get("tun") {
+        for key in [
+            "enable",
+            "stack",
+            "device",
+            "mtu",
+            "auto-route",
+            "strict-route",
+            "auto-detect-interface",
+            "dns-hijack",
+        ] {
+            if let Some(value) = tun.get(key) {
+                // Disabled TUN has no active adapter parameters to read back.
+                if key != "enable"
+                    && tun.get("enable").and_then(serde_yaml::Value::as_bool) != Some(true)
+                {
+                    continue;
+                }
+                anyhow::ensure!(
+                    actual["tun"][key] == {
+                        let mut expected = serde_json::to_value(value)?;
+                        if key == "dns-hijack" {
+                            if let Some(entries) = expected.as_array_mut() {
+                                entries.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+                            }
+                        }
+                        expected
+                    },
+                    "Mihomo did not apply tun.{key}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn verify_tun_state(snapshot: &crate::config::ConfigSnapshot) -> Result<()> {
+    #[cfg(windows)]
+    if let Some(tun) = snapshot
+        .runtime
+        .config
+        .as_ref()
+        .and_then(|config| config.get("tun"))
+    {
+        if tun
+            .get("device")
+            .and_then(serde_yaml::Value::as_str)
+            .is_some_and(|device| !device.is_empty())
+        {
+            let ipv6 = snapshot
+                .runtime
+                .config
+                .as_ref()
+                .and_then(|config| config.get("ipv6"))
+                .and_then(serde_yaml::Value::as_bool)
+                .unwrap_or(false);
+            crate::infrastructure::tun_state::verify(tun, ipv6).await?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn connection_cleanup_is_scoped_to_group_and_preserves_new_paths() {
+    let connection = |id: &str, chain: &[&str]| ConnectionItemRes {
+        id: id.into(),
+        chains: chain.iter().map(|name| name.to_string()).collect(),
+        ..Default::default()
+    };
+    let before = ConnectionsRes {
+        connections: vec![
+            connection("old", &["A", "group"]),
+            connection("unrelated", &["A", "other"]),
+        ],
+    };
+    let cleanup = ConnectionCleanup::capture(&before, Some(("group".into(), "A".into())));
+    assert!(cleanup.matches(&before.connections[0]));
+    assert!(!cleanup.matches(&before.connections[1]));
+    assert!(cleanup.matches(&connection("in-flight", &["A", "group"])));
+    assert!(!cleanup.matches(&connection("new", &["B", "group"])));
+}
+
+#[test]
+fn mode_cleanup_includes_racing_old_sessions_but_preserves_sessions_after_application() {
+    let mut cleanup = ConnectionCleanup::capture(&ConnectionsRes::default(), None);
+    cleanup.include_started_before_now();
+    let before = ConnectionItemRes {
+        id: "racing".into(),
+        start: (chrono::Utc::now() - chrono::Duration::seconds(1)).to_rfc3339(),
+        ..Default::default()
+    };
+    let after = ConnectionItemRes {
+        id: "new".into(),
+        start: (chrono::Utc::now() + chrono::Duration::seconds(1)).to_rfc3339(),
+        ..Default::default()
+    };
+    assert!(cleanup.matches(&before));
+    assert!(!cleanup.matches(&after));
+}
+
+#[cfg(test)]
+mod switch_tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    };
+    use warp::Filter;
+
+    #[test]
+    fn empty_core_tracker_is_null_but_an_absent_connection_snapshot_is_not_success() {
+        assert!(
+            serde_json::from_str::<ConnectionsRes>(r#"{"connections":null}"#)
+                .unwrap()
+                .connections
+                .is_empty()
+        );
+        assert!(
+            serde_json::from_str::<ConnectionsRes>(r#"{"connections":[]}"#)
+                .unwrap()
+                .connections
+                .is_empty()
+        );
+        assert!(serde_json::from_str::<ConnectionsRes>(r#"{}"#).is_err());
+    }
+
+    async fn controller(
+        failures: usize,
+        keep_connection: bool,
+    ) -> (ClashInfo, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
+        let deletes = Arc::new(AtomicUsize::new(0));
+        let gone = Arc::new(AtomicBool::new(false));
+        let read_state = gone.clone();
+        let get = warp::get().and(warp::path("connections")).and(warp::path::end()).map(move || {
+            let connections = if read_state.load(Ordering::SeqCst) { vec![] } else { vec![serde_json::json!({"id":"1234-5678-abcd", "chains":["A","Main"],"metadata":{"network":"udp"}})] };
+            warp::reply::json(&serde_json::json!({"connections":connections}))
+        });
+        let count = deletes.clone();
+        let remove = warp::delete()
+            .and(warp::path("connections"))
+            .and(warp::path::param::<String>())
+            .map(move |id: String| {
+                let attempt = count.fetch_add(1, Ordering::SeqCst);
+                if id != "1234-5678-abcd" {
+                    return warp::http::StatusCode::BAD_REQUEST;
+                }
+                if attempt < failures {
+                    return warp::http::StatusCode::SERVICE_UNAVAILABLE;
+                }
+                if !keep_connection {
+                    gone.store(true, Ordering::SeqCst);
+                }
+                warp::http::StatusCode::NO_CONTENT
+            });
+        let (address, server) = warp::serve(get.or(remove)).bind_ephemeral(([127, 0, 0, 1], 0));
+        let info = ClashInfo {
+            server: address.to_string(),
+            ..Default::default()
+        };
+        (info, deletes, tokio::spawn(server))
+    }
+
+    #[tokio::test]
+    async fn transient_delete_failures_are_retried_until_readback_is_empty() {
+        let (info, deletes, server) = controller(2, false).await;
+        let before = get_connections_for(info.clone()).await.unwrap();
+        let cleanup = ConnectionCleanup::capture(&before, Some(("Main".into(), "A".into())));
+        cleanup
+            .finish(
+                info.clone(),
+                tokio::time::Instant::now() + Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        assert_eq!(deletes.load(Ordering::SeqCst), 3);
+        assert!(get_connections_for(info)
+            .await
+            .unwrap()
+            .connections
+            .is_empty());
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn tun_readback_uses_the_pinned_api_enum_and_omitted_false_contract() {
+        let route = warp::path("configs").map(|| warp::reply::json(&serde_json::json!({"tun":{"enable":true,"stack":"gVisor","device":"synthetic","mtu":1400,"dns-hijack":["0.0.0.0:53","tcp://any:53"]}})));
+        let (address, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
+        let server = tokio::spawn(server);
+        let mut snapshot = crate::config::ConfigSnapshot {
+            revision: 0,
+            runtime_revision: 0,
+            profile_versions: Default::default(),
+            clash: crate::config::IClashTemp::template(),
+            clash_settings: crate::config::IClashSettings::template(),
+            profiles: crate::config::IProfiles::template(),
+            runtime: crate::config::IRuntime::default(),
+        };
+        snapshot
+            .clash
+            .0
+            .insert("external-controller".into(), address.to_string().into());
+        snapshot.runtime.config = Some(serde_yaml::from_str("tun: {enable: true, stack: gvisor, device: synthetic, mtu: 1400, strict-route: false, dns-hijack: ['tcp://any:53', '0.0.0.0:53']}").unwrap());
+        verify_runtime(&snapshot).await.unwrap();
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn false_success_delete_escalates_once_instead_of_accepting_http_204() {
+        let (info, deletes, server) = controller(0, true).await;
+        let before = get_connections_for(info.clone()).await.unwrap();
+        let cleanup = ConnectionCleanup::capture(&before, None);
+        let recovered = AtomicUsize::new(0);
+        crate::application::routing::cleanup_or_recover(
+            &cleanup,
+            info,
+            tokio::time::Instant::now() + Duration::from_millis(350),
+            async {
+                recovered.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .await
+        .unwrap();
+        assert!(deletes.load(Ordering::SeqCst) >= 2);
+        assert_eq!(recovered.load(Ordering::SeqCst), 1);
+        server.abort();
+    }
 }
 
 /// 使用本次操作的目标控制地址检查就绪，避免端口修改时误查旧地址。
@@ -392,12 +849,6 @@ pub async fn wait_for_core_ready(client_info: ClashInfo, ready_timeout: Duration
 }
 
 /// 根据clash info获取clash服务地址和请求头
-fn clash_client_info() -> Result<(String, HeaderMap)> {
-    let client = Config::clash().get_client_info();
-
-    build_clash_client_info(client)
-}
-
 fn build_clash_client_info(client: ClashInfo) -> Result<(String, HeaderMap)> {
     let server = format!("http://{}", client.server);
 

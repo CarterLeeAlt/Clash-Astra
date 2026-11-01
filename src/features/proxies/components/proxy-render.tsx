@@ -21,6 +21,7 @@ import { utf8ToBase64 } from "@/utils/base64";
 import { textSizes } from "@/shared/typography";
 
 interface RenderProps {
+  pendingSelection?: { group: string; node: string };
   item: IRenderItem;
   indent: boolean;
   onLocation: (group: IProxyGroupItem) => void;
@@ -123,6 +124,10 @@ export const ProxyRender = (props: RenderProps) => {
   if (type === 2 && !group.hidden) {
     return (
       <ProxyItem
+        switching={
+          props.pendingSelection?.group === group.name &&
+          props.pendingSelection.node === proxy?.name
+        }
         groupName={group.name}
         proxy={proxy!}
         selected={group.now === proxy?.name}
@@ -166,6 +171,10 @@ export const ProxyRender = (props: RenderProps) => {
       >
         {proxyCol?.map((proxy) => (
           <ProxyItemMini
+            switching={
+              props.pendingSelection?.group === group.name &&
+              props.pendingSelection.node === proxy.name
+            }
             key={item.key + proxy.name}
             groupName={group.name}
             proxy={proxy!}

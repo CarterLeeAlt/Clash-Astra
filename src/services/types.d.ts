@@ -239,7 +239,6 @@ interface IClashSettings {
     success_color?: string;
     css_injection?: string;
   };
-  auto_close_connection?: boolean;
   default_latency_test?: string;
   default_latency_timeout?: number;
   auto_log_clean?: 0 | 1 | 2 | 3;

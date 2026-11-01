@@ -54,7 +54,7 @@ const SettingClash = ({ onError }: Props) => {
   const onUpdateGeo = useLockFn(async () => {
     try {
       await updateGeoData();
-      Notice.success("GeoData update started.");
+      Notice.success("GeoData updated and applied.");
     } catch (err: any) {
       Notice.error(formatNoticeMessage(err?.response?.data?.message || err));
     }
@@ -125,7 +125,7 @@ const SettingClash = ({ onError }: Props) => {
                   await patchClashSettings({
                     enable_random_port: !enable_random_port,
                   });
-                  Notice.success("Restart required to apply changes.");
+                  Notice.success("Clash config updated.");
                 } catch (error) {
                   Notice.error(formatNoticeMessage(error));
                 }

@@ -15,7 +15,6 @@ import {
   DialogRef,
   formatNoticeMessage,
   Notice,
-  Switch,
 } from "@/components/base";
 
 export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
@@ -25,7 +24,6 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState({
     appLogLevel: "info",
-    autoCloseConnection: true,
     proxyLayoutColumn: 6,
     defaultLatencyTest: "",
     autoLogClean: 1,
@@ -37,7 +35,6 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
       setOpen(true);
       setValues({
         appLogLevel: clashSettings?.app_log_level ?? "info",
-        autoCloseConnection: clashSettings?.auto_close_connection ?? true,
         proxyLayoutColumn: clashSettings?.proxy_layout_column ?? 6,
         defaultLatencyTest: clashSettings?.default_latency_test ?? "",
         autoLogClean: clashSettings?.auto_log_clean ?? 1,
@@ -60,7 +57,6 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
 
       await patchClashSettings({
         app_log_level: values.appLogLevel,
-        auto_close_connection: values.autoCloseConnection,
         proxy_layout_column: values.proxyLayoutColumn,
         default_latency_test: values.defaultLatencyTest,
         default_latency_timeout: timeout,
@@ -103,17 +99,6 @@ export const MiscViewer = forwardRef<DialogRef>((_props, ref) => {
               </MenuItem>
             ))}
           </Select>
-        </ListItem>
-
-        <ListItem sx={{ padding: "5px 2px" }}>
-          <ListItemText primary={t("Auto Close Connections")} />
-          <Switch
-            edge="end"
-            checked={values.autoCloseConnection}
-            onChange={(_, c) =>
-              setValues((v) => ({ ...v, autoCloseConnection: c }))
-            }
-          />
         </ListItem>
 
         <ListItem sx={{ padding: "5px 2px" }}>

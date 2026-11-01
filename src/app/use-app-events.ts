@@ -87,6 +87,7 @@ export const useAppEvents = () => {
           void mutate(queryKeys.runtimeLogs);
           invalidateClashRuntime();
           window.dispatchEvent(new CustomEvent("astra://runtime-changed"));
+          window.dispatchEvent(new CustomEvent("clash://connections-refresh"));
         }
       })
     );

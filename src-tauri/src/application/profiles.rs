@@ -296,34 +296,49 @@ pub async fn restore_selected(snapshot: &ConfigSnapshot) -> Result<()> {
             continue;
         }
         if proxy.now.as_ref() != Some(node) {
-            clash_api::select_proxy_for(info.clone(), group, node).await?;
+            clash_api::select_proxy_verified(info.clone(), group, node).await?;
         }
     }
     Ok(())
 }
 
-pub async fn select_proxy(profile_uid: String, group: String, proxy: String) -> Result<()> {
-    super::dispatch(async move {
-        let _operation = super::operation().await?;
+pub async fn select_proxy(
+    profile_uid: String,
+    group: String,
+    proxy: String,
+    deadline_unix_ms: Option<u64>,
+) -> Result<()> {
+    let budget = super::routing::SwitchBudget::from_deadline_unix_ms(deadline_unix_ms);
+    super::routing::dispatch_switch(budget, async move {
+        let _operation = budget.run(super::operation()).await?;
         let mut change = Change::new();
-        anyhow::ensure!(change.next.profiles.current.as_ref() == Some(&profile_uid), "current subscription changed; refresh the proxy groups");
-        let proxies = clash_api::get_proxies_for(change.next.clash.get_client_info()).await?.proxies;
-        let target = proxies.get(&group).context("proxy group no longer exists")?;
-        anyhow::ensure!(matches!(target.proxy_type.as_str(), "Selector" | "Fallback") && target.all.as_ref().is_some_and(|all| all.contains(&proxy)), "proxy selection is not valid for this group");
-        let uid = change.next.profiles.current.clone().context("no current subscription")?;
-        let item = items(&mut change).iter_mut().find(|item| item.uid.as_ref() == Some(&uid)).context("current subscription not found")?;
+        anyhow::ensure!(
+            change.next.profiles.current.as_ref() == Some(&profile_uid),
+            "current subscription changed; refresh the proxy groups"
+        );
+        let uid = change
+            .next
+            .profiles
+            .current
+            .clone()
+            .context("no current subscription")?;
+        let item = items(&mut change)
+            .iter_mut()
+            .find(|item| item.uid.as_ref() == Some(&uid))
+            .context("current subscription not found")?;
         let selected = item.selected.get_or_insert_with(Vec::new);
         selected.retain(|item| item.name.as_ref() != Some(&group));
-        selected.push(PrfSelected { name: Some(group), now: Some(proxy) });
-        change.restore_selection = true;
-        let old_node = target.now.clone();
-        let close_connections = change.next.clash_settings.auto_close_connection.unwrap_or(false);
-        super::configuration::apply_locked(change).await?;
-        if close_connections {
-            if let Some(old_node) = old_node {
-                if let Err(error) = clash_api::close_connections_for_node(&old_node).await { log::warn!(target: "app", "selection saved; closing old connections failed: {error:#}"); }
-            }
-        }
-        Ok(())
-    }).await
+        selected.push(PrfSelected {
+            name: Some(group.clone()),
+            now: Some(proxy.clone()),
+        });
+        change.selection = Some(super::configuration::ProxySelection {
+            group,
+            node: proxy,
+            previous: String::new(),
+        });
+        change.switch_budget = Some(budget);
+        super::configuration::apply_locked(change).await
+    })
+    .await
 }

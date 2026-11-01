@@ -2,6 +2,7 @@ pub mod actions;
 pub mod configuration;
 pub mod diagnostics;
 pub mod profiles;
+pub mod routing;
 pub mod service;
 pub mod transaction;
 pub mod window;

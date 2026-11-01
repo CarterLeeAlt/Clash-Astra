@@ -10,6 +10,8 @@ export const invalidateClashRuntime = () => {
   mutate(queryKeys.version);
   mutate(queryKeys.clashConfig);
   mutate(queryKeys.proxyProviders);
+  mutate(queryKeys.ruleProviders);
+  mutate(queryKeys.rules);
 };
 
 export const invalidateProfiles = () => {

@@ -3,9 +3,15 @@ import { invoke } from "./client";
 export async function selectProxy(
   profileUid: string,
   group: string,
-  proxy: string
+  proxy: string,
+  deadlineUnixMs?: number
 ) {
-  return invoke<void>("select_proxy", { profileUid, group, proxy });
+  return invoke<void>("select_proxy", {
+    profileUid,
+    group,
+    proxy,
+    deadlineUnixMs,
+  });
 }
 
 export async function getProfiles() {

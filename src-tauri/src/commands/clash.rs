@@ -28,8 +28,39 @@ pub struct ControllerSnapshot {
 }
 
 #[tauri::command(async)]
-pub fn get_runtime_config() -> CmdResult<Option<Mapping>> {
-    Ok(Config::runtime().config)
+pub async fn get_runtime_config() -> CmdResult<Option<Mapping>> {
+    let snapshot = Config::snapshot();
+    let Some(mut runtime) = snapshot.runtime.config.clone() else {
+        return Ok(None);
+    };
+    // Persistent intent is not a readback, especially after APPLY_INCOMPLETE.
+    let actual = clash_api::get_configs_for(snapshot.clash.get_client_info())
+        .await
+        .map_err(super::CommandError::from)?;
+    let mut actual: Mapping = serde_yaml::to_value(actual)
+        .map_err(anyhow::Error::from)
+        .map_err(super::CommandError::from)?
+        .as_mapping()
+        .cloned()
+        .unwrap_or_default();
+    let actual_tun = actual.remove("tun");
+    runtime.extend(actual);
+    if let Some(tun) = actual_tun {
+        if tun.get("enable").and_then(serde_yaml::Value::as_bool) == Some(true) {
+            runtime.insert("tun".into(), tun);
+        } else {
+            // An inactive adapter has no stack/MTU to report. Keep its editor
+            // preferences, but expose the actual disabled state explicitly.
+            let mut preferences = runtime
+                .get("tun")
+                .and_then(serde_yaml::Value::as_mapping)
+                .cloned()
+                .unwrap_or_default();
+            preferences.insert("enable".into(), false.into());
+            runtime.insert("tun".into(), preferences.into());
+        }
+    }
+    Ok(Some(runtime))
 }
 
 #[tauri::command]
@@ -50,13 +81,23 @@ pub fn get_runtime_logs() -> CmdResult<HashMap<String, Vec<(String, String)>>> {
 }
 
 #[tauri::command]
-pub async fn patch_clash_config(payload: Mapping) -> CmdResult {
-    wrap_err!(configuration::patch_clash(payload).await)
+pub async fn patch_clash_config(payload: Mapping, deadline_unix_ms: Option<u64>) -> CmdResult {
+    wrap_err!(configuration::patch_clash_until(payload, deadline_unix_ms).await)
 }
 
 #[tauri::command]
 pub async fn patch_ports(ports: crate::domain::network::PortSettings) -> CmdResult {
     wrap_err!(crate::application::configuration::patch_ports(ports).await)
+}
+
+#[tauri::command]
+pub async fn refresh_provider(kind: String, name: String) -> CmdResult {
+    wrap_err!(configuration::refresh_network_data(Some((kind, name))).await)
+}
+
+#[tauri::command]
+pub async fn refresh_geo_data() -> CmdResult {
+    wrap_err!(configuration::refresh_network_data(None).await)
 }
 
 #[tauri::command(async)]

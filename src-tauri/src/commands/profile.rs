@@ -103,6 +103,11 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
 }
 
 #[tauri::command]
-pub async fn select_proxy(profile_uid: String, group: String, proxy: String) -> CmdResult {
-    wrap_err!(profiles::select_proxy(profile_uid, group, proxy).await)
+pub async fn select_proxy(
+    profile_uid: String,
+    group: String,
+    proxy: String,
+    deadline_unix_ms: Option<u64>,
+) -> CmdResult {
+    wrap_err!(profiles::select_proxy(profile_uid, group, proxy, deadline_unix_ms).await)
 }

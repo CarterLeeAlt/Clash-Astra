@@ -1,10 +1,19 @@
 import useSWR from "swr";
 import { useLockFn } from "ahooks";
+import { useRef, useState } from "react";
+import { LatestOperation } from "@/shared/async/latest-operation";
 import { useTranslation } from "react-i18next";
 import lockIconUrl from "@/assets/icons/lock.svg";
 import lockOpenIconUrl from "@/assets/icons/lock_open.svg";
 import restartIconUrl from "@/assets/icons/restart.svg";
-import { Box, Button, ButtonGroup, IconButton, Tooltip } from "@mui/material";
+import {
+  Box,
+  Button,
+  ButtonGroup,
+  CircularProgress,
+  IconButton,
+  Tooltip,
+} from "@mui/material";
 import { getClashConfig } from "@/services/api";
 import {
   patchClashConfig,
@@ -52,14 +61,23 @@ const ProxyPage = () => {
 
   const curMode = clashConfig?.mode?.toLowerCase();
 
-  const onChangeMode = useLockFn(async (mode: string) => {
-    try {
-      await patchClashConfig({ mode });
-      await mutateClash();
-    } catch (error) {
-      Notice.error(formatNoticeMessage(error));
-    }
-  });
+  const [switchingMode, setSwitchingMode] = useState<string>();
+  const modeQueue = useRef<LatestOperation<string>>();
+  if (!modeQueue.current)
+    modeQueue.current = new LatestOperation<string>(
+      async (mode, _remaining, deadlineUnixMs) => {
+        try {
+          await patchClashConfig({ mode }, deadlineUnixMs);
+        } finally {
+          void mutateClash();
+        }
+      },
+      setSwitchingMode
+    );
+  const onChangeMode = (mode: string) =>
+    void modeQueue
+      .current!.submit(mode)
+      .catch((error) => Notice.error(formatNoticeMessage(error)));
 
   const onRestartCore = useLockFn(async () => {
     try {
@@ -120,6 +138,12 @@ const ProxyPage = () => {
             <ButtonGroup size="small">
               {modeList.map((mode) => (
                 <Button
+                  aria-busy={switchingMode === mode || undefined}
+                  startIcon={
+                    switchingMode === mode ? (
+                      <CircularProgress size={12} color="inherit" />
+                    ) : undefined
+                  }
                   key={mode}
                   variant={mode === curMode ? "contained" : "outlined"}
                   onClick={() => onChangeMode(mode)}
