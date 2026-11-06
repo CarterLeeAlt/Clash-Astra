@@ -2,19 +2,14 @@
 
 Clash Astra 的变更日志。基于 clash-verge-rev 的上游历史变更不再在此保留，可通过 git 历史（fork 起点：Initial commit 2026-04-23）查阅。
 
-## 1.8.6
-
-### Changed
-
-- 代码编辑器改用内置 JetBrains Mono 等宽字体，代码字号统一为 14px
-- 代理延迟数字统一为 13px
-
 ## 1.8.5
 
 ### Changed
 
 - 使用独立版本的 Clash Astra Runtime Release 管理 Mihomo、Geo 数据和 Windows 运行时资源
 - 便携包构建不再直接依赖第三方运行时资源下载地址
+- 代码编辑器改用内置 JetBrains Mono 等宽字体，代码字号统一为 14px
+- 代理延迟数字统一为 13px
 
 ## 1.8.3
 
