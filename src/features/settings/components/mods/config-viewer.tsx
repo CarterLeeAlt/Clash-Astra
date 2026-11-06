@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Chip } from "@mui/material";
 import { getRuntimeYaml } from "@/services/cmds";
 import { BaseDialog, DialogRef } from "@/components/base";
+import { editorFontFamily, loadEditorFont } from "@/shared/fonts";
 import { textSizePx } from "@/shared/typography";
 import { editor } from "monaco-editor/esm/vs/editor/editor.api";
 
@@ -37,7 +38,7 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
     open: () => {
       setOpen(true);
 
-      getRuntimeYaml().then((data) => {
+      Promise.all([getRuntimeYaml(), loadEditorFont()]).then(([data]) => {
         const dom = editorRef.current;
 
         if (!dom) return;
@@ -49,7 +50,7 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
           theme: "vs",
           minimap: { enabled: false },
           fontSize: textSizePx.secondary,
-          fontFamily: `"Monaco", "Noto Sans SC", "twemoji mozilla"`,
+          fontFamily: editorFontFamily,
           readOnly: true,
         });
 

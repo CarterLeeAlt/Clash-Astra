@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { readProfileFile, saveProfileFile } from "@/services/cmds";
 import { formatNoticeMessage, Notice } from "@/components/base";
+import { editorFontFamily, loadEditorFont } from "@/shared/fonts";
 import { textSizePx } from "@/shared/typography";
 
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js";
@@ -37,8 +38,8 @@ export const EditorViewer = (props: Props) => {
     if (!open) return;
     let disposed = false;
 
-    readProfileFile(uid)
-      .then((data) => {
+    Promise.all([readProfileFile(uid), loadEditorFont()])
+      .then(([data]) => {
         if (disposed) return;
         const dom = editorRef.current;
 
@@ -51,7 +52,7 @@ export const EditorViewer = (props: Props) => {
           theme: "vs",
           minimap: { enabled: false },
           fontSize: textSizePx.secondary,
-          fontFamily: `"Monaco", "Noto Sans SC", "twemoji mozilla"`,
+          fontFamily: editorFontFamily,
         });
 
         instanceRef.current.focus();
