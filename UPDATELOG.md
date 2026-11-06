@@ -4,9 +4,9 @@ Clash Astra 的变更日志。基于 clash-verge-rev 的上游历史变更不再
 
 ## 1.8.6
 
-### Fixed
+### Changed
 
-- 修复代码编辑器未加载内置 Monaco 字体
+- 代码编辑器改用内置 Consolas 等宽字体，代码字号统一为 13px
 
 ## 1.8.5
 

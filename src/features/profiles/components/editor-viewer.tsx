@@ -51,7 +51,7 @@ export const EditorViewer = (props: Props) => {
           language: mode,
           theme: "vs",
           minimap: { enabled: false },
-          fontSize: textSizePx.secondary,
+          fontSize: textSizePx.code,
           fontFamily: editorFontFamily,
         });
 

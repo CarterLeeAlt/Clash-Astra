@@ -17,7 +17,10 @@ const { createTheme } = require("@mui/material/styles");
 const sourceRoot = fileURLToPath(new URL("../../src", import.meta.url));
 
 test("the shared text roles are the only source of pixel, rem and CSS variable sizes", () => {
-  assert.deepEqual(Object.values(textSizePx), [10, 12, 14, 15, 16, 18, 20, 22]);
+  assert.deepEqual(
+    Object.values(textSizePx),
+    [10, 12, 13, 14, 15, 16, 18, 20, 22]
+  );
   assert.deepEqual(Object.keys(textSizes), Object.keys(textSizePx));
   assert.deepEqual(
     Object.values(textSizeCssVariables),

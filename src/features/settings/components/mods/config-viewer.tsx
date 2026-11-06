@@ -49,7 +49,7 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
           language: "yaml",
           theme: "vs",
           minimap: { enabled: false },
-          fontSize: textSizePx.secondary,
+          fontSize: textSizePx.code,
           fontFamily: editorFontFamily,
           readOnly: true,
         });
