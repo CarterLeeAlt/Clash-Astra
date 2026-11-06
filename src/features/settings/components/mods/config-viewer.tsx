@@ -51,6 +51,7 @@ export const ConfigViewer = forwardRef<DialogRef>((_props, ref) => {
           minimap: { enabled: false },
           fontSize: textSizePx.code,
           fontFamily: editorFontFamily,
+          fontWeight: "300",
           readOnly: true,
         });
 
