@@ -127,11 +127,12 @@ export const ProxyItemMini = (props: Props) => {
               onDelay();
             }}
             color={delayManager.formatDelayColor(delay, timeout)}
-            sx={({ palette }) =>
-              !proxy.provider
+            sx={({ palette }) => ({
+              fontSize: textSizes.delay,
+              ...(!proxy.provider
                 ? { ":hover": { bgcolor: alpha(palette.primary.main, 0.15) } }
-                : {}
-            }
+                : {}),
+            })}
           >
             {delayManager.formatDelay(delay, timeout)}
           </Widget>
