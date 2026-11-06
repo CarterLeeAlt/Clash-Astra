@@ -51,7 +51,7 @@ export const EditorViewer = (props: Props) => {
           theme: "vs",
           minimap: { enabled: false },
           fontSize: textSizePx.secondary,
-          fontFamily: `"Noto Sans Mono", "Noto Sans SC", "twemoji mozilla", monospace`,
+          fontFamily: `"Monaco", "Noto Sans SC", "twemoji mozilla"`,
         });
 
         instanceRef.current.focus();

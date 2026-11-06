@@ -9,5 +9,5 @@ export const defaultTheme = {
   warning_color: "#FF9500",
   success_color: "#34C759",
   background_color: "#f5f5f5",
-  font_family: `"CharterBT", "Noto Sans SC", "twemoji mozilla", sans-serif`,
+  font_family: `"CharterBT", "Noto Sans SC", "twemoji mozilla"`,
 };
