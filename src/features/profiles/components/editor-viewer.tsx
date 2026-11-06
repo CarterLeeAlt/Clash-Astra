@@ -53,7 +53,7 @@ export const EditorViewer = (props: Props) => {
           minimap: { enabled: false },
           fontSize: textSizePx.code,
           fontFamily: editorFontFamily,
-          fontWeight: "300",
+          fontWeight: "400",
         });
 
         instanceRef.current.focus();
