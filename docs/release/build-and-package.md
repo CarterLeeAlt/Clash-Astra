@@ -120,7 +120,7 @@ node scripts/pnpm.mjs run portable x86_64-pc-windows-msvc
 artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 ```
 
-未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 `Clash Astra.exe`、`Clash Astra Watchdog.exe`、唯一的 `mihomo.exe`、`mihomo.lock.json`、`build-info.json` 和 `resources/`。`build-info.json` 记录内核身份、应用源码基线/修改状态/指纹；本地联合交付可在进程级设置 `SUBLINK_SOURCE_DIR` 记录实际生成器身份。不得把修改前的提交称为修复后的源码版本。
+未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 `Clash Astra.exe`、`Clash Astra Watchdog.exe`、唯一的 `mihomo.exe` 和 `resources/`。Mihomo 的版本与 SHA-256 仍由源码中的 `src-tauri/mihomo.lock.json` 在构建前、打包前和运行前校验。
 
 ## 产物边界
 

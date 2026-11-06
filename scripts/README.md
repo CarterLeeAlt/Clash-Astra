@@ -34,7 +34,7 @@
 
 `sidecars/prepare-mihomo.mjs` 读取 `src-tauri/mihomo.lock.json`，只准备 `v1.19.33` 的固定 Windows x64 资产并核对压缩包、二进制和版本。`verify/check-mihomo.mjs` 在 Tauri 生产构建前检查已有文件；打包和运行前同样核对身份。不下载最新版、不交付 Alpha、不提供软件内核升级。服务构建资源按内容与本次源码构建结果同步，不能因旧文件存在而跳过更新。
 
-`lib/source-identity.mjs` 记录源码基线、修改状态和指纹；Markdown/报告不参与指纹，避免自引用。包内 `build-info.json` 配合 `mihomo.lock.json` 给出可追溯身份，本地联合交付可用进程级 `SUBLINK_SOURCE_DIR` 关联生成器源码。完整边界见 `docs/reference/mihomo-contract.md`。
+`src-tauri/mihomo.lock.json` 是内核身份的唯一锁定来源，构建、打包和运行前均使用它校验 Mihomo。便携包不携带锁定文件或源码指纹文件。完整边界见 `docs/reference/mihomo-contract.md`。
 
 ## 完整后端测试
 

@@ -49,6 +49,6 @@ Sublink `test:mihomo:fixtures` 使用生产 builder 导出完整无凭据配置�
 
 真实订阅在独立目录、端口和内核中验收，`ASTRA_CONTRACT_SUBSCRIPTION_FILE` 指定私有输入，`ASTRA_CONTRACT_CONNECTIVITY=1` 额外检查真实节点连通性，不切换运行实例节点。该输入和私有日志不上传 CI。
 
-包内 `mihomo.lock.json` 记录内核，`build-info.json` 记录应用基线、修改状态和源码指纹；本地联合交付用 `SUBLINK_SOURCE_DIR` 记录实际生成器源码身份。未提供生成器源码时该字段为空，不虚构联合验证。两个仓库的最终指纹、测试结果和线上/本地差别见验收报告。
+源码中的 `src-tauri/mihomo.lock.json` 记录内核身份，并在构建、打包和运行前参与校验。便携包携带已校验的 `mihomo.exe`，不额外携带锁定文件或源码指纹文件。两个仓库的最终测试结果和线上/本地差别见验收报告。
 
 升级必须先核对版本参数差异、修两端、通过联合回归，再更新锁定资产/哈希并交付。版本和资产地址不是可绕过的运行选项。

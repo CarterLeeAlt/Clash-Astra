@@ -3,8 +3,7 @@ import path from "path";
 import AdmZip from "adm-zip";
 import { createRequire } from "module";
 import { getOctokit, context } from "@actions/github";
-import { mihomoLock, verifyMihomo } from "../lib/mihomo-lock.mjs";
-import { sourceIdentity } from "../lib/source-identity.mjs";
+import { verifyMihomo } from "../lib/mihomo-lock.mjs";
 
 const target = process.argv.slice(2)[0];
 // 同版本的本地修复包用标签区分，不覆盖用户已经下载或正在使用的旧包。
@@ -143,22 +142,6 @@ async function resolvePortable() {
   zip.addFile(portableExeName, await fs.readFile(exePath));
   zip.addLocalFile(watchdogPath);
   zip.addLocalFile(mihomoPath);
-  zip.addFile(
-    "mihomo.lock.json",
-    Buffer.from(JSON.stringify(mihomoLock, null, 2) + "\n")
-  );
-  const buildInfo = {
-    contract: mihomoLock.contract,
-    mihomo: mihomoLock,
-    applicationSource: sourceIdentity(process.cwd()),
-    generatorSource: process.env.SUBLINK_SOURCE_DIR
-      ? sourceIdentity(path.resolve(process.env.SUBLINK_SOURCE_DIR))
-      : null,
-  };
-  zip.addFile(
-    "build-info.json",
-    Buffer.from(JSON.stringify(buildInfo, null, 2) + "\n")
-  );
   for (const name of resourceNames) {
     zip.addLocalFile(path.join(resourcesPath, name), "resources");
   }
