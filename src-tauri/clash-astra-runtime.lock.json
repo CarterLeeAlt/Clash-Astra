@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "runtimeVersion": "v1.0.0",
+  "releaseTag": "clash-astra-runtime-v1.0.0",
+  "target": "x86_64-pc-windows-msvc",
+  "manifest": "clash-astra-runtime.json",
+  "manifestSha256": "fd2f5a3bba1a288f95cf14612380887433313cb06358d8fbacb8e737fe8e1254",
+  "archive": "clash-astra-runtime-windows-x64-v1.0.0.zip",
+  "archiveSha256": "54b59a3e141653ac91516965e28b58172a62c64092197b771867b1365ffe3f46",
+  "mihomo": {
+    "version": "v1.19.33",
+    "contract": "mihomo-v1.19.33-common",
+    "commit": "3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+    "binarySha256": "0b4c7353057a78de8a09db445351aadec7d72a4f48adc7d99691f3c5ff74d3da"
+  },
+  "files": {
+    "sidecar/mihomo-x86_64-pc-windows-msvc.exe": {
+      "sha256": "0b4c7353057a78de8a09db445351aadec7d72a4f48adc7d99691f3c5ff74d3da",
+      "size": 61271040
+    },
+    "resources/Country.mmdb": {
+      "sha256": "ccec4d6fa69de3a79960a460c377ac9a23c1a90e5f9052dae3488921e56201df",
+      "size": 7649827
+    },
+    "resources/geoip.dat": {
+      "sha256": "a6271d3c96361d96156e6d3f7cf1550ef21b00d2f951deb772f464db91e89ac5",
+      "size": 16570425
+    },
+    "resources/geosite.dat": {
+      "sha256": "bd1804e37ebc09bfe793bd6822d2d49c8d5a668e34fd47112821540dd68645a3",
+      "size": 4312165
+    },
+    "resources/enableLoopback.exe": {
+      "sha256": "f0c328376bd5ae0ef3b0eb19ac1f343c24a9abfe7bc1008d3b2f6ef3573d04d1",
+      "size": 84040
+    },
+    "resources/clash-astra-service.exe": {
+      "sha256": "402d182a9f65d431594e0c3f00ca7773213712a2ce80ad6f5c84544b94bbb5f6",
+      "size": 827904
+    },
+    "resources/clash-astra-service-install.exe": {
+      "sha256": "09e2fe63d9da87548315d81450a1aa27e1009620231771ecb607a9202c525860",
+      "size": 446976
+    },
+    "resources/clash-astra-service-uninstall.exe": {
+      "sha256": "727c9340086464b7b9a28a6e30e8865f847539be75feece31c174750c1eb0512",
+      "size": 199680
+    },
+    "resources/clash-astra-firewall-helper.exe": {
+      "sha256": "b43ebdd5df52a5d2cd3ac38e85fc41271a38c2981fdc6675bec4590e77b648df",
+      "size": 230912
+    }
+  }
+}

@@ -20,13 +20,36 @@ node scripts/pnpm.mjs <命令>
 # 安装前端依赖
 node scripts/pnpm.mjs install
 
-# 首次构建或资源缺失时：下载 mihomo/Geo 数据并构建 Windows service 二进制
+# 首次构建或资源缺失时：解析 Clash Astra Runtime 资源
 node scripts/pnpm.mjs run prepare:runtime
 ```
 
-`prepare:runtime` 不是代码检查；已有资源会被复用，只有缺失或传 `--force` 时才重新下载。
+`prepare:runtime` 不是代码检查；已有资源会在 SHA-256 校验通过后复用，只有缺失、校验失败或传 `--force` 时才从锁定的 Clash Astra Runtime Release 获取。
 
-内核由 `src-tauri/mihomo.lock.json` 固定为 `v1.19.33`，不查询 `latest`。存在的内核也必须匹配版本和 SHA-256，否则失败；`--force` 不能绕过身份检查。构建前的 `check-mihomo.mjs`、打包和运行前均核对同一文件。版本、常用字段和三方联合验收见 [适配契约](../reference/mihomo-contract.md)。
+Runtime 由 `src-tauri/clash-astra-runtime.lock.json` 固定，Mihomo 由 `src-tauri/mihomo.lock.json` 固定为 `v1.19.33`，不查询 `latest`，也不访问第三方运行时资源地址。存在的资源必须匹配 Runtime 清单和 Mihomo SHA-256，否则失败；`--force` 不能绕过身份检查。构建前的 `check-mihomo.mjs`、打包和运行前均核对同一文件。版本、常用字段和三方联合验收见 [适配契约](../reference/mihomo-contract.md)。
+
+### 发布 Runtime 资源
+
+Runtime 版本独立于主程序版本。生成当前锁定资源的发布资产：
+
+```powershell
+node scripts/pnpm.mjs run runtime:archive
+```
+
+该命令生成 `artifacts/runtime/clash-astra-runtime.json`、`artifacts/runtime/clash-astra-runtime-windows-x64-<Runtime版本>.zip`，并更新 `src-tauri/clash-astra-runtime.lock.json`。首次发布使用 Clash Astra 自己的预发布标签，例如：
+
+资源内容发生变化时，先指定新的 Runtime 版本，例如 `$env:CLASH_ASTRA_RUNTIME_VERSION="v1.0.1"`，避免覆盖已有 Runtime 版本。
+
+```powershell
+gh release create clash-astra-runtime-v1.0.0 `
+  artifacts/runtime/clash-astra-runtime.json `
+  artifacts/runtime/clash-astra-runtime-windows-x64-v1.0.0.zip `
+  --repo CarterLeeAlt/Clash-Astra `
+  --title "Clash Astra Runtime v1.0.0" `
+  --prerelease
+```
+
+主程序版本升级不需要重新发布 Runtime；只有 Runtime 文件或资源契约变化时才递增 Runtime 版本并更新锁定文件。
 
 ## 构建
 

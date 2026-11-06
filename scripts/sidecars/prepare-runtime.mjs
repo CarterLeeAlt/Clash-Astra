@@ -1,21 +1,54 @@
 import fs from "fs-extra";
 import path from "path";
-import { prepareMihomo } from "./prepare-mihomo.mjs";
+import AdmZip from "adm-zip";
 import fetch from "node-fetch";
 import proxyAgent from "https-proxy-agent";
 import { execSync } from "child_process";
+import { prepareMihomo } from "./prepare-mihomo.mjs";
+import { sha256 } from "../lib/mihomo-lock.mjs";
+import {
+  assertRuntimeManifest,
+  readRuntimeLock,
+  runtimeFileSpecs,
+  runtimeReleaseBaseUrl,
+  verifyRuntimeFiles,
+  verifyRuntimeWorkspace,
+} from "../lib/runtime-resources.mjs";
+import { repoRoot } from "../lib/workspace-env.mjs";
 
-const cwd = process.cwd();
 const FORCE = process.argv.includes("--force");
+const arg1 = process.argv.slice(2).find((arg) => arg !== "--force");
+const target =
+  arg1 ||
+  execSync("rustc -vV")
+    .toString()
+    .match(/(?<=host: ).+(?=\s*)/g)[0];
+const lock = readRuntimeLock();
 
-const arg1 = process.argv.slice(2)[0];
-const arg2 = process.argv.slice(2)[1];
-const target = arg1 === "--force" ? arg2 : arg1;
-const SIDECAR_HOST = target
-  ? target
-  : execSync("rustc -vV")
-      .toString()
-      .match(/(?<=host: ).+(?=\s*)/g)[0];
+if (target !== lock.target) {
+  throw new Error(`No Runtime resource set for ${target}`);
+}
+
+const specs = runtimeFileSpecs(target);
+const requiredServiceResources = [
+  "clash-astra-service.exe",
+  "clash-astra-service-install.exe",
+  "clash-astra-service-uninstall.exe",
+  "clash-astra-firewall-helper.exe",
+];
+const specPaths = new Set(specs.map((spec) => spec.archivePath));
+for (const file of requiredServiceResources) {
+  if (!specPaths.has(`resources/${file}`)) {
+    throw new Error(`Runtime lock does not define service resource: ${file}`);
+  }
+}
+const expectedArchivePaths = new Set(Object.keys(lock.files));
+const cacheDir = path.join(
+  repoRoot,
+  ".tmp",
+  "clash-astra-runtime",
+  lock.runtimeVersion
+);
 
 function getHttpProxyAgent() {
   const httpProxy =
@@ -33,32 +66,20 @@ function readPositiveNumber(value, fallback) {
 }
 
 async function fetchWithRetry(url, options = {}, context = {}) {
-  const {
-    retries: configuredRetries,
-    retryDelayMs: configuredRetryDelayMs,
-    timeoutMs: configuredTimeoutMs,
-    targetPath,
-    name,
-  } = context;
   const retries = Math.max(
     5,
     Math.floor(
-      readPositiveNumber(
-        configuredRetries ?? process.env.CLASH_DOWNLOAD_RETRY,
-        5
-      )
+      readPositiveNumber(context.retries ?? process.env.CLASH_DOWNLOAD_RETRY, 5)
     )
   );
   const retryDelayMs = readPositiveNumber(
-    configuredRetryDelayMs ?? process.env.CLASH_DOWNLOAD_RETRY_DELAY_MS,
+    context.retryDelayMs ?? process.env.CLASH_DOWNLOAD_RETRY_DELAY_MS,
     3000
   );
   const timeoutMs = readPositiveNumber(
-    configuredTimeoutMs ?? process.env.CLASH_DOWNLOAD_TIMEOUT_MS,
+    context.timeoutMs ?? process.env.CLASH_DOWNLOAD_TIMEOUT_MS,
     60000
   );
-  const targetPathLog = targetPath ? ` targetPath="${targetPath}"` : "";
-  const nameLog = name ? ` name="${name}"` : "";
   let lastError;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -67,34 +88,30 @@ async function fetchWithRetry(url, options = {}, context = {}) {
 
     try {
       console.log(
-        `[INFO]: fetching attempt ${attempt}/${retries} url="${url}" target="${SIDECAR_HOST}"${targetPathLog}${nameLog}`
+        `[INFO]: fetching attempt ${attempt}/${retries} url="${url}" targetPath="${context.targetPath}"`
       );
-
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
       });
-
       if (!response.ok) {
         throw new Error(
-          `request failed url="${url}" target="${SIDECAR_HOST}" status=${response.status} statusText="${response.statusText}"${targetPathLog}${nameLog}`
+          `request failed status=${response.status} statusText="${response.statusText}"`
         );
       }
-
       return response;
-    } catch (err) {
-      lastError = err;
+    } catch (error) {
+      lastError = error;
       console.warn(
-        `[WARN]: fetch failed attempt ${attempt}/${retries} url="${url}" target="${SIDECAR_HOST}"${targetPathLog}${nameLog} error="${
-          err?.message || err
+        `[WARN]: fetch failed attempt ${attempt}/${retries} url="${url}" error="${
+          error?.message || error
         }"`
       );
-
-      if (attempt >= retries) break;
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, retryDelayMs * attempt)
-      );
+      if (attempt < retries) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, retryDelayMs * attempt)
+        );
+      }
     } finally {
       clearTimeout(timer);
     }
@@ -103,272 +120,119 @@ async function fetchWithRetry(url, options = {}, context = {}) {
   throw lastError;
 }
 
-const DOWNLOAD_SOURCES = {
-  countryMmdb:
-    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb",
-  geositeDat:
-    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
-  geoipDat:
-    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat",
-  enableLoopback:
-    "https://github.com/Kuingsmile/uwp-tool/releases/download/latest/enableLoopback.exe",
-};
-
-/**
- * download the file to the resources dir
- */
-async function resolveResource(binInfo) {
-  const { file, downloadURL } = binInfo;
-
-  const resDir = path.join(cwd, "src-tauri/resources");
-  const targetPath = path.join(resDir, file);
-  console.log(
-    `[INFO]: resolving resource "${file}" url="${downloadURL}" targetPath="${targetPath}" target="${SIDECAR_HOST}"`
-  );
-
-  if (!FORCE && (await fs.pathExists(targetPath))) return;
-
-  await fs.mkdirp(resDir);
-  await downloadFile(downloadURL, targetPath);
-
-  console.log(`[INFO]: ${file} finished`);
-}
-
-/**
- * 将本地 Windows 服务二进制复制到资源目录。
- */
-const WINDOWS_SERVICE_BINARY_FILES = [
-  "clash-astra-service.exe",
-  "clash-astra-service-install.exe",
-  "clash-astra-service-uninstall.exe",
-  "clash-astra-firewall-helper.exe",
-];
-
-let windowsServiceBuildPromise = null;
-let windowsServiceBinariesPromise = null;
-
-function buildWindowsServiceBinariesIfNeededOnce() {
-  if (!windowsServiceBuildPromise) {
-    windowsServiceBuildPromise = buildWindowsServiceBinariesIfNeeded().catch(
-      (err) => {
-        windowsServiceBuildPromise = null;
-        throw err;
-      }
-    );
-  }
-  return windowsServiceBuildPromise;
-}
-
-async function buildWindowsServiceBinariesIfNeeded() {
-  if (process.platform !== "win32") return;
-
-  const serviceTarget = SIDECAR_HOST || "x86_64-pc-windows-msvc";
-  const manifestPath = path.join(
-    cwd,
-    "src-tauri",
-    "windows-service-src",
-    "Cargo.toml"
-  );
-  const outDir = path.join(
-    cwd,
-    "src-tauri",
-    "local-binaries",
-    "windows-service-bin"
-  );
-  const binDir = path.join(
-    cwd,
-    "src-tauri",
-    "windows-service-src",
-    "target",
-    serviceTarget,
-    "release"
-  );
-
-  console.log(
-    `[INFO]: building Windows service binaries once target=${serviceTarget} files=${WINDOWS_SERVICE_BINARY_FILES.join(
-      ","
-    )}`
-  );
-  await fs.mkdirp(outDir);
-  execSync(
-    `cargo build --manifest-path "${manifestPath}" --release --target ${serviceTarget}`,
-    { stdio: "inherit" }
-  );
-
-  for (const file of WINDOWS_SERVICE_BINARY_FILES) {
-    const src = path.join(binDir, file);
-    const dst = path.join(outDir, file);
-
-    if (!(await fs.pathExists(src))) {
-      throw new Error(`Missing built service binary: ${src}`);
-    }
-
-    await fs.copy(src, dst, { overwrite: true });
-  }
-}
-
-function copyLocalWindowsServiceBinariesOnce() {
-  if (!windowsServiceBinariesPromise) {
-    windowsServiceBinariesPromise = copyLocalWindowsServiceBinaries().catch(
-      (err) => {
-        windowsServiceBinariesPromise = null;
-        throw err;
-      }
-    );
-  }
-  return windowsServiceBinariesPromise;
-}
-
-async function copyLocalWindowsServiceBinaries() {
-  console.log(
-    `[INFO]: resolving Windows service binaries as one task files=${WINDOWS_SERVICE_BINARY_FILES.join(
-      ","
-    )}`
-  );
-  await buildWindowsServiceBinariesIfNeededOnce();
-
-  const sourceDir = path.join(
-    cwd,
-    "src-tauri",
-    "local-binaries",
-    "windows-service-bin"
-  );
-  const targetDir = path.join(cwd, "src-tauri", "resources");
-
-  await fs.mkdirp(targetDir);
-
-  for (const file of WINDOWS_SERVICE_BINARY_FILES) {
-    const src = path.join(sourceDir, file);
-    const dst = path.join(targetDir, file);
-
-    if (!(await fs.pathExists(src))) {
-      throw new Error(`Missing local service binary: ${src}`);
-    }
-
-    // 服务源码变化后必须同步新二进制，不能复用仅仅“存在”的旧构建资源。
-    if (
-      !FORCE &&
-      (await fs.pathExists(dst)) &&
-      (await fs.readFile(src)).equals(await fs.readFile(dst))
-    )
-      continue;
-    await fs.copyFile(src, dst);
-    console.log(`[INFO]: ${file} copied from local repository`);
+async function downloadPinnedAsset(name, expectedSha256) {
+  const targetPath = path.join(cacheDir, name);
+  if (await fs.pathExists(targetPath)) {
+    const cached = await fs.readFile(targetPath);
+    if (sha256(cached) === expectedSha256) return cached;
+    await fs.remove(targetPath);
   }
 
-  console.log(
-    `[INFO]: Windows service binaries ready in resources: ${WINDOWS_SERVICE_BINARY_FILES.join(
-      ","
-    )}`
-  );
-}
-
-/**
- * download file and save to `path`
- */
-async function downloadFile(url, path) {
+  const url = `${runtimeReleaseBaseUrl(lock)}/${name}`;
   const agent = getHttpProxyAgent();
-  const options = agent ? { agent } : {};
-  const tempPath = `${path}.download`;
+  const response = await fetchWithRetry(url, agent ? { agent } : {}, {
+    targetPath,
+  });
+  const data = Buffer.from(await response.arrayBuffer());
+  if (sha256(data) !== expectedSha256) {
+    throw new Error(`Runtime asset SHA-256 mismatch: ${name}`);
+  }
+  await fs.ensureDir(cacheDir);
+  await fs.writeFile(targetPath, data);
+  return data;
+}
 
-  console.log(
-    `[INFO]: downloading url="${url}" -> "${path}" target="${SIDECAR_HOST}"`
+function verifyLocalRuntime() {
+  verifyRuntimeWorkspace(repoRoot, lock.files, specs);
+  prepareMihomo(target);
+}
+
+function extractRuntimeArchive(data, stageRoot) {
+  const zip = new AdmZip(data);
+  const entries = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => entry.entryName.replaceAll("\\", "/"));
+  const unexpected = entries.filter(
+    (entry) => !expectedArchivePaths.has(entry)
   );
-
-  try {
-    const response = await fetchWithRetry(
-      url,
-      {
-        ...options,
-        method: "GET",
-        headers: { "Content-Type": "application/octet-stream" },
-      },
-      {
-        name: "download-file",
-        targetPath: path,
-      }
+  if (unexpected.length) {
+    throw new Error(
+      `Unexpected Runtime archive files: ${unexpected.join(", ")}`
     );
-    const buffer = await response.arrayBuffer();
-    await fs.writeFile(tempPath, new Uint8Array(buffer));
-    await fs.rename(tempPath, path);
+  }
 
-    console.log(`[INFO]: download finished "${url}"`);
-  } catch (err) {
-    await fs.remove(tempPath).catch(() => {});
-    throw err;
+  for (const archivePath of expectedArchivePaths) {
+    const entry = zip.getEntry(archivePath);
+    if (!entry) throw new Error(`Missing Runtime archive file: ${archivePath}`);
+
+    const outputPath = path.resolve(
+      stageRoot,
+      archivePath.replaceAll("/", path.sep)
+    );
+    const stagePath = path.resolve(stageRoot) + path.sep;
+    if (!outputPath.startsWith(stagePath)) {
+      throw new Error(`Unsafe Runtime archive path: ${archivePath}`);
+    }
+    fs.ensureDirSync(path.dirname(outputPath));
+    fs.writeFileSync(outputPath, entry.getData());
   }
 }
 
-/**
- * main
- */
+async function installRuntime(stageRoot) {
+  for (const spec of specs) {
+    const sourcePath = path.join(
+      stageRoot,
+      spec.archivePath.replaceAll("/", path.sep)
+    );
+    const targetPath = path.join(repoRoot, spec.workspacePath);
+    await fs.ensureDir(path.dirname(targetPath));
+    await fs.copyFile(sourcePath, targetPath);
+  }
+}
 
-const resolveWindowsServiceBinaries = () =>
-  copyLocalWindowsServiceBinariesOnce();
-const resolveMmdb = () =>
-  resolveResource({
-    file: "Country.mmdb",
-    // Dynamic upstream asset; checksum cannot be fixed unless version is pinned.
-    downloadURL: DOWNLOAD_SOURCES.countryMmdb,
-  });
-const resolveGeosite = () =>
-  resolveResource({
-    file: "geosite.dat",
-    // Dynamic upstream asset; checksum cannot be fixed unless version is pinned.
-    downloadURL: DOWNLOAD_SOURCES.geositeDat,
-  });
-const resolveGeoIP = () =>
-  resolveResource({
-    file: "geoip.dat",
-    // Dynamic upstream asset; checksum cannot be fixed unless version is pinned.
-    downloadURL: DOWNLOAD_SOURCES.geoipDat,
-  });
-const resolveEnableLoopback = () =>
-  resolveResource({
-    file: "enableLoopback.exe",
-    // Dynamic upstream asset; checksum cannot be fixed unless version is pinned.
-    downloadURL: DOWNLOAD_SOURCES.enableLoopback,
-  });
-
-const tasks = [
-  {
-    name: "mihomo",
-    func: () => prepareMihomo(SIDECAR_HOST),
-    retry: 1,
-  },
-  {
-    name: "windows-service-binaries",
-    func: resolveWindowsServiceBinaries,
-    retry: 5,
-    winOnly: true,
-  },
-  { name: "mmdb", func: resolveMmdb, retry: 5 },
-  { name: "geosite", func: resolveGeosite, retry: 5 },
-  { name: "geoip", func: resolveGeoIP, retry: 5 },
-  {
-    name: "enableLoopback",
-    func: resolveEnableLoopback,
-    retry: 5,
-    winOnly: true,
-  },
-];
-
-async function runTask() {
-  const task = tasks.shift();
-  if (!task) return;
-  if (task.winOnly && process.platform !== "win32") return runTask();
-
-  for (let i = 0; i < task.retry; i++) {
+async function prepareRuntime() {
+  if (!FORCE) {
     try {
-      await task.func();
-      break;
-    } catch (err) {
-      console.error(`[ERROR]: task::${task.name} try ${i} ==`, err.message);
-      if (i === task.retry - 1) throw err;
+      verifyLocalRuntime();
+      console.log(
+        `[OK] Reused verified Clash Astra Runtime ${lock.runtimeVersion}`
+      );
+      return;
+    } catch (error) {
+      console.log(`[INFO] Local Runtime is not ready: ${error.message}`);
     }
   }
-  return runTask();
+
+  if (process.env.CLASH_ASTRA_RUNTIME_OFFLINE === "1") {
+    throw new Error(
+      `Clash Astra Runtime ${lock.runtimeVersion} is missing or invalid in offline mode`
+    );
+  }
+
+  await fs.ensureDir(cacheDir);
+  const manifestData = await downloadPinnedAsset(
+    lock.manifest,
+    lock.manifestSha256
+  );
+  const manifest = JSON.parse(manifestData.toString("utf8"));
+  assertRuntimeManifest(manifest, lock);
+
+  const archiveData = await downloadPinnedAsset(
+    lock.archive,
+    lock.archiveSha256
+  );
+  const stageRoot = path.join(cacheDir, "stage");
+  await fs.remove(stageRoot);
+  await fs.ensureDir(stageRoot);
+  extractRuntimeArchive(archiveData, stageRoot);
+  verifyRuntimeFiles(stageRoot, lock.files);
+
+  await installRuntime(stageRoot);
+  verifyLocalRuntime();
+  console.log(
+    `[OK] Prepared Clash Astra Runtime ${lock.runtimeVersion} from ${lock.releaseTag}`
+  );
 }
 
-runTask();
-runTask();
+await prepareRuntime();

@@ -16,7 +16,7 @@ Clash-Astra/
 │  ├─ watchdog/                  # 独立 watchdog crate
 │  ├─ windows-service-src/       # Windows service crate
 │  ├─ vendor-crates/             # 内部 vendored crate
-│  ├─ icons/ sidecar/ resources/ local-binaries/
+│  ├─ icons/ sidecar/ resources/
 │  └─ target/                    # Rust 构建输出（忽略）
 ├─ scripts/                      # 构建、校验、发布脚本（见 scripts/README.md）
 ├─ tests/frontend/               # 前端异步状态、快照与模型回归
@@ -39,9 +39,8 @@ Clash-Astra/
 | `src-tauri/windows-service-src/` | 源码      | Windows service 与 helper                                |
 | `src-tauri/vendor-crates/`       | 源码      | 内部 vendored crate                                      |
 | `src-tauri/icons/`               | 源码/资源 | Tauri 图标与托盘资源                                     |
-| `src-tauri/sidecar/`             | 生成输入  | `prepare:runtime` 下载的内核，构建时打包                 |
-| `src-tauri/resources/`           | 生成输入  | Geo 数据、service 二进制等打包资源                       |
-| `src-tauri/local-binaries/`      | 生成输入  | 本地 service 二进制输出                                  |
+| `src-tauri/sidecar/`             | 生成输入  | Clash Astra Runtime 中的内核，构建时打包                 |
+| `src-tauri/resources/`           | 生成输入  | Clash Astra Runtime 中的 Geo 数据、service 等资源        |
 | `src-tauri/target/`              | 生成      | Rust 构建输出，不提交                                    |
 | `scripts/`                       | 源码      | 构建、校验、发布脚本；入口和用途见 `scripts/README.md`   |
 | `docs/`                          | 源码      | 当前说明、参考、发布流程与历史归档                       |

@@ -7,17 +7,29 @@ import {
   sha256,
   verifyMihomo,
 } from "../../scripts/lib/mihomo-lock.mjs";
-import { extractPinnedMihomo } from "../../scripts/sidecars/prepare-mihomo.mjs";
+import { prepareMihomo } from "../../scripts/sidecars/prepare-mihomo.mjs";
+import {
+  readRuntimeLock,
+  runtimeFileSpecs,
+  verifyRuntimeWorkspace,
+} from "../../scripts/lib/runtime-resources.mjs";
 
-test("locked core rejects substituted data and the packaging route has no latest lookup", () => {
+test("locked core and Runtime resources reject substituted data", () => {
   assert.equal(mihomoLock.version, "v1.19.33");
-  assert.throws(
-    () => extractPinnedMihomo(Buffer.from("not-the-pinned-archive")),
-    /SHA-256/
-  );
   assert.throws(
     () => verifyMihomo(path.resolve("package.json")),
     /does not match/
+  );
+  const runtimeLock = readRuntimeLock();
+  assert.equal(runtimeLock.runtimeVersion, "v1.0.0");
+  verifyRuntimeWorkspace(
+    path.resolve("."),
+    runtimeLock.files,
+    runtimeFileSpecs(runtimeLock.target)
+  );
+  assert.equal(
+    prepareMihomo(),
+    path.resolve(`src-tauri/sidecar/mihomo-${mihomoLock.target}.exe`)
   );
   verifyMihomo(
     path.resolve(`src-tauri/sidecar/mihomo-${mihomoLock.target}.exe`)
@@ -28,7 +40,7 @@ test("locked core rejects substituted data and the packaging route has no latest
   );
   assert.doesNotMatch(
     source,
-    /getLatest|mihomo-alpha|Prerelease-Alpha|mihomo\/releases\/latest/
+    /MetaCubeX\/mihomo|meta-rules-dat|uwp-tool|releases\/download\/latest/
   );
   assert.equal(
     sha256(

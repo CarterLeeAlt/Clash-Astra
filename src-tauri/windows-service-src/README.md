@@ -11,10 +11,11 @@ Inspired by upstream projects:
 
 Only minimal source required by this repository is included here.
 
-## Build output policy
+## Runtime release policy
 
 - `clash-astra-service.exe`, `clash-astra-service-install.exe`,
   `clash-astra-service-uninstall.exe`, and
-  `clash-astra-firewall-helper.exe` are built from this source.
-- `src-tauri/local-binaries/windows-service-bin/` is a build output staging directory only.
-- Precompiled service `.exe` files must not be committed to Git.
+  `clash-astra-firewall-helper.exe` are built from this source when creating a
+  Clash Astra Runtime Release.
+- The generated binaries are packaged into the versioned Runtime Release and
+  are not committed to the source repository.

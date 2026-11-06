@@ -19,13 +19,13 @@ node scripts/pnpm.mjs install
 
 ### Prepare Runtime Assets
 
-Download the Mihomo cores and Geo data, and build the Windows service binaries:
+Resolve the pinned Clash Astra Runtime resources:
 
 ```shell
 node scripts/pnpm.mjs run prepare:runtime
 ```
 
-Existing assets are reused; add `--force` to update them. The step is also run by CI before packaging.
+Existing resources are reused after SHA-256 verification; add `--force` to resolve the pinned Runtime Release again. The step is also run by CI before packaging.
 
 ### Run the Development Server
 

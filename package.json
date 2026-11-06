@@ -34,6 +34,7 @@
     "test:backend": "node scripts/verify/test-backend.mjs",
     "check:architecture": "node scripts/verify/check-architecture.mjs",
     "prepare:runtime": "node scripts/sidecars/prepare-runtime.mjs",
+    "runtime:archive": "node scripts/runtime/create-runtime-archive.mjs",
     "portable": "node scripts/release/portable.mjs",
     "sync-metadata": "node scripts/metadata/sync-metadata.mjs",
     "prepare": "husky install"

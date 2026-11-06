@@ -32,9 +32,11 @@
 
 ## 固定内核
 
-`sidecars/prepare-mihomo.mjs` 读取 `src-tauri/mihomo.lock.json`，只准备 `v1.19.33` 的固定 Windows x64 资产并核对压缩包、二进制和版本。`verify/check-mihomo.mjs` 在 Tauri 生产构建前检查已有文件；打包和运行前同样核对身份。不下载最新版、不交付 Alpha、不提供软件内核升级。服务构建资源按内容与本次源码构建结果同步，不能因旧文件存在而跳过更新。
+`sidecars/prepare-runtime.mjs` 读取 `src-tauri/clash-astra-runtime.lock.json`，只解析固定版本的 Clash Astra Runtime；Runtime 清单锁定全部内核、Geo 数据和 Windows 资源。`sidecars/prepare-mihomo.mjs` 和 `verify/check-mihomo.mjs` 使用 `src-tauri/mihomo.lock.json` 校验 Mihomo `v1.19.33` 的版本、契约和二进制 SHA-256。构建、打包和运行前均核对身份，不访问第三方运行时资源地址，不查询最新版，不交付 Alpha。
 
 `src-tauri/mihomo.lock.json` 是内核身份的唯一锁定来源，构建、打包和运行前均使用它校验 Mihomo。便携包不携带锁定文件或源码指纹文件。完整边界见 `docs/reference/mihomo-contract.md`。
+
+`runtime:archive`（`node scripts/pnpm.mjs run runtime:archive`）从已校验的本地 Runtime 输入生成 Clash Astra Runtime manifest、ZIP 和 `src-tauri/clash-astra-runtime.lock.json`。Runtime 版本独立于主程序版本，发布资产使用 `clash-astra-runtime-v<Runtime版本>` 标签。
 
 ## 完整后端测试
 
