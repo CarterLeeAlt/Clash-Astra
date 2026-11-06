@@ -2,6 +2,12 @@
 
 Clash Astra 的变更日志。基于 clash-verge-rev 的上游历史变更不再在此保留，可通过 git 历史（fork 起点：Initial commit 2026-04-23）查阅。
 
+## 1.8.6
+
+### Fixed
+
+- 修复代码编辑器未加载内置 Monaco 字体
+
 ## 1.8.5
 
 ### Changed
