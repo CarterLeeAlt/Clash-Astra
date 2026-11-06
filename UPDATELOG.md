@@ -6,7 +6,7 @@ Clash Astra 的变更日志。基于 clash-verge-rev 的上游历史变更不再
 
 ### Changed
 
-- 代码编辑器改用内置 Consolas 等宽字体，代码字号统一为 13px
+- 代码编辑器改用内置 Cascadia Mono 等宽字体，代码字号统一为 14px
 - 代理延迟数字统一为 13px
 
 ## 1.8.5

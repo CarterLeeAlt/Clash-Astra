@@ -4,8 +4,8 @@ import type { ThemeOptions } from "@mui/material/styles";
 export const textSizePx = {
   tag: 10,
   caption: 12,
-  code: 13,
   delay: 13,
+  code: 14,
   secondary: 14,
   groupTitle: 15,
   body: 16,
