@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { alpha, createTheme, Shadows, Theme } from "@mui/material";
-import { defaultTheme } from "@/app/theme";
+import { baseTheme, defaultTheme } from "@/app/theme";
 import { useClashSettings } from "@/hooks/use-clash-settings";
-import { textSizeCssVariables, textTheme } from "@/shared/typography";
+import { textSizeCssVariables } from "@/shared/typography";
 
 /**
  * custom theme
@@ -19,7 +19,7 @@ export const useCustomTheme = () => {
 
     try {
       theme = createTheme({
-        ...textTheme,
+        ...baseTheme,
         breakpoints: {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
         },
@@ -41,14 +41,14 @@ export const useCustomTheme = () => {
         },
         shadows: Array(25).fill("none") as Shadows,
         typography: {
-          ...textTheme.typography,
+          ...baseTheme.typography,
           fontFamily: dt.font_family,
         },
       });
     } catch {
       // 用户主题字段无效时，保留可用的基础调色板以保证界面能够渲染。
       theme = createTheme({
-        ...textTheme,
+        ...baseTheme,
         breakpoints: {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
         },
@@ -62,7 +62,7 @@ export const useCustomTheme = () => {
           success: { main: dt.success_color },
           text: { primary: dt.primary_text, secondary: dt.secondary_text },
         },
-        typography: { ...textTheme.typography, fontFamily: dt.font_family },
+        typography: { ...baseTheme.typography, fontFamily: dt.font_family },
       });
     }
 

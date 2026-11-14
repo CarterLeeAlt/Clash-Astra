@@ -736,7 +736,7 @@ impl TransactionDriver for Driver {
                 settings_changed,
             );
         }
-        if runtime_changed {
+        if runtime_changed && self.change.selection.is_none() {
             tauri::async_runtime::spawn(async {
                 if let Err(error) = super::diagnostics::run_auto_delay_test().await {
                     log::warn!(target: "app", "automatic delay test after commit: {error:#}");

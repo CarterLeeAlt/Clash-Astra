@@ -144,6 +144,7 @@ async fn production_coordinator_verifies_switch_and_recovers_false_204_once() {
     let deletes = Arc::new(AtomicUsize::new(0));
     let requests = Arc::new(parking_lot::Mutex::new(Vec::new()));
     let records = requests.clone();
+    let (delay_requests, mut delay_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (lying, counter) = (lie.clone(), deletes.clone());
     let gateway = warp::any()
         .and(warp::method())
@@ -159,8 +160,12 @@ async fn production_coordinator_verifies_switch_and_recovers_false_204_once() {
                     records.clone(),
                     unreadable.clone(),
                 );
+                let delay_requests = delay_requests.clone();
                 async move {
                     let request_label = format!("{} {}", method, path.as_str());
+                    if path.as_str().ends_with("/delay") {
+                        let _ = delay_requests.send(request_label.clone());
+                    }
                     if unreadable.load(Ordering::SeqCst)
                         && method == warp::http::Method::GET
                         && path.as_str() == "/connections"
@@ -282,6 +287,12 @@ async fn production_coordinator_verifies_switch_and_recovers_false_204_once() {
     profiles::select_proxy("synthetic".into(), "Main".into(), "B".into(), None)
         .await
         .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), delay_receiver.recv())
+            .await
+            .is_err(),
+        "selecting a node must not trigger automatic delay requests"
+    );
     fs::write(
         root.join("controller-requests.json"),
         serde_json::to_vec_pretty(&*requests.lock()).unwrap(),
