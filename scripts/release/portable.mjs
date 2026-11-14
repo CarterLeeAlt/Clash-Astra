@@ -97,14 +97,14 @@ async function resolvePortable() {
 
   const exePath = path.join(releaseDir, mainExeSource);
 
-  const mihomoPath = path.join(releaseDir, "mihomo.exe");
+  const mihomoPath = path.join("src-tauri", "sidecar", `mihomo-${target}.exe`);
   if (!(await fs.pathExists(mihomoPath))) {
     throw new Error(`File not found: ${mihomoPath}`);
   }
 
   verifyMihomo(mihomoPath);
 
-  const resourcesPath = path.join(releaseDir, "resources");
+  const resourcesPath = path.join("src-tauri", "resources");
   if (!(await fs.pathExists(resourcesPath))) {
     throw new Error(`Folder not found: ${resourcesPath}`);
   }
@@ -141,7 +141,7 @@ async function resolvePortable() {
 
   zip.addFile(portableExeName, await fs.readFile(exePath));
   zip.addLocalFile(watchdogPath);
-  zip.addLocalFile(mihomoPath);
+  zip.addLocalFile(mihomoPath, "", "mihomo.exe");
   for (const name of resourceNames) {
     zip.addLocalFile(path.join(resourcesPath, name), "resources");
   }

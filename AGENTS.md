@@ -27,8 +27,13 @@
 - Rust 构建输出：`src-tauri\target\`、`src-tauri\watchdog\target\`（`.gitignore` 已排除）。
 - 前端构建输出：`dist\`（Vite 产物，只放前端构建结果）。
 - 打包交付物：`artifacts\portable\`；CI staging 在 `artifacts\staging\`。`vite build` 只清空 `dist\`，不影响 `artifacts\`。
-- 构建所需的 sidecar 与资源：`src-tauri\sidecar\`、`src-tauri\resources\`（从本地安装目录复制，`.gitignore` 已排除，不提交）。
+- 构建所需的 sidecar 与资源：`src-tauri\sidecar\`、`src-tauri\resources\`（由 `prepare:runtime` 按锁定清单准备，`.gitignore` 已排除，不提交）。
 - 构建产物默认按临时产物处理；用户要求保留的交付物除外。
+
+## 云端构建
+
+- GitHub Actions 使用 `workflow_dispatch` 手动触发；提交和推送不自动触发构建。
+- 每次触发云端构建前，先查询并清理本仓库失败的工作流运行。排错所需日志先保存到工作区，再删除远端失败记录；清理完成后才启动本次构建。
 
 ## 临时产物
 

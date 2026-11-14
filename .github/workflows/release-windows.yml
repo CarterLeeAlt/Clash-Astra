@@ -1,9 +1,6 @@
 name: Release Build Windows
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       release_tag:
@@ -21,7 +18,7 @@ on:
           - signpath
           - ossign
 
-# 串行执行 main 分支发版，避免自动版本提交相互竞争。
+# 串行执行 main 分支的手动发布，避免发布资产相互覆盖。
 concurrency:
   group: release-windows-main
   cancel-in-progress: false
@@ -62,28 +59,12 @@ jobs:
 
       - name: Resolve release version
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          if ("${{ github.event_name }}" -eq "push") {
-            # auto mode: bump patch by 1; carry into minor when patch exceeds 9 (2.0.9 -> 2.1.0)
-            $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-            $current = if ($conf.package -and $conf.package.version) { $conf.package.version } else { $conf.version }
-            if ($current -notmatch '^\d+\.\d+\.\d+$') { throw "unexpected version in tauri.conf.json: $current" }
-            $parts = $current.Split('.')
-            $patch = [int]$parts[2] + 1
-            if ($patch -gt 9) {
-              $patch = 0
-              $parts[1] = "$([int]$parts[1] + 1)"
-            }
-            $version = "$($parts[0]).$($parts[1]).$patch"
-            Write-Host "[INFO] auto bump version: $current -> $version"
-          } else {
-            # manual mode: version comes from the release_tag input
-            $tag = "${{ github.event.inputs.release_tag }}".Trim()
-            if (-not $tag) { throw "release_tag input is required for manual runs" }
-            if (-not $tag.StartsWith("v")) { throw "release_tag must start with v, got: $tag" }
-            $version = $tag.Substring(1)
-            if (-not $version) { throw "resolved VERSION is empty from tag: $tag" }
-          }
+          $tag = $env:RELEASE_TAG.Trim()
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "release_tag must be v<major>.<minor>.<patch>, got: $tag" }
+          $version = $tag.Substring(1)
           "TAG_NAME=v$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -125,78 +106,7 @@ jobs:
           )
           # 手动重发已存在的 tag 时以该 tag 为终点，避免混入其后的提交
           if (git tag -l $env:TAG_NAME) { $noteArgs += @("--to", $env:TAG_NAME) }
-          # 自动发版同时写 UPDATELOG.md，随下面的版本提交一起进仓库
-          if ("${{ github.event_name }}" -eq "push") { $noteArgs += "--write-updatelog" }
           node @noteArgs
-
-      - name: Bump version, commit and tag (auto mode)
-        if: github.event_name == 'push'
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $PSNativeCommandUseErrorActionPreference = $true
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          $text = Get-Content package.json -Raw
-          $rx = [regex]'("version"\s*:\s*)"[^"]*"'
-          $newText = $rx.Replace($text, ('$1"' + $env:VERSION + '"'), 1)
-          Set-Content -Path package.json -Value $newText -NoNewline -Encoding UTF8
-          pnpm sync-metadata
-
-          $pkgVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).package.version
-          if ($pkgVersion -ne $env:VERSION -or $tauriVersion -ne $env:VERSION) {
-            throw "version sync failed: package=$pkgVersion tauri=$tauriVersion expected=$env:VERSION"
-          }
-
-          $lockPath = "src-tauri/Cargo.lock"
-          $lines = Get-Content $lockPath
-          $inTarget = $false
-          for ($i = 0; $i -lt $lines.Count; $i++) {
-            if ($lines[$i] -match '^\[\[package\]\]') { $inTarget = $false; continue }
-            if ($lines[$i] -match '^name = "clash-astra"') { $inTarget = $true; continue }
-            if ($inTarget -and $lines[$i] -match '^\s*version\s*=') {
-              $lines[$i] = 'version = "' + $env:VERSION + '"'
-              $inTarget = $false
-            }
-          }
-          Set-Content -Path $lockPath -Value $lines
-
-          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock UPDATELOG.md
-          $staged = git diff --cached --name-only
-          if (-not $staged) {
-            throw "version bump produced no staged changes"
-          }
-
-          $before = git rev-parse HEAD
-          git commit --no-verify -m "chore(release): v$env:VERSION [skip ci]"
-          $after = git rev-parse HEAD
-          if ($before -eq $after) {
-            throw "version bump commit was not created"
-          }
-
-          git fetch origin main
-          git rebase origin/main
-          git push origin HEAD:main
-
-          $localHead = (git rev-parse HEAD).Trim()
-          $remoteHead = ((git ls-remote origin refs/heads/main) -split '\s+')[0].Trim()
-          if ($localHead -ne $remoteHead) {
-            throw "main push verification failed: local=$localHead remote=$remoteHead"
-          }
-
-          $tagName = "v$env:VERSION"
-          git tag $tagName
-          git push origin "refs/tags/$tagName"
-
-          $remoteTag = ((git ls-remote origin "refs/tags/$tagName") -split '\s+')[0].Trim()
-          if ($remoteTag -ne $localHead) {
-            throw "tag push verification failed: tag=$remoteTag head=$localHead"
-          }
 
       - name: Pnpm install, sync version and check
         shell: pwsh

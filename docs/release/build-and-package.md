@@ -145,6 +145,8 @@ artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 
 未签名时带 `_unsigned`，版本取自 `package.json`。zip 根目录包含 `Clash Astra.exe`、`Clash Astra Watchdog.exe`、唯一的 `mihomo.exe` 和 `resources/`。Mihomo 的版本与 SHA-256 仍由源码中的 `src-tauri/mihomo.lock.json` 在构建前、打包前和运行前校验。
 
+主程序与 Watchdog 取自 Release 输出目录；内核取自 `src-tauri/sidecar/mihomo-<target>.exe`，在 ZIP 根目录命名为 `mihomo.exe`；运行资源取自 `src-tauri/resources/`。这些运行时输入由 `prepare:runtime` 准备，打包直接读取标准输入目录。
+
 ## 产物边界
 
 | 路径                                         | 说明                                        |
@@ -159,6 +161,8 @@ artifacts/portable/clash-astra_<version>_x64_portable_unsigned.zip
 
 ## CI
 
+工作流仅通过 `workflow_dispatch` 在 `main` 分支手动触发，输入 `release_tag`（如 `v1.8.6`）和 `signing_mode`（默认 `unsigned`）。每次触发前的失败运行清理按仓库根目录 `AGENTS.md` 执行。
+
 GitHub Actions 使用 `pnpm/action-setup` 安装的 pnpm，不使用本机 wrapper；构建步骤与本机一致。release 的 staging 在 `artifacts/staging/` 下，上传路径由工作流维护。工作流 checkout 使用 `fetch-depth: 0`：生成发布说明要读取上一个 tag 与完整提交历史。
 
 ## 发布说明
@@ -171,7 +175,7 @@ Release 页面的说明由 `scripts/release/release-notes.mjs` 按「上一个 t
 - 提交标题作为条目，正文中以 `-` 或 `*` 开头的行作为子条。
 - `chore(release):` 版本提交与合并提交不收录。
 
-自动发版（push 到 `main`）时，同一份内容还会以 `Added`、`Changed`、`Fixed` 小节写进 `UPDATELOG.md` 顶部，随版本提交一起推送。手动重发已存在的 tag 时不改 `UPDATELOG.md`。
+版本号、锁文件和 `UPDATELOG.md` 随源码提交维护。手动工作流按 `release_tag` 指定的版本生成发布说明并上传资产。
 
 本地预览：
 
